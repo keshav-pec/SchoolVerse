@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+
+/*
+ * SchoolVerse theme
+ * Base palette, sizing and semantics are taken from the Quill UI kit (tokens.json).
+ * The "fun" accents (sun / coral / mint / lavender) are decorative only — never used
+ * to communicate status. Every status shows a word and an icon too.
+ */
+@theme {
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, Arial, Helvetica, sans-serif;
+  --font-display: 'Plus Jakarta Sans Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Quill brand + surfaces */
+  --color-navy: #0d1f3d;
+  --color-navy-700: #15305a;
+  --color-navy-600: #193663;
+  --color-navy-line: #253955;
+  --color-navy-text: #c6d2e6;
+  --color-navy-muted: #a1b4d1;
+
+  --color-brand: #244fd4;
+  --color-brand-hover: #1c3eac;
+  --color-brand-soft: #eef4ff;
+  --color-brand-300: #86a8ff;
+
+  --color-canvas: #f6f7f9;
+  --color-ink: #15233b;
+  --color-muted: #5c6980;
+  --color-line: #e2e7ef;
+  --color-control: #8794a8;
+
+  /* Quill semantic status pairs */
+  --color-success: #08754f;
+  --color-success-soft: #eaf7f0;
+  --color-warning: #925400;
+  --color-warning-soft: #fff4db;
+  --color-danger: #bd2436;
+  --color-danger-soft: #fff0f2;
+
+  /* SchoolVerse playful accents (decorative) */
+  --color-sun: #ffc940;
+  --color-sun-soft: #fff6dc;
+  --color-coral: #ff7a59;
+  --color-coral-soft: #ffefe9;
+  --color-mint: #2bc48a;
+  --color-mint-soft: #e5f8f0;
+  --color-lavender: #8b7cf6;
+  --color-lavender-soft: #f1efff;
+
+  /* Quill sizing */
+  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgb(13 31 61 / 0.04), 0 10px 30px -18px rgb(13 31 61 / 0.18);
+  --shadow-pop: 0 12px 40px -12px rgb(13 31 61 / 0.28);
+  --shadow-brand: 0 8px 20px -8px rgb(36 79 212 / 0.55);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-float-slow: float 9s ease-in-out infinite;
+  --animate-wiggle: wiggle 1.2s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  @keyframes wiggle {
+    0%,
+    100% {
+      transform: rotate(-6deg);
+    }
+    50% {
+      transform: rotate(6deg);
+    }
+  }
+}
+
+@layer base {
+  html {
+    color: var(--color-ink);
+    background: var(--color-canvas);
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  :focus-visible {
+    outline: 3px solid rgb(36 79 212 / 0.45);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-brand-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
