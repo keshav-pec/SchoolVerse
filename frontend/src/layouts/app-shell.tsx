@@ -5,7 +5,6 @@ import { Building2, ChevronDown, GraduationCap, House, Library, LayoutDashboard,
 import { Avatar } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Logo, LogoMark } from '@/components/sv/logo';
 import { RoleBadge } from '@/components/sv/role-badge';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -71,19 +70,15 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
   return (
     <div className={cn('flex h-full flex-col overflow-hidden bg-navy pt-5 pb-3 text-navy-text', collapsed ? 'px-2' : 'px-3')}>
-      <div className={cn('pb-6', collapsed ? 'flex justify-center' : 'px-2.5')}>
-        {collapsed ? <LogoMark className="size-9" /> : <Logo tone="light" />}
-      </div>
-
       <div title={collapsed ? session.tenant.name : undefined} className={cn('mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3', collapsed && 'justify-center px-0')}>
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/30 text-brand-300">
           <Building2 className="size-[18px]" />
         </span>
         <div className={cn('min-w-0', collapsed && 'hidden')}>
-          <p className="truncate text-sm font-semibold text-white" title={session.tenant.name}>
+          <p className="truncate text-[13px] font-semibold text-white" title={session.tenant.name}>
             {session.tenant.name}
           </p>
-          <p className="text-xs text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</p>
+          <p className="text-[11px] text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</p>
         </div>
         <span className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')} title="Workspace active" />
       </div>
@@ -94,8 +89,8 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
           if (items.length === 0) return null;
           return (
             <div key={section.label ?? i}>
-              {section.label && !collapsed && <p className="px-3.5 pt-5 pb-2.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">{section.label}</p>}
-              <ul className={cn('space-y-0.5', collapsed ? 'mt-4' : 'mt-3')}>
+              {section.label && !collapsed && <p className="px-3.5 pt-3 pb-1.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">{section.label}</p>}
+              <ul className={cn('space-y-0.5', collapsed ? 'mt-3' : 'mt-1.5')}>
                 {items.map(({ to, label, Icon, end }) => (
                   <li key={to}>
                     <NavLink
@@ -122,14 +117,6 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
           );
         })}
       </nav>
-
-      <div className={cn('flex items-center justify-between border-t border-[#2a3d5b] px-2 pt-3', collapsed && 'hidden')}>
-        <div>
-          <p className="text-[13px] font-semibold text-[#e3eafb]">SchoolVerse ERP</p>
-          <p className="text-[11px] text-navy-muted">Modules 1–2 · Setup &amp; Academics</p>
-        </div>
-        <span className="rounded-[5px] border border-[#455b7b] px-1.5 py-0.5 text-[11px] text-[#c8d8f0]">v0.1</span>
-      </div>
     </div>
   );
 }
