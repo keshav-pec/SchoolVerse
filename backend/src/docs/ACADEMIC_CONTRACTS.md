@@ -1,0 +1,252 @@
+# Academic Structure — Downstream Contracts
+
+Module 2 (Academic Structure & Academic Session Setup) is the **system of record** for how a school's year is
+organised: `Location → Session → Grade Offering → Section → Subject Offering`. Faculty, Students, Timetable,
+Attendance, Assessments and Fees all consume this model through the contracts below. No other module creates its
+own sessions, grades, sections, subjects, programmes or terms.
+
+Machine-readable API: [`openapi.yaml`](./openapi.yaml) (Swagger UI at `/api/docs`). Module 1 contracts (school and
+locations) are in [`CONTRACTS.md`](./CONTRACTS.md).
+
+## 1. Reference offerings by UUID, never by label
+
+| Bad pattern | Required pattern |
+|---|---|
+| `class = "VIII-A"` | `section_offering_id = <UUID>` |
+| `grade_name = "Class 8"` | `grade_offering_id = <UUID>` (and `grade_id` for the master grade) |
+| `subject = "Mathematics"` | `subject_offering_id = <UUID>` (and `subject_id` for the school's subject) |
+| `academic_year = "2026-27"` | `academic_session_id = <UUID>` |
+| `board = "CBSE"` branches in code | Board is **data**: read it from the context (`board.boardCode`, the pinned rule version) |
+
+- **Masters** are identities that outlive a session: the grade master (system data), boards and rule versions
+  (system data, plus a school's own), and the subject master (per school).
+- **Offerings** are the per-session, per-location instances of the masters. A grade offering exists for one
+  `(session, location, grade)`; sections and subject offerings hang under it. "Class VIII at Mohali" and
+  "Class VIII at Chandigarh" are different grade offerings and may be configured differently.
+- **Labels are presentation.** `displayName` / `displayCode` (Class VIII, Standard 8, Grade 8…) are per offering and
+  may be renamed at any time. Never key, join or filter on them.
+- Always include `tenantId` in your own queries. This module never trusts a tenant id from a request.
+- A record that belongs to a session (an enrollment, a faculty assignment, a timetable slot) stores the **offering
+  ids**, so closing the session and starting the next one never rewrites history.
+
+## 2. Frozen fields
+
+These fields will not be renamed, retyped or removed without a versioned replacement. New optional fields may be
+**added**; treat unknown fields as ignorable.
+
+| DTO | Frozen fields |
+|---|---|
+| `AcademicSessionDTO` | `academicSessionId`, `schoolId`, `name`, `code`, `startDate`, `endDate`, `status`, `isCurrent`, `locations[] { locationId, boardId, boardRuleVersionId, affiliationNumber }`, `previousSessionId` |
+| `GradeOfferingDTO` | `gradeOfferingId`, `academicSessionId`, `locationId`, `gradeId`, `canonicalCode`, `displayName`, `displayCode`, `medium`, `capacity`, `sequenceOrder`, `status` |
+| `SectionOfferingDTO` | `sectionOfferingId`, `gradeOfferingId`, `academicSessionId`, `locationId`, `sectionCode`, `displayName`, `capacity`, `status` |
+| `SubjectOfferingDTO` | `subjectOfferingId`, `gradeOfferingId`, `academicSessionId`, `locationId`, `subjectId`, `offeringType`, `boardSubjectDefinitionId`, `boardSubjectCode`, `status` |
+| `AcademicTermDTO` | `termId`, `academicSessionId`, `locationId` (null = whole session), `code`, `type`, `startDate`, `endDate` |
+| `AcademicContextDTO` | everything in §5 |
+
+`sectionCode` is stored upper-cased (`"a"` and `"A"` are the same section). `code` of a session, programme or term is
+upper-cased too. Dates are `YYYY-MM-DD` with no time zone shift.
+
+## 3. Session lifecycle
+
+```
+DRAFT ──publish──▶ PUBLISHED ──activate──▶ ACTIVE ──close──▶ CLOSED ──archive──▶ ARCHIVED
+```
+
+There is no way back. Status moves are business operations (`POST /academic-sessions/:id/publish|activate|close|archive`);
+`status` is never a PATCH field. "Validated" is a stored result (`lastValidation`), not a status. `isCurrent` is
+simply `status === 'ACTIVE'`, and a school has at most one ACTIVE session (database-enforced, so two concurrent
+activations cannot both win).
+
+| Move | Requires | Fails with |
+|---|---|---|
+| `publish` | DRAFT; validation has no **errors** | `INVALID_STATUS_TRANSITION`; `VALIDATION_FAILED` with `details.issues[]` |
+| `activate` | PUBLISHED; validation re-run clean; no other ACTIVE session | `VALIDATION_FAILED`; `ANOTHER_SESSION_ACTIVE` with `details.activeSession` |
+| `close` | ACTIVE | `INVALID_STATUS_TRANSITION` |
+| `archive` | CLOSED | `INVALID_STATUS_TRANSITION` |
+
+Closed and archived sessions are never deleted. Warnings and info never block publishing.
+
+### Edit rules by status
+
+| Status | What can change |
+|---|---|
+| `DRAFT` | Anything. Hard delete is allowed (the session, its grades, sections, subjects, groups, rules, programmes, terms). |
+| `PUBLISHED` | Anything (nobody has used it yet), but rows are **deactivated, not deleted**. |
+| `ACTIVE` | Additive changes and display edits (rename, capacity, add a grade / section / subject / term). Deactivating or removing structure — a grade, section, subject offering, choice group, constraint, programme, term or session location — is refused with `ACADEMIC_HAS_DEPENDENCIES` while a downstream module reports that it is in use. Rows are deactivated, never deleted. |
+| `CLOSED` / `ARCHIVED` | Read-only: every mutation returns `SESSION_READ_ONLY`. |
+
+"Apply from next session" falls out naturally: plan the change in the next DRAFT session (clone this one).
+
+**Delete policy.** Hard delete only while the session is `DRAFT`; afterwards `DELETE` on a grade, section, subject
+offering, group or programme returns `USE_DEACTIVATE_INSTEAD` — set `status: INACTIVE` with `PATCH`. Subjects in the
+subject master are never deleted. Terms and constraints have no status, so they can be removed in DRAFT/PUBLISHED,
+and on an ACTIVE session only when nothing depends on them.
+
+## 4. Choice rules and programmes
+
+Everything is data; there are no board branches in code.
+
+| Group `ruleType` | Meaning | `min` / `max` |
+|---|---|---|
+| `REQUIRED_ALL` | every listed subject is taken | derived: both = number of items |
+| `CHOOSE_ONE` | exactly one | 1 / 1 |
+| `CHOOSE_N` | between `min` and `max` | entered; `min ≤ max` |
+| `OPTIONAL` | none up to `max` | 0 / `max` |
+
+- A subject offering belongs to **at most one** group of its grade offering (`SUBJECT_IN_ANOTHER_GROUP`). Items must
+  be offerings of the same grade offering.
+- Constraints: `REQUIRES` ("A requires B") and `EXCLUDES` (mutual). Both subjects belong to the same grade offering.
+- Every group carries a plain-language `summary` ("Choose 1 of Punjabi, Hindi, Urdu").
+- **Programmes** (`kind: STREAM`) list `subjectRules` (`REQUIRED`, `CHOICE`, `OPTIONAL`) with `choiceMin/choiceMax` for the
+  CHOICE subjects. A `kind: FLEXIBLE` programme has no fixed subject list: students in that grade pick any combination
+  the grade's groups and constraints allow. Student-level selection is out of scope for this module.
+
+## 5. Academic context (the downstream read API)
+
+`GET /academic-context?academicSessionId=&locationId=&gradeId=` — or, in process, `academicService.getContext(ctx, query)`.
+
+- Without `gradeId`: `{ academicSessionId, locationId, sessionStatus, board, grades[] }` — the grade offerings at that
+  location in that session.
+- With `gradeId` (the **master** grade id): additionally `gradeOffering`, `sections[]`, `subjectOfferings[]` (with type
+  and board code), `choiceGroups[]`, `constraints[]`, `programmes[]` (those whose grade range contains the grade) and
+  `terms[]` (session-wide terms plus the location's own; each term carries its `locationId`).
+- `board` is `{ boardId, boardCode, boardRuleVersionId, ruleVersionName }` — the board and the rule version this
+  location **pinned** for the session. Publishing a newer rule version never changes an existing session.
+- Faculty and Staff can read PUBLISHED, ACTIVE and CLOSED sessions only; drafts and archived sessions are `404`.
+
+Other reads: `GET /academic-sessions/current` (the ACTIVE session; `404` when none) and
+`GET /academic-sessions/:id/overview` (dashboard counts, board per location, checklist, last validation; needs
+`academic:view_config`).
+
+### In-process contract
+
+```ts
+import { academicService } from '../academic/academic.service';
+
+await academicService.assertSectionUsable(ctx, sectionOfferingId, { purpose: 'NEW_ASSIGNMENT' });
+await academicService.assertSubjectOfferingUsable(ctx, subjectOfferingId, { purpose: 'HISTORICAL_READ' });
+academicService.registerAcademicDependency({ key, label, entityTypes, count, message });
+```
+
+| `purpose` | Rule |
+|---|---|
+| `NEW_ASSIGNMENT` | Use when **creating** a record. The session must be `PUBLISHED` or `ACTIVE`, and the location, grade offering and section / subject offering must all be `ACTIVE`. Otherwise `ACADEMIC_NOT_USABLE` with `details.reason` = `SESSION_NOT_OPEN`, `LOCATION_NOT_ACTIVE`, `GRADE_INACTIVE`, `SECTION_INACTIVE` or `SUBJECT_INACTIVE`. |
+| `HISTORICAL_READ` | Use when **reading** an old record. Anything the caller may see, whatever its status, so a closed session still resolves. |
+
+Both return the resolved chain (`location`, `session`, `gradeOffering`, and `section` or `subjectOffering`), so a
+caller never needs to copy a name. Unknown ids and other schools' ids are `NOT_FOUND`.
+
+### Registering as a dependency
+
+A module that keeps references to offerings registers a checker so Academic Structure can refuse unsafe changes:
+
+```ts
+registerAcademicDependency({
+  key: 'faculty.assignments',
+  label: 'Faculty assignments',
+  entityTypes: ['section_offering', 'subject_offering'],   // also: grade_offering, academic_term, session_location, choice_group, constraint, programme
+  count: async ({ tenantId, entityId }) => countActiveAssignments(tenantId, entityId),
+  message: (n) => `${n} faculty assignments use this.`,
+});
+```
+
+On an ACTIVE session, deactivating or removing an entity whose count is above zero fails with
+`ACADEMIC_HAS_DEPENDENCIES` and `details.dependencies[] { key, label, count, message }` (the same shape as Module 1's
+`LOCATION_HAS_DEPENDENCIES`). Academic Structure also registers itself on the **location** registry: a location with
+grade offerings in a non-closed session cannot be archived, and a location any session has used keeps its code.
+
+## 6. Validation
+
+`POST /academic-sessions/:id/validate` runs a pure function over a snapshot of the session and stores the summary in
+`lastValidation`. It returns `{ level, code, message, entityType, entityId }[]`; messages name the offending group or rule.
+
+| Level | Codes |
+|---|---|
+| `ERROR` (blocks publish) | `SESSION_DATES_INVALID`, `SESSION_NO_LOCATIONS`, `LOCATION_NOT_ACTIVE`, `RULE_VERSION_MISSING`, `NO_GRADE_OFFERINGS`, `GRADE_WITHOUT_SECTIONS`, `GRADE_WITHOUT_SUBJECTS`, `TERM_OUTSIDE_SESSION`, `GROUP_MIN_EXCEEDS_ELIGIBLE`, `GROUP_MIN_GREATER_THAN_MAX`, `CONSTRAINT_CONFLICT`, `EXCLUDES_ON_REQUIRED`, `REQUIRES_TARGET_INACTIVE`, `PROGRAMME_INACTIVE_SUBJECT` |
+| `WARNING` | `SESSION_DATES_OVERLAP`, `MANDATORY_IN_CHOICE_GROUP`, `GRADE_WITHOUT_TERMS` (non-board grades), `RULE_VERSION_RETIRED` |
+| `INFO` | `NO_TERMS`, `NO_PROGRAMMES` (Grade XI/XII with none) |
+
+Only ACTIVE grade offerings, groups and programmes are checked; inactive rows are history.
+
+## 7. Clone / roll forward
+
+`POST /academic-sessions/:id/clone { name, code, startDate, endDate }` creates a new DRAFT in one transaction from any
+visible session (usually the closed one). It copies **planning data only**: locations and board mapping, grade
+offerings, sections, subject offerings, choice groups, constraints, programmes and terms. Only ACTIVE rows are carried
+over, every id is remapped, `previousSessionId` is set, and term dates shift by the difference between the two start
+dates in days. It never copies students, faculty, attendance, marks or fees — it reads exactly the collections above.
+
+## 8. Error codes
+
+Every error is `{ "error": { "code", "message", "details?", "requestId" } }`. Codes are stable; messages may be
+reworded, so branch on `code`.
+
+| Code | HTTP | When |
+|---|---|---|
+| `VALIDATION_FAILED` | 400 | Invalid input (`details.fields`), or publish / activate blocked (`details.issues[]`, `details.summary`). |
+| `NOT_FOUND` | 404 | Unknown id, **another school's id**, or a session the caller may not see (drafts for Faculty / Staff). |
+| `BOARD_CODE_TAKEN` | 409 | Board code already used (built-in codes are reserved). |
+| `BOARD_READ_ONLY` | 403 | Built-in boards and rule versions cannot be changed. |
+| `RULE_VERSION_INVALID` | 400 | Not a PUBLISHED rule version of the chosen board. |
+| `SESSION_CODE_TAKEN` | 409 | Session code in use for this school (case-insensitive). |
+| `SESSION_DATES_INVALID` | 400 | Start date is not before the end date. |
+| `SESSION_READ_ONLY` | 409 | The session is CLOSED or ARCHIVED. |
+| `SESSION_NOT_DRAFT` | 409 | Only a DRAFT session can be deleted. |
+| `INVALID_STATUS_TRANSITION` | 409 | Not allowed by the lifecycle in §3. `details.{ from, action, allowedFrom }`. |
+| `ANOTHER_SESSION_ACTIVE` | 409 | The school already has an ACTIVE session. `details.activeSession`. |
+| `LOCATION_NOT_IN_SESSION` | 409 | The location is not part of the session. |
+| `LOCATION_NOT_ACTIVE` | 409 | A session can only use ACTIVE locations. |
+| `GRADE_OFFERING_EXISTS` | 409 | The grade is already set up for this location in this session. `details.gradeIds`. |
+| `SECTION_CODE_TAKEN` | 409 | Section code already used for the grade (any letter case). `details.codes`. |
+| `SUBJECT_CODE_TAKEN` | 409 | Subject code in use. |
+| `SUBJECT_ALREADY_OFFERED` / `SUBJECT_INACTIVE` | 409 | Subject offered twice / inactive subject offered. |
+| `SUBJECT_IN_ANOTHER_GROUP` | 409 | A subject offering is in another choice group of the grade. |
+| `CONSTRAINT_EXISTS` | 409 | The same REQUIRES / EXCLUDES rule already exists. |
+| `PROGRAMME_CODE_TAKEN` | 409 | Programme code in use at this location in this session. |
+| `BOARD_MAPPING_INVALID` | 400 | Board code mapping is not this subject's code on the location's rule version. |
+| `TERM_CODE_TAKEN` / `TERM_OUTSIDE_SESSION` / `TERM_OVERLAP` | 409 / 400 / 409 | Term rules. `TERM_OVERLAP` lists `details.overlapsWith`. |
+| `ACADEMIC_HAS_DEPENDENCIES` | 409 | Blocked because other records depend on it. `details.dependencies[]`. |
+| `USE_DEACTIVATE_INSTEAD` | 409 | Hard delete only in a DRAFT session. |
+| `ACADEMIC_NOT_USABLE` | 409 | In-process `NEW_ASSIGNMENT` check failed. `details.reason`. |
+| `FORBIDDEN` | 403 | Missing permission (`details.required`). |
+
+## 9. Permissions
+
+| Permission | School Admin | Faculty | Staff | Parent |
+|---|:-:|:-:|:-:|:-:|
+| `academic:view` — PUBLISHED / ACTIVE / CLOSED sessions, structure fields only | ✓ | ✓ | ✓ | |
+| `academic:view_config` — DRAFT sessions, validation results, overview | ✓ | | | |
+| `academic:manage` — create / edit / delete configuration | ✓ | | | |
+| `academic:publish` — validate, publish, activate, close, archive, clone | ✓ | | | |
+| `audit:view` — academic audit trail | ✓ | | | |
+
+Enforcement is server-side on every route. The web app only uses the matrix to decide what to *show*.
+
+## 10. System-of-record ownership
+
+| Data | Owning module |
+|---|---|
+| School, School Location, official identifiers | School Setup (Module 1) |
+| Education boards, board rule versions, grade master | **Academic Structure (this module)** — seeded system data, plus a school's own boards |
+| Subject master, board subject codes | **Academic Structure** |
+| Academic session, term | **Academic Structure** |
+| Grade offering, section offering, subject offering | **Academic Structure** |
+| Subject choice groups, constraints, programmes | **Academic Structure** |
+| Faculty, staff, faculty assignments | Faculty & Staff Management |
+| Student, enrollment, a student's subject selection | Student Management |
+| Rooms and buildings | Buildings & Rooms |
+| Timetable | Timetable |
+| Attendance | Attendance |
+| Fee structure and invoices | Finance |
+| Exam rules and marks | Assessments |
+
+A module may **read** another module's data through that module's contract. It may never write to it, and never keeps
+its own copy of it. *(This table is derived from the module plan; reconcile it with PRD Appendix A when that appendix changes.)*
+
+## 11. Audit
+
+Every mutation writes an `audit_events` row **in the same transaction** as the change, with field-level old and new
+values: session create / edit / delete / publish / activate / close / archive / clone; grade, section and subject
+offering changes; terms; choice groups, constraints and programmes; subject and board-code changes. Child events carry
+`metadata.academicSessionId`, so one session's whole history is `GET /audit?academicSessionId=` (needs `audit:view`).
+A refused change writes nothing.

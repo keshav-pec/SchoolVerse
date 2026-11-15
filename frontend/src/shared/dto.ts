@@ -1,4 +1,10 @@
 import type {
+  AcademicPurpose,
+  ChoiceRuleType,
+  ConstraintType,
+  ProgrammeKind,
+  ProgrammeRequirement,
+  ValidationLevel,
   BoardStatus,
   BoardType,
   EducationStage,
@@ -459,4 +465,116 @@ export interface AcademicTermDTO {
   endDate: string;
   /** Computed from today's date in the school's time zone. */
   status: TermStatus;
+}
+
+// ── Part 2: rules, programmes, validation, context
+
+export interface ChoiceGroupDTO {
+  choiceGroupId: string;
+  gradeOfferingId: string;
+  academicSessionId: string;
+  name: string;
+  ruleType: ChoiceRuleType;
+  /** Derived for REQUIRED_ALL (all items) and CHOOSE_ONE (1); entered for CHOOSE_N; 0 for OPTIONAL. */
+  min: number;
+  max: number;
+  sequence: number;
+  status: OfferingStatus;
+  subjects: { subjectOfferingId: string; subjectCode: string; subjectName: string; status: OfferingStatus }[];
+  /** Plain-language rule, e.g. "Choose 1 of Punjabi, Hindi, Urdu". */
+  summary: string;
+}
+
+export interface ConstraintDTO {
+  constraintId: string;
+  gradeOfferingId: string;
+  academicSessionId: string;
+  type: ConstraintType;
+  subjectOfferingId: string;
+  subjectName: string;
+  otherSubjectOfferingId: string;
+  otherSubjectName: string;
+  /** e.g. "Physics requires Mathematics". */
+  summary: string;
+}
+
+export interface ProgrammeSubjectRuleDTO {
+  subjectOfferingId: string;
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  requirement: ProgrammeRequirement;
+  status: OfferingStatus;
+}
+
+export interface ProgrammeDTO {
+  programmeId: string;
+  academicSessionId: string;
+  locationId: string;
+  name: string;
+  code: string;
+  kind: ProgrammeKind;
+  gradeFromId: string;
+  gradeToId: string;
+  boardId: string | null;
+  subjectRules: ProgrammeSubjectRuleDTO[];
+  choiceMin: number | null;
+  choiceMax: number | null;
+  status: OfferingStatus;
+}
+
+export interface ValidationIssueDTO {
+  level: ValidationLevel;
+  code: string;
+  message: string;
+  entityType: string;
+  entityId: string;
+}
+
+export interface ValidationResultDTO {
+  academicSessionId: string;
+  validatedAt: string;
+  summary: { errors: number; warnings: number; info: number };
+  /** True when there are no errors (warnings and info never block publishing). */
+  canPublish: boolean;
+  issues: ValidationIssueDTO[];
+}
+
+export type ChecklistStatus = 'completed' | 'pending' | 'optional';
+
+export interface AcademicOverviewDTO {
+  academicSessionId: string;
+  status: SessionStatus;
+  counts: { locations: number; grades: number; sections: number; subjects: number; programmes: number; terms: number; choiceGroups: number };
+  boards: { locationId: string; locationCode: string | null; locationName: string | null; boardCode: string | null; boardName: string | null; ruleVersionName: string | null }[];
+  checklist: { key: 'session' | 'board' | 'grades' | 'sections' | 'subjects' | 'rules' | 'terms' | 'validation'; label: string; status: ChecklistStatus; detail: string }[];
+  lastValidation: ValidationSummaryDTO | null;
+}
+
+export interface AcademicContextGradesDTO {
+  academicSessionId: string;
+  locationId: string;
+  sessionStatus: SessionStatus;
+  board: { boardId: string; boardCode: string | null; boardRuleVersionId: string; ruleVersionName: string | null };
+  grades: GradeOfferingDTO[];
+}
+
+export interface AcademicContextDTO extends AcademicContextGradesDTO {
+  gradeOffering: GradeOfferingDTO;
+  sections: SectionOfferingDTO[];
+  subjectOfferings: SubjectOfferingDTO[];
+  choiceGroups: ChoiceGroupDTO[];
+  constraints: ConstraintDTO[];
+  programmes: ProgrammeDTO[];
+  /** Session-wide terms plus the location's own terms (each carries its `locationId`). */
+  terms: AcademicTermDTO[];
+}
+
+export interface AcademicUsabilityDTO {
+  purpose: AcademicPurpose;
+  location: { locationId: string; locationCode: string; displayName: string };
+  session: { academicSessionId: string; code: string; name: string; status: SessionStatus };
+  gradeOffering: { gradeOfferingId: string; gradeId: string; displayName: string };
+  section?: { sectionOfferingId: string; sectionCode: string; displayName: string };
+  subjectOffering?: { subjectOfferingId: string; subjectId: string; subjectName: string; offeringType: SubjectOfferingType };
 }

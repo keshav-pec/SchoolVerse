@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import type { AcademicSessionDTO, AuditEventDTO, LocationDetailDTO, Role, SchoolDTO, SessionStatus } from '@shared';
+import { permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
+import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
 import { BoardRuleVersion, EducationBoard, GradeMaster } from '../src/modules/academic/reference.model';
@@ -247,4 +248,51 @@ export async function addGrades(agent: Agent, academicSessionId: string, locatio
 export async function auditForSession(agent: Agent, academicSessionId: string) {
   const res = await agent.get(`${API}/audit`).query({ academicSessionId, limit: 100 }).expect(200);
   return res.body.data.items as AuditEventDTO[];
+}
+
+/** Six more subjects for tests that need language choices or senior-secondary streams. */
+export async function createMoreSubjects(agent: Agent): Promise<Record<string, string>> {
+  const defs = [
+    { subjectCode: 'PUN', name: 'Punjabi', category: 'LANGUAGE', languageCode: 'pa' },
+    { subjectCode: 'URD', name: 'Urdu', category: 'LANGUAGE', languageCode: 'ur' },
+    { subjectCode: 'PHY', name: 'Physics', category: 'SCIENCE', hasPractical: true },
+    { subjectCode: 'CHEM', name: 'Chemistry', category: 'SCIENCE', hasPractical: true },
+    { subjectCode: 'BIO', name: 'Biology', category: 'SCIENCE', hasPractical: true },
+    { subjectCode: 'CS', name: 'Computer Science', category: 'TECHNOLOGY', hasPractical: true },
+  ];
+  const ids: Record<string, string> = {};
+  for (const def of defs) ids[def.subjectCode] = (await agent.post(`${API}/subjects`).send(def).expect(201)).body.data.subjectId;
+  return ids;
+}
+
+/** Offers subjects for a grade offering and returns `{ subjectCode: subjectOfferingId }`. */
+export async function offer(agent: Agent, gradeOfferingId: string, subjectIds: string[], offeringType = 'MANDATORY'): Promise<Record<string, string>> {
+  const res = await agent.post(`${API}/grade-offerings/${gradeOfferingId}/subjects`).send({ subjectIds, offeringType });
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return Object.fromEntries((res.body.data as SubjectOfferingDTO[]).map((o) => [o.subjectCode, o.subjectOfferingId]));
+}
+
+/** A service context for calling domain services in-process (like a later module would). */
+export function serviceContextFor(tenantId: string, userId: string, role: Role = 'SCHOOL_ADMIN'): ServiceContext {
+  return { tenantId, userId, role, permissions: permissionsFor(role), requestId: null };
+}
+
+/** A school with MOH (CBSE) and CHD (PSEB) in a DRAFT session, plus English, Hindi, Mathematics and Science. */
+export async function draftSession() {
+  const s = await academicSchool();
+  const session = await createSession(s.agent, [s.ref.pin(s.moh.locationId, 'CBSE'), s.ref.pin(s.chd.locationId, 'PSEB')]);
+  const subjects = await createStarterSubjects(s.agent);
+  const sessionUrl = `${API}/academic-sessions/${session.academicSessionId}`;
+  const userId = s.session.user.userId;
+  return { ...s, session, subjects, sessionUrl, id: session.academicSessionId, ctx: serviceContextFor(s.tenantId, userId) };
+}
+export type DraftSession = Awaited<ReturnType<typeof draftSession>>;
+
+/** Adds the smallest plan that passes validation: Grade 6 at Mohali with a section, a subject and a session-wide term. */
+export async function makePublishable(t: DraftSession) {
+  const [grade] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
+  const section = (await t.agent.post(`${API}/grade-offerings/${grade!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data[0];
+  const offerings = await offer(t.agent, grade!.gradeOfferingId, [t.subjects.MATH!, t.subjects.SCI!]);
+  const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
+  return { gradeOfferingId: grade!.gradeOfferingId, sectionId: section.sectionOfferingId as string, offerings, termId: term.termId as string };
 }

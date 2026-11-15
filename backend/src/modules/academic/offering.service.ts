@@ -20,6 +20,7 @@ import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { diffFields } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
+import { removeRulesForGradeOffering, removeRulesForSubjectOfferings } from './cleanup';
 import { assertDeletable, assertEditable } from './guard';
 import {
   GradeOffering,
@@ -92,7 +93,7 @@ async function countBy(model: typeof SectionOffering | typeof SubjectOffering, t
   return new Map(rows.map((r) => [r._id, r.n]));
 }
 
-async function toGradeOfferingDTOs(ctx: ServiceContext, docs: GradeOfferingDoc[], db?: ClientSession): Promise<GradeOfferingDTO[]> {
+export async function toGradeOfferingDTOs(ctx: ServiceContext, docs: GradeOfferingDoc[], db?: ClientSession): Promise<GradeOfferingDTO[]> {
   if (docs.length === 0) return [];
   const ids = docs.map((d) => d._id);
   const [grades, sections, subjects] = await Promise.all([
@@ -209,13 +210,16 @@ export async function updateGradeOffering(ctx: ServiceContext, gradeOfferingId: 
   });
 }
 
-/** Deletes a grade offering and what hangs under it. Part 2 adds choice groups and constraints here. */
+/** Deletes a grade offering and what hangs under it: sections, subject offerings, choice groups, constraints and programme rules. */
 export async function deleteGradeOfferingContents(tenantId: string, gradeOfferingId: string, db: ClientSession) {
+  const offeringIds = (await SubjectOffering.find({ tenantId, gradeOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((o) => o._id);
+  const rules = await removeRulesForGradeOffering(tenantId, gradeOfferingId, db);
+  await removeRulesForSubjectOfferings(tenantId, offeringIds, db);
   const [sections, subjectOfferings] = await Promise.all([
     SectionOffering.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
     SubjectOffering.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
   ]);
-  return { sections: sections.deletedCount, subjectOfferings: subjectOfferings.deletedCount };
+  return { sections: sections.deletedCount, subjectOfferings: subjectOfferings.deletedCount, ...rules };
 }
 
 export async function deleteGradeOffering(ctx: ServiceContext, gradeOfferingId: string): Promise<void> {
@@ -253,6 +257,11 @@ function toSectionDTO(doc: SectionOfferingDoc): SectionOfferingDTO {
 
 export async function listSections(ctx: ServiceContext, gradeOfferingId: string): Promise<SectionOfferingDTO[]> {
   await getGradeOfferingOrThrow(ctx, gradeOfferingId);
+  return listSectionsFor(ctx, gradeOfferingId);
+}
+
+/** Same as `listSections` for a grade offering the caller has already been allowed to see. */
+export async function listSectionsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<SectionOfferingDTO[]> {
   const docs = await SectionOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).sort({ sequenceOrder: 1, sectionCode: 1 }).lean<SectionOfferingDoc[]>();
   return docs.map(toSectionDTO);
 }
@@ -394,6 +403,10 @@ async function toSubjectOfferingDTOs(ctx: ServiceContext, docs: SubjectOfferingD
 
 export async function listSubjectOfferings(ctx: ServiceContext, gradeOfferingId: string): Promise<SubjectOfferingDTO[]> {
   await getGradeOfferingOrThrow(ctx, gradeOfferingId);
+  return listSubjectOfferingsFor(ctx, gradeOfferingId);
+}
+
+export async function listSubjectOfferingsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<SubjectOfferingDTO[]> {
   const docs = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).lean<SubjectOfferingDoc[]>();
   const dtos = await toSubjectOfferingDTOs(ctx, docs);
   return dtos.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
@@ -547,6 +560,7 @@ export async function deleteSubjectOffering(ctx: ServiceContext, subjectOffering
   await withTransaction(async (db) => {
     const { offering: before, session } = await getSubjectOfferingOrThrow(ctx, subjectOfferingId, db);
     assertDeletable(session);
+    await removeRulesForSubjectOfferings(ctx.tenantId, [subjectOfferingId], db);
     await SubjectOffering.deleteOne({ _id: subjectOfferingId, tenantId: ctx.tenantId }, { session: db });
     await recordAcademicAudit(ctx, db, {
       entityType: 'subject_offering',

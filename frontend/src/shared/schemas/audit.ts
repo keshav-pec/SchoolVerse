@@ -15,6 +15,9 @@ export const AUDIT_ENTITY_TYPES = [
   'section_offering',
   'subject_offering',
   'academic_term',
+  'subject_choice_group',
+  'subject_choice_constraint',
+  'academic_programme',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

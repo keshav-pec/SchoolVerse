@@ -21,6 +21,7 @@ import { diffFields } from '../audit/diff';
 import { Location } from '../locations/location.model';
 import { assertOperationalLocation } from '../master/master.service';
 import { getCurrentSchool } from '../school/school.service';
+import { removeRulesForSession } from './cleanup';
 import { assertEditable } from './guard';
 import { GradeOffering, SectionOffering, SubjectOffering } from './offering.model';
 import { BoardRuleVersion, EducationBoard, visibleToTenant, type BoardRuleVersionDoc, type EducationBoardDoc } from './reference.model';
@@ -151,7 +152,7 @@ export async function listSessions(ctx: ServiceContext, query: ListSessionsQuery
 
 // ───────────────────────────────────────────────────────────── validation helpers
 
-function assertDates(startDate: string, endDate: string) {
+export function assertDates(startDate: string, endDate: string) {
   if (startDate >= endDate) {
     throw new AppError('SESSION_DATES_INVALID', undefined, { fields: { endDate: 'The end date must be after the start date.' } });
   }
@@ -342,8 +343,9 @@ async function assertLocationChangesAllowed(ctx: ServiceContext, before: Academi
 
 // ───────────────────────────────────────────────────────────── delete (DRAFT only)
 
-/** Removes everything planned inside a session. Part 2 adds choice groups / programmes here. */
+/** Removes everything planned inside a session. */
 export async function deleteSessionContents(tenantId: string, sessionId: string, db: ClientSession) {
+  const rules = await removeRulesForSession(tenantId, sessionId, db);
   const [terms, subjectOfferings, sections, gradeOfferings] = await Promise.all([
     AcademicTerm.deleteMany({ tenantId, sessionId }, { session: db }),
     SubjectOffering.deleteMany({ tenantId, sessionId }, { session: db }),
@@ -355,6 +357,7 @@ export async function deleteSessionContents(tenantId: string, sessionId: string,
     subjectOfferings: subjectOfferings.deletedCount,
     sections: sections.deletedCount,
     gradeOfferings: gradeOfferings.deletedCount,
+    ...rules,
   };
 }
 

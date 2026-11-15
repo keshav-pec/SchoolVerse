@@ -12,9 +12,11 @@ import { createIdentifierSchema, createLocationSchema, createSchoolSchema, permi
 import { env } from '../config/env';
 import { connectDatabase, disconnectDatabase } from '../db/connection';
 import { AuditEvent } from '../modules/audit/audit.model';
+import { seedAcademicDemo } from '../modules/academic/academic.seed';
 import { seedReferenceData, seedStarterSubjects } from '../modules/academic/reference.seed';
 import { LocationReference } from '../modules/dependencies/simulated-references';
 import { GradeOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
+import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '../modules/academic/rules.model';
 import { BoardRuleVersion, EducationBoard } from '../modules/academic/reference.model';
 import { AcademicSession, AcademicTerm } from '../modules/academic/session.model';
 import { BoardSubjectDefinition, Subject } from '../modules/academic/subject.model';
@@ -147,6 +149,9 @@ async function wipeTenant(tenantId: string) {
     GradeOffering.deleteMany({ tenantId }),
     SectionOffering.deleteMany({ tenantId }),
     SubjectOffering.deleteMany({ tenantId }),
+    SubjectChoiceGroup.deleteMany({ tenantId }),
+    SubjectChoiceConstraint.deleteMany({ tenantId }),
+    AcademicProgramme.deleteMany({ tenantId }),
     Subject.deleteMany({ tenantId }),
     BoardSubjectDefinition.deleteMany({ tenantId }),
     EducationBoard.deleteMany({ tenantId }),
@@ -183,11 +188,16 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
     };
     const school = await createSchool(ctx, createSchoolSchema.parse(def.school));
     for (const identifier of def.identifiers ?? []) await createIdentifier(ctx, school._id, createIdentifierSchema.parse(identifier));
-    const created = [];
+    const created: Awaited<ReturnType<typeof createLocation>>[] = [];
     for (const loc of def.locations) created.push(await createLocation(ctx, school._id, createLocationSchema.parse(loc)));
     if (def.setupComplete) {
       await completeSetup(ctx, school._id);
       await seedStarterSubjects(ctx);
+      const byCode = (code: string) => created.find((l) => l.locationCode === code)!._id;
+      if (def.slug === 'greenfield-public-school') {
+        await seedAcademicDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
+        log('    📚 Academic session 2026-27 (active) and 2027-28 (draft, cloned)');
+      }
     }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);
 

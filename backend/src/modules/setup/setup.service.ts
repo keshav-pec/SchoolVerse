@@ -10,6 +10,7 @@ import { AppError } from '../../core/errors';
 import { withTransaction } from '../../db/transaction';
 import { actorFrom, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
+import { AcademicSession } from '../academic/session.model';
 import { Location, type LocationDoc } from '../locations/location.model';
 import { changeLocationStatusInSession } from '../locations/location.service';
 import { findPrimary, lockSchoolLocations, switchPrimary } from '../locations/primary';
@@ -119,15 +120,6 @@ type ItemSpec = Omit<SetupItemDTO, 'status'> & { done?: boolean; upcoming?: bool
 /** Items owned by modules that don't exist yet. They show as "upcoming", never as failures. */
 const UPCOMING_ITEMS: ItemSpec[] = [
   {
-    key: 'academic_structure',
-    label: 'Academic Structure',
-    description: 'Academic years, grades, sections and subjects.',
-    weight: 20,
-    module: 'academic-structure',
-    href: null,
-    upcoming: true,
-  },
-  {
     key: 'buildings_rooms',
     label: 'Buildings & Rooms',
     description: 'Buildings and rooms for each campus.',
@@ -160,6 +152,13 @@ export async function getSetupStatus(ctx: ServiceContext, schoolId: string): Pro
   const primary = locations.find((l) => l.isPrimary && l.status === 'ACTIVE') ?? null;
   const addressMissing = (l: LocationDoc) => Object.keys(missingActivationFields({ phone: 'x', address: l.address })).some((k) => k.startsWith('address.'));
   const everyAddressComplete = locations.length > 0 && locations.every((l) => !addressMissing(l));
+
+  // Academic Structure (Module 2): completed once a session is ACTIVE; pending while only drafts / published plans exist;
+  // upcoming until the school starts planning one.
+  const [activeSessions, plannedSessions] = await Promise.all([
+    AcademicSession.countDocuments({ ...scope, status: 'ACTIVE' }),
+    AcademicSession.countDocuments({ ...scope, status: { $in: ['DRAFT', 'PUBLISHED'] } }),
+  ]);
 
   const specs: ItemSpec[] = [
     {
@@ -206,6 +205,16 @@ export async function getSetupStatus(ctx: ServiceContext, schoolId: string): Pro
       module: 'school-setup',
       href: '/school-setup/locations',
       done: everyAddressComplete,
+    },
+    {
+      key: 'academic_structure',
+      label: 'Academic Structure',
+      description: 'Academic years, grades, sections and subjects.',
+      weight: 20,
+      module: 'academic-structure',
+      href: null,
+      done: activeSessions > 0,
+      upcoming: activeSessions === 0 && plannedSessions === 0,
     },
     ...UPCOMING_ITEMS,
   ];

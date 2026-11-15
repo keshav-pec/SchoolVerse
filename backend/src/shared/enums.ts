@@ -206,6 +206,36 @@ export const TERM_TYPE_LABELS: Record<TermType, string> = {
 export const TERM_STATUSES = ['planned', 'current', 'closed'] as const;
 export type TermStatus = (typeof TERM_STATUSES)[number];
 
+/** Session lifecycle operations (status moves are business operations, never PATCH fields). */
+export const SESSION_ACTIONS = ['publish', 'activate', 'close', 'archive'] as const;
+export type SessionAction = (typeof SESSION_ACTIONS)[number];
+
+export const CHOICE_RULE_TYPES = ['REQUIRED_ALL', 'CHOOSE_ONE', 'CHOOSE_N', 'OPTIONAL'] as const;
+export type ChoiceRuleType = (typeof CHOICE_RULE_TYPES)[number];
+
+export const CHOICE_RULE_TYPE_LABELS: Record<ChoiceRuleType, string> = {
+  REQUIRED_ALL: 'Take all',
+  CHOOSE_ONE: 'Choose one',
+  CHOOSE_N: 'Choose a number',
+  OPTIONAL: 'Optional',
+};
+
+export const CONSTRAINT_TYPES = ['REQUIRES', 'EXCLUDES'] as const;
+export type ConstraintType = (typeof CONSTRAINT_TYPES)[number];
+
+export const PROGRAMME_KINDS = ['STREAM', 'FLEXIBLE'] as const;
+export type ProgrammeKind = (typeof PROGRAMME_KINDS)[number];
+
+export const PROGRAMME_REQUIREMENTS = ['REQUIRED', 'CHOICE', 'OPTIONAL'] as const;
+export type ProgrammeRequirement = (typeof PROGRAMME_REQUIREMENTS)[number];
+
+export const VALIDATION_LEVELS = ['ERROR', 'WARNING', 'INFO'] as const;
+export type ValidationLevel = (typeof VALIDATION_LEVELS)[number];
+
+/** Same meaning as the location purposes: new assignments need live rows, history can read anything. */
+export const ACADEMIC_PURPOSES = ['NEW_ASSIGNMENT', 'HISTORICAL_READ'] as const;
+export type AcademicPurpose = (typeof ACADEMIC_PURPOSES)[number];
+
 // ───────────────────────────────────────────────────────────── Audit (PRD §18)
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -249,5 +279,18 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'academic_term.created': 'Term added',
   'academic_term.updated': 'Term updated',
   'academic_term.deleted': 'Term removed',
+  'academic_session.published': 'Academic session published',
+  'academic_session.activated': 'Academic session activated',
+  'academic_session.closed': 'Academic session closed',
+  'academic_session.archived': 'Academic session archived',
+  'academic_session.cloned': 'Academic session created from a previous session',
+  'choice_group.created': 'Subject choice group added',
+  'choice_group.updated': 'Subject choice group updated',
+  'choice_group.deleted': 'Subject choice group removed',
+  'constraint.created': 'Subject constraint added',
+  'constraint.deleted': 'Subject constraint removed',
+  'programme.created': 'Programme added',
+  'programme.updated': 'Programme updated',
+  'programme.deleted': 'Programme removed',
 };
 

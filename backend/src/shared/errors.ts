@@ -83,6 +83,11 @@ export const ERROR_CODES = {
     status: 409,
     message: 'Records can only be deleted while the session is a draft. Deactivate this one instead.',
   },
+  ANOTHER_SESSION_ACTIVE: { status: 409, message: 'Another academic session is already active. Close it before activating this one.' },
+  SUBJECT_IN_ANOTHER_GROUP: { status: 409, message: 'A subject can belong to only one choice group per grade.' },
+  CONSTRAINT_EXISTS: { status: 409, message: 'This subject rule already exists.' },
+  PROGRAMME_CODE_TAKEN: { status: 409, message: 'A programme with this code already exists for this location in this session.' },
+  ACADEMIC_NOT_USABLE: { status: 409, message: 'This academic record cannot be used for new assignments.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

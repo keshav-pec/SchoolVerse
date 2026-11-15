@@ -7,7 +7,16 @@ import type { ClientSession } from 'mongoose';
  * grade offering is in use". On an ACTIVE session, structural changes (deactivating or removing
  * structure) are blocked while any checker reports a count (`ACADEMIC_HAS_DEPENDENCIES`).
  */
-export const ACADEMIC_ENTITY_TYPES = ['grade_offering', 'section_offering', 'subject_offering', 'academic_term', 'session_location'] as const;
+export const ACADEMIC_ENTITY_TYPES = [
+  'grade_offering',
+  'section_offering',
+  'subject_offering',
+  'academic_term',
+  'session_location',
+  'choice_group',
+  'constraint',
+  'programme',
+] as const;
 export type AcademicEntityType = (typeof ACADEMIC_ENTITY_TYPES)[number];
 
 export interface AcademicDependencyContext {

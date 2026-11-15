@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
-  title: SchoolVerse API — Module 1, School & School Locations Setup
+  title: SchoolVerse API — Modules 1–2, School Setup and Academic Structure
   version: 1.0.0
   description: |
-    The School and Location master for SchoolVerse, plus the first-time setup flow and the read-only
-    contract that downstream modules build on. Behaviour, frozen fields and ownership rules are in
-    `CONTRACTS.md` next to this file.
+    The School and Location master for SchoolVerse (Module 1), plus the first-time setup flow and the read-only
+    contract that downstream modules build on, and the Academic Structure & Session Setup (Module 2): boards,
+    grades, subjects, sessions, offerings, choice rules, programmes, validation, lifecycle and the academic context.
+    Behaviour, frozen fields and ownership rules are in `CONTRACTS.md` (Module 1) and `ACADEMIC_CONTRACTS.md`
+    (Module 2) next to this file.
 
     **Conventions**
     - Success: `{ "data": … }`. Error: `{ "error": { "code", "message", "details?", "requestId" } }`.
@@ -21,6 +23,12 @@ tags:
   - { name: Locations, description: School locations and their lifecycle }
   - { name: Setup, description: First-time setup wizard and overview }
   - { name: Master, description: Read-only contract for downstream modules }
+  - { name: Reference, description: Boards, rule versions and the grade master (Module 2) }
+  - { name: Subjects, description: Subject master and board subject codes (Module 2) }
+  - { name: Sessions, description: Academic sessions, lifecycle, validation and clone (Module 2) }
+  - { name: Offerings, description: Grade, section and subject offerings, terms (Module 2) }
+  - { name: Rules, description: Choice groups, constraints and programmes (Module 2) }
+  - { name: Context, description: Academic context for downstream modules (Module 2) }
   - { name: Audit, description: Configuration audit trail }
   - { name: Dev, description: Non-production helpers (not mounted when NODE_ENV=production) }
 security:
@@ -535,6 +543,986 @@ paths:
       responses:
         '200': { description: Removed }
 
+  /boards:
+    get:
+      tags: [Reference]
+      summary: "Boards visible to the school (built-in plus its own)"
+      description: "Permission: `academic:view`."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/Board' } } }
+    post:
+      tags: [Reference]
+      summary: "Create the school's own board (\"configure from blank\")"
+      description: "Permission: `academic:manage`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBoard' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Board' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /boards/{boardId}/rule-versions:
+    get:
+      tags: [Reference]
+      summary: "Rule versions of a board (drafts need academic:view_config)"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: boardId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/RuleVersion' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Reference]
+      summary: "Add a draft rule version to the school's own board"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: boardId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRuleVersion' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/RuleVersion' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /boards/{boardId}/rule-versions/{ruleVersionId}/publish:
+    post:
+      tags: [Reference]
+      summary: "Publish a draft rule version (sessions can then pin it)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: boardId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: ruleVersionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/RuleVersion' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grades:
+    get:
+      tags: [Reference]
+      summary: "The grade master (Pre-Nursery to XII), read-only"
+      description: "Permission: `academic:view`."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/GradeMaster' } } }
+  /subjects:
+    get:
+      tags: [Subjects]
+      summary: "Subject master (filters: search, category, languageCode, status, boardCode, gradeId, academicSessionId; page, pageSize)"
+      description: "Permission: `academic:view`."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/SubjectPage' } }
+        '400': { $ref: '#/components/responses/Validation' }
+    post:
+      tags: [Subjects]
+      summary: "Create a subject"
+      description: "Permission: `academic:manage`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubject' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Subject' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /subjects/{subjectId}:
+    get:
+      tags: [Subjects]
+      summary: "One subject with its board codes"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Subject' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Subjects]
+      summary: "Edit a subject or set it INACTIVE (subjects are never deleted)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSubject' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Subject' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /subjects/{subjectId}/board-codes:
+    put:
+      tags: [Subjects]
+      summary: "Map the subject to its official code on a rule version (create or update)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetBoardCode' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Subject' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /subjects/{subjectId}/board-codes/{ruleVersionId}:
+    delete:
+      tags: [Subjects]
+      summary: "Remove a mapping (blocked while a subject offering uses it)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: ruleVersionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Subject' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions:
+    get:
+      tags: [Sessions]
+      summary: "List sessions (?status=); Faculty/Staff never see drafts"
+      description: "Permission: `academic:view`."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/AcademicSession' } } }
+    post:
+      tags: [Sessions]
+      summary: "Create a DRAFT session with explicit dates and its locations + boards"
+      description: "Permission: `academic:manage`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSession' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/current:
+    get:
+      tags: [Sessions]
+      summary: "The ACTIVE session of the school (404 when none)"
+      description: "Permission: `academic:view`."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /academic-sessions/{academicSessionId}:
+    get:
+      tags: [Sessions]
+      summary: "One session"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Sessions]
+      summary: "Edit name, dates or locations (rules depend on the status)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSession' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Sessions]
+      summary: "Delete a DRAFT session and everything planned in it"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/overview:
+    get:
+      tags: [Sessions]
+      summary: "Dashboard: counts, boards, checklist and last validation"
+      description: "Permission: `academic:view_config`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicOverview' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /academic-sessions/{academicSessionId}/validate:
+    post:
+      tags: [Sessions]
+      summary: "Run the validation engine and store its summary"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/ValidationResult' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/publish:
+    post:
+      tags: [Sessions]
+      summary: "DRAFT → PUBLISHED. Fails with VALIDATION_FAILED and details.issues when any error exists"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/activate:
+    post:
+      tags: [Sessions]
+      summary: "PUBLISHED → ACTIVE. ANOTHER_SESSION_ACTIVE if the school already has one; validation is re-run"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/close:
+    post:
+      tags: [Sessions]
+      summary: "ACTIVE → CLOSED (read-only from now on)"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/archive:
+    post:
+      tags: [Sessions]
+      summary: "CLOSED → ARCHIVED"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/clone:
+    post:
+      tags: [Sessions]
+      summary: "Create a new DRAFT from this session (planning data only; terms shift with the start date)"
+      description: "Permission: `academic:publish`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CloneSession' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicSession' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/grade-offerings:
+    get:
+      tags: [Offerings]
+      summary: "Grade offerings (?locationId=)"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/GradeOffering' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Offerings]
+      summary: "Add grades in bulk for one location"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGradeOfferings' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/GradeOffering' } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-sessions/{academicSessionId}/terms:
+    get:
+      tags: [Offerings]
+      summary: "Terms (?locationId=)"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/Term' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Offerings]
+      summary: "Add a term (session-wide, or for one location)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: academicSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTerm' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Term' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}:
+    get:
+      tags: [Offerings]
+      summary: "One grade offering"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/GradeOffering' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Offerings]
+      summary: "Rename, set medium / capacity / order, or (de)activate"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateGradeOffering' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/GradeOffering' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Offerings]
+      summary: "Delete (DRAFT sessions only; otherwise deactivate)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}/sections:
+    get:
+      tags: [Offerings]
+      summary: "Sections of a grade offering"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/SectionOffering' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Offerings]
+      summary: "Add sections in bulk (codes are upper-cased; duplicates are refused)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSections' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/SectionOffering' } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}/subjects:
+    get:
+      tags: [Offerings]
+      summary: "Subject offerings of a grade offering"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/SubjectOffering' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Offerings]
+      summary: "Offer subjects in bulk"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubjectOfferings' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/SubjectOffering' } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}/subjects/copy-from/{otherGradeOfferingId}:
+    post:
+      tags: [Offerings]
+      summary: "Copy a subject list from another grade of the same session (only when asked)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: otherGradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/CopySubjectsResult' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sections/{sectionId}:
+    patch:
+      tags: [Offerings]
+      summary: "Rename, set capacity / order, or (de)activate a section"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: sectionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSection' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/SectionOffering' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Offerings]
+      summary: "Delete a section (DRAFT sessions only)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: sectionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /subject-offerings/{subjectOfferingId}:
+    patch:
+      tags: [Offerings]
+      summary: "Change type, board mapping or status"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateSubjectOffering' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/SubjectOffering' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Offerings]
+      summary: "Delete (DRAFT sessions only); removes it from groups, rules and programmes"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /terms/{termId}:
+    patch:
+      tags: [Offerings]
+      summary: "Edit a term"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: termId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTerm' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Term' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Offerings]
+      summary: "Delete a term (DRAFT / PUBLISHED, or ACTIVE when nothing depends on it)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: termId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}/choice-groups:
+    get:
+      tags: [Rules]
+      summary: "Subject choice groups of a grade offering"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/ChoiceGroup' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Rules]
+      summary: "Add a group: REQUIRED_ALL, CHOOSE_ONE, CHOOSE_N or OPTIONAL"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateChoiceGroup' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/ChoiceGroup' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /choice-groups/{choiceGroupId}:
+    patch:
+      tags: [Rules]
+      summary: "Edit or (de)activate a group"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: choiceGroupId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateChoiceGroup' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/ChoiceGroup' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Rules]
+      summary: "Delete a group (DRAFT sessions only)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: choiceGroupId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /grade-offerings/{gradeOfferingId}/constraints:
+    get:
+      tags: [Rules]
+      summary: "REQUIRES / EXCLUDES rules of a grade offering"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/Constraint' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Rules]
+      summary: "Add \"A requires B\" or \"A excludes B\""
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: gradeOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateConstraint' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Constraint' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /constraints/{constraintId}:
+    delete:
+      tags: [Rules]
+      summary: "Remove a rule"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: constraintId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-programmes:
+    get:
+      tags: [Rules]
+      summary: "Programmes of a session (?academicSessionId= required, ?locationId=)"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: academicSessionId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: locationId, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/Programme' } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Rules]
+      summary: "Add a stream or a flexible combination"
+      description: "Permission: `academic:manage`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProgramme' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Programme' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-programmes/{programmeId}:
+    get:
+      tags: [Rules]
+      summary: "One programme"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: programmeId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Programme' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Rules]
+      summary: "Edit or (de)activate a programme"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: programmeId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProgramme' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Programme' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Rules]
+      summary: "Delete a programme (DRAFT sessions only)"
+      description: "Permission: `academic:manage`."
+      parameters:
+        - { name: programmeId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /academic-context:
+    get:
+      tags: [Context]
+      summary: "Grades at a location, or (with gradeId) the whole tree for one grade — the downstream contract"
+      description: "Permission: `academic:view`."
+      parameters:
+        - { name: academicSessionId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: locationId, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: gradeId, in: query, required: false, description: Master grade id; omit to list the grades offered, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AcademicContext' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -916,3 +1904,451 @@ components:
               locationId: { type: string }
               valid: { type: boolean }
               reason: { type: string, enum: [NOT_FOUND, NOT_ACTIVE, ARCHIVED], nullable: true }
+    Board:
+      type: object
+      properties:
+        boardId: { type: string, format: uuid }
+        boardCode: { type: string, example: CBSE }
+        boardName: { type: string }
+        boardType: { type: string, enum: [CENTRAL, STATE, OTHER] }
+        stateCode: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        isSystem: { type: boolean, description: Built-in boards are shared by every school and read-only }
+    RuleVersion:
+      type: object
+      properties:
+        ruleVersionId: { type: string, format: uuid }
+        boardId: { type: string, format: uuid }
+        name: { type: string, example: 2026-27 }
+        effectiveFrom: { type: string, format: date, nullable: true }
+        effectiveTo: { type: string, format: date, nullable: true }
+        sourceReference: { type: string, nullable: true }
+        status: { type: string, enum: [DRAFT, PUBLISHED, RETIRED] }
+        isSystem: { type: boolean }
+    GradeMaster:
+      type: object
+      properties:
+        gradeId: { type: string, format: uuid }
+        canonicalCode: { type: string, example: G08 }
+        canonicalName: { type: string }
+        shortCode: { type: string }
+        sequenceNumber: { type: integer }
+        educationStage: { type: string, enum: [FOUNDATIONAL, PREPARATORY, MIDDLE, SECONDARY] }
+        isPrePrimary: { type: boolean }
+        isBoardGrade: { type: boolean }
+    Subject:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        subjectCode: { type: string }
+        name: { type: string }
+        shortName: { type: string, nullable: true }
+        category: { type: string, enum: [LANGUAGE, MATHEMATICS, SCIENCE, SOCIAL_SCIENCE, COMMERCE, HUMANITIES, TECHNOLOGY, ARTS, PHYSICAL_EDUCATION, SKILL, OTHER] }
+        languageCode: { type: string, nullable: true }
+        hasTheory: { type: boolean }
+        hasPractical: { type: boolean }
+        hasProject: { type: boolean }
+        hasInternalAssessment: { type: boolean }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        boardCodes:
+          type: array
+          items:
+            type: object
+            properties:
+              definitionId: { type: string, format: uuid }
+              boardRuleVersionId: { type: string, format: uuid }
+              boardCode: { type: string, nullable: true }
+              ruleVersionName: { type: string, nullable: true }
+              boardSubjectCode: { type: string }
+              boardSubjectName: { type: string, nullable: true }
+    SubjectPage:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Subject' } }
+            page: { type: integer }
+            pageSize: { type: integer }
+            total: { type: integer }
+    AcademicSession:
+      type: object
+      description: Frozen. Store `academicSessionId`, never the name or code.
+      properties:
+        academicSessionId: { type: string, format: uuid }
+        schoolId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string, example: 2026-27 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        status: { type: string, enum: [DRAFT, PUBLISHED, ACTIVE, CLOSED, ARCHIVED] }
+        isCurrent: { type: boolean, description: True for the one ACTIVE session }
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              locationId: { type: string, format: uuid }
+              locationCode: { type: string, nullable: true }
+              locationName: { type: string, nullable: true }
+              boardId: { type: string, format: uuid }
+              boardCode: { type: string, nullable: true }
+              boardRuleVersionId: { type: string, format: uuid }
+              ruleVersionName: { type: string, nullable: true }
+              affiliationNumber: { type: string, nullable: true }
+        previousSessionId: { type: string, format: uuid, nullable: true }
+        warnings: { type: array, items: { type: object } }
+        deletable: { type: boolean }
+        lastValidation: { type: object, nullable: true, description: Only with academic:view_config }
+    GradeOffering:
+      type: object
+      description: Frozen. A grade as taught at one location in one session. Store `gradeOfferingId`.
+      properties:
+        gradeOfferingId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        gradeId: { type: string, format: uuid }
+        canonicalCode: { type: string }
+        displayName: { type: string }
+        displayCode: { type: string }
+        medium: { type: string, nullable: true }
+        capacity: { type: integer, nullable: true }
+        sequenceOrder: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        sectionCount: { type: integer }
+        subjectCount: { type: integer }
+    SectionOffering:
+      type: object
+      description: Frozen. Store `sectionOfferingId`.
+      properties:
+        sectionOfferingId: { type: string, format: uuid }
+        gradeOfferingId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        sectionCode: { type: string }
+        displayName: { type: string }
+        capacity: { type: integer, nullable: true }
+        sequenceOrder: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    SubjectOffering:
+      type: object
+      description: Frozen. Store `subjectOfferingId`.
+      properties:
+        subjectOfferingId: { type: string, format: uuid }
+        gradeOfferingId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+        subjectCode: { type: string }
+        subjectName: { type: string }
+        category: { type: string }
+        offeringType: { type: string, enum: [MANDATORY, ELECTIVE, OPTIONAL_ADDITIONAL, LANGUAGE, SKILL, INTERNAL] }
+        boardSubjectDefinitionId: { type: string, format: uuid, nullable: true }
+        boardSubjectCode: { type: string, nullable: true }
+        boardSubjectName: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    CopySubjectsResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            created: { type: array, items: { $ref: '#/components/schemas/SubjectOffering' } }
+            skipped: { type: integer }
+    Term:
+      type: object
+      properties:
+        termId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid, nullable: true, description: null = every location in the session }
+        name: { type: string }
+        code: { type: string }
+        type: { type: string, enum: [TERM, SEMESTER, QUARTER, ANNUAL, CUSTOM] }
+        sequence: { type: integer }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        status: { type: string, enum: [planned, current, closed], description: Computed from today's date in the school time zone }
+    ChoiceGroup:
+      type: object
+      properties:
+        choiceGroupId: { type: string, format: uuid }
+        gradeOfferingId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        name: { type: string }
+        ruleType: { type: string, enum: [REQUIRED_ALL, CHOOSE_ONE, CHOOSE_N, OPTIONAL] }
+        min: { type: integer }
+        max: { type: integer }
+        sequence: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        subjects: { type: array, items: { type: object } }
+        summary: { type: string, example: Choose 1 of Punjabi, Hindi, Urdu }
+    Constraint:
+      type: object
+      properties:
+        constraintId: { type: string, format: uuid }
+        gradeOfferingId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        type: { type: string, enum: [REQUIRES, EXCLUDES] }
+        subjectOfferingId: { type: string, format: uuid }
+        subjectName: { type: string }
+        otherSubjectOfferingId: { type: string, format: uuid }
+        otherSubjectName: { type: string }
+        summary: { type: string, example: Physics requires Mathematics }
+    Programme:
+      type: object
+      properties:
+        programmeId: { type: string, format: uuid }
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        kind: { type: string, enum: [STREAM, FLEXIBLE] }
+        gradeFromId: { type: string, format: uuid }
+        gradeToId: { type: string, format: uuid }
+        boardId: { type: string, format: uuid, nullable: true }
+        subjectRules:
+          type: array
+          items:
+            type: object
+            properties:
+              subjectOfferingId: { type: string, format: uuid }
+              subjectCode: { type: string }
+              subjectName: { type: string }
+              requirement: { type: string, enum: [REQUIRED, CHOICE, OPTIONAL] }
+              status: { type: string, enum: [ACTIVE, INACTIVE] }
+        choiceMin: { type: integer, nullable: true }
+        choiceMax: { type: integer, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    ValidationResult:
+      type: object
+      properties:
+        academicSessionId: { type: string, format: uuid }
+        validatedAt: { type: string, format: date-time }
+        summary: { type: object, properties: { errors: { type: integer }, warnings: { type: integer }, info: { type: integer } } }
+        canPublish: { type: boolean }
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              level: { type: string, enum: [ERROR, WARNING, INFO] }
+              code: { type: string, example: GROUP_MIN_EXCEEDS_ELIGIBLE }
+              message: { type: string }
+              entityType: { type: string }
+              entityId: { type: string }
+    AcademicOverview:
+      type: object
+      properties:
+        academicSessionId: { type: string, format: uuid }
+        status: { type: string }
+        counts: { type: object }
+        boards: { type: array, items: { type: object } }
+        checklist:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string, enum: [session, board, grades, sections, subjects, rules, terms, validation] }
+              label: { type: string }
+              status: { type: string, enum: [completed, pending, optional] }
+              detail: { type: string }
+        lastValidation: { type: object, nullable: true }
+    AcademicContext:
+      type: object
+      description: Frozen. Without `gradeId` only `grades` is returned; with it, the full tree below.
+      properties:
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        sessionStatus: { type: string }
+        board: { type: object }
+        grades: { type: array, items: { $ref: '#/components/schemas/GradeOffering' } }
+        gradeOffering: { $ref: '#/components/schemas/GradeOffering' }
+        sections: { type: array, items: { $ref: '#/components/schemas/SectionOffering' } }
+        subjectOfferings: { type: array, items: { $ref: '#/components/schemas/SubjectOffering' } }
+        choiceGroups: { type: array, items: { $ref: '#/components/schemas/ChoiceGroup' } }
+        constraints: { type: array, items: { $ref: '#/components/schemas/Constraint' } }
+        programmes: { type: array, items: { $ref: '#/components/schemas/Programme' } }
+        terms: { type: array, items: { $ref: '#/components/schemas/Term' } }
+    CreateBoard:
+      type: object
+      required: [boardCode, boardName]
+      properties:
+        boardCode: { type: string, example: HSB }
+        boardName: { type: string }
+        boardType: { type: string, enum: [CENTRAL, STATE, OTHER] }
+        stateCode: { type: string }
+    CreateRuleVersion:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: 2027-28 }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: string, format: date }
+        sourceReference: { type: string }
+    CreateSubject:
+      type: object
+      required: [subjectCode, name, category]
+      properties:
+        subjectCode: { type: string, example: MATH }
+        name: { type: string }
+        shortName: { type: string }
+        category: { type: string }
+        languageCode: { type: string }
+        hasTheory: { type: boolean }
+        hasPractical: { type: boolean }
+        hasProject: { type: boolean }
+        hasInternalAssessment: { type: boolean }
+    UpdateSubject:
+      type: object
+      description: Any subset of the CreateSubject fields plus `status`.
+      properties:
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    SetBoardCode:
+      type: object
+      required: [boardRuleVersionId, boardSubjectCode]
+      properties:
+        boardRuleVersionId: { type: string, format: uuid }
+        boardSubjectCode: { type: string, example: "041" }
+        boardSubjectName: { type: string }
+    CreateSession:
+      type: object
+      required: [name, code, startDate, endDate]
+      properties:
+        name: { type: string }
+        code: { type: string, example: 2026-27 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        locations:
+              type: array
+              items:
+                type: object
+                required: [locationId, boardId, boardRuleVersionId]
+                properties:
+                  locationId: { type: string, format: uuid }
+                  boardId: { type: string, format: uuid }
+                  boardRuleVersionId: { type: string, format: uuid }
+                  affiliationNumber: { type: string }
+    UpdateSession:
+      type: object
+      description: Any subset. `locations` replaces the list; the code and status cannot be changed here.
+      properties:
+        name: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        locations:
+              type: array
+              items:
+                type: object
+                required: [locationId, boardId, boardRuleVersionId]
+                properties:
+                  locationId: { type: string, format: uuid }
+                  boardId: { type: string, format: uuid }
+                  boardRuleVersionId: { type: string, format: uuid }
+                  affiliationNumber: { type: string }
+    CloneSession:
+      type: object
+      required: [name, code, startDate, endDate]
+      properties:
+        name: { type: string }
+        code: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+    CreateGradeOfferings:
+      type: object
+      required: [locationId, gradeIds]
+      properties:
+        locationId: { type: string, format: uuid }
+        gradeIds: { type: array, items: { type: string, format: uuid } }
+        medium: { type: string }
+    UpdateGradeOffering:
+      type: object
+      properties:
+        displayName: { type: string }
+        displayCode: { type: string }
+        medium: { type: string, nullable: true }
+        capacity: { type: integer, nullable: true }
+        sequenceOrder: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    CreateSections:
+      type: object
+      required: [codes]
+      properties:
+        codes: { type: array, items: { type: string }, example: [A, B, C] }
+        capacity: { type: integer }
+    UpdateSection:
+      type: object
+      properties:
+        displayName: { type: string }
+        capacity: { type: integer, nullable: true }
+        sequenceOrder: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    CreateSubjectOfferings:
+      type: object
+      required: [subjectIds, offeringType]
+      properties:
+        subjectIds: { type: array, items: { type: string, format: uuid } }
+        offeringType: { type: string, enum: [MANDATORY, ELECTIVE, OPTIONAL_ADDITIONAL, LANGUAGE, SKILL, INTERNAL] }
+    UpdateSubjectOffering:
+      type: object
+      properties:
+        offeringType: { type: string }
+        boardSubjectDefinitionId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    CreateTerm:
+      type: object
+      required: [name, code, startDate, endDate]
+      properties:
+        name: { type: string }
+        code: { type: string, example: T1 }
+        type: { type: string, enum: [TERM, SEMESTER, QUARTER, ANNUAL, CUSTOM] }
+        locationId: { type: string, format: uuid, nullable: true }
+        sequence: { type: integer }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+    UpdateTerm:
+      type: object
+      description: Any subset of the CreateTerm fields.
+      properties:
+        name: { type: string }
+    CreateChoiceGroup:
+      type: object
+      required: [name, ruleType, subjectOfferingIds]
+      properties:
+        name: { type: string, example: Language 1 }
+        ruleType: { type: string, enum: [REQUIRED_ALL, CHOOSE_ONE, CHOOSE_N, OPTIONAL] }
+        min: { type: integer, description: CHOOSE_N only }
+        max: { type: integer, description: CHOOSE_N and OPTIONAL }
+        sequence: { type: integer }
+        subjectOfferingIds: { type: array, items: { type: string, format: uuid } }
+    UpdateChoiceGroup:
+      type: object
+      description: Any subset of the CreateChoiceGroup fields plus `status`.
+      properties:
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    CreateConstraint:
+      type: object
+      required: [type, subjectOfferingId, otherSubjectOfferingId]
+      properties:
+        type: { type: string, enum: [REQUIRES, EXCLUDES] }
+        subjectOfferingId: { type: string, format: uuid }
+        otherSubjectOfferingId: { type: string, format: uuid }
+    CreateProgramme:
+      type: object
+      required: [academicSessionId, locationId, name, code, kind, gradeFromId, gradeToId]
+      properties:
+        academicSessionId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        kind: { type: string, enum: [STREAM, FLEXIBLE] }
+        gradeFromId: { type: string, format: uuid }
+        gradeToId: { type: string, format: uuid }
+        boardId: { type: string, format: uuid, nullable: true }
+        subjectRules: { type: array, items: { type: object, properties: { subjectOfferingId: { type: string, format: uuid }, requirement: { type: string, enum: [REQUIRED, CHOICE, OPTIONAL] } } } }
+        choiceMin: { type: integer }
+        choiceMax: { type: integer }
+    UpdateProgramme:
+      type: object
+      description: Any subset of the CreateProgramme fields (except session, location and code) plus `status`.
+      properties:
+        status: { type: string, enum: [ACTIVE, INACTIVE] }

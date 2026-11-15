@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import {
   BOARD_TYPES,
+  CHOICE_RULE_TYPES,
+  CONSTRAINT_TYPES,
   OFFERING_STATUSES,
+  PROGRAMME_KINDS,
+  PROGRAMME_REQUIREMENTS,
   SESSION_STATUSES,
   SUBJECT_CATEGORIES,
   SUBJECT_OFFERING_TYPES,
@@ -257,3 +261,89 @@ export type CreateTermData = z.output<typeof createTermSchema>;
 
 export const updateTermSchema = z.object(termShape).partial();
 export type UpdateTermData = z.output<typeof updateTermSchema>;
+
+// ───────────────────────────────────────────────────────────── choice groups & constraints (AS-08, AS-09)
+
+export const CHOICE_GROUP_EDITABLE_FIELDS = ['name', 'ruleType', 'min', 'max', 'sequence', 'subjectOfferingIds', 'status'] as const;
+
+const choiceGroupShape = {
+  name: requiredText('Group name', 80),
+  ruleType: z.enum(CHOICE_RULE_TYPES, { message: 'Choose a rule type.' }),
+  /** CHOOSE_N: lowest number of subjects a student takes. Ignored for the other types (they are derived). */
+  min: optionalInt('Minimum', 0, 50),
+  /** CHOOSE_N / OPTIONAL: highest number of subjects a student takes. */
+  max: optionalInt('Maximum', 1, 50),
+  sequence: optionalInt('Order', 0, 1000),
+  subjectOfferingIds: uuidList('Subjects', 50),
+};
+
+export const createChoiceGroupSchema = z.object(choiceGroupShape);
+export type CreateChoiceGroupData = z.output<typeof createChoiceGroupSchema>;
+
+export const updateChoiceGroupSchema = z
+  .object({ ...choiceGroupShape, status: z.enum(OFFERING_STATUSES, { message: 'Choose a valid status.' }) })
+  .partial();
+export type UpdateChoiceGroupData = z.output<typeof updateChoiceGroupSchema>;
+
+export const createConstraintSchema = z.object({
+  type: z.enum(CONSTRAINT_TYPES, { message: 'Choose REQUIRES or EXCLUDES.' }),
+  subjectOfferingId: uuidSchema,
+  otherSubjectOfferingId: uuidSchema,
+});
+export type CreateConstraintData = z.output<typeof createConstraintSchema>;
+
+// ───────────────────────────────────────────────────────────── programmes (AS-10, AS-11)
+
+export const PROGRAMME_EDITABLE_FIELDS = ['name', 'kind', 'gradeFromId', 'gradeToId', 'boardId', 'subjectRules', 'choiceMin', 'choiceMax', 'status'] as const;
+
+export const programmeSubjectRuleSchema = z.object({
+  subjectOfferingId: uuidSchema,
+  requirement: z.enum(PROGRAMME_REQUIREMENTS, { message: 'Choose REQUIRED, CHOICE or OPTIONAL.' }),
+});
+
+const programmeShape = {
+  name: requiredText('Programme name', 80),
+  kind: z.enum(PROGRAMME_KINDS, { message: 'Choose STREAM or FLEXIBLE.' }),
+  gradeFromId: uuidSchema,
+  gradeToId: uuidSchema,
+  boardId: z.preprocess(emptyToNull, uuidSchema.nullable()),
+  subjectRules: z.array(programmeSubjectRuleSchema).max(60, { message: 'Too many subjects.' }),
+  choiceMin: optionalInt('Minimum choices', 0, 50),
+  choiceMax: optionalInt('Maximum choices', 0, 50),
+};
+
+export const createProgrammeSchema = z.object({
+  academicSessionId: uuidSchema,
+  locationId: uuidSchema,
+  code: upperCode('Programme code', TERM_CODE_PATTERN, 'Use up to 20 letters, numbers, hyphens or underscores, e.g. SCI.'),
+  ...programmeShape,
+  boardId: programmeShape.boardId.optional(),
+  subjectRules: programmeShape.subjectRules.default([]),
+});
+export type CreateProgrammeData = z.output<typeof createProgrammeSchema>;
+
+export const updateProgrammeSchema = z
+  .object({ ...programmeShape, status: z.enum(OFFERING_STATUSES, { message: 'Choose a valid status.' }) })
+  .partial();
+export type UpdateProgrammeData = z.output<typeof updateProgrammeSchema>;
+
+export const listProgrammesQuerySchema = z.object({ academicSessionId: uuidSchema, locationId: uuidSchema.optional() });
+export type ListProgrammesQuery = z.output<typeof listProgrammesQuerySchema>;
+
+// ───────────────────────────────────────────────────────────── clone & context
+
+export const cloneSessionSchema = z.object({
+  name: requiredText('Session name', 100),
+  code: sessionCodeSchema,
+  startDate: requiredDateSchema,
+  endDate: requiredDateSchema,
+});
+export type CloneSessionData = z.output<typeof cloneSessionSchema>;
+
+export const academicContextQuerySchema = z.object({
+  academicSessionId: uuidSchema,
+  locationId: uuidSchema,
+  /** Master grade id. Omit it to list the grades offered at the location. */
+  gradeId: uuidSchema.optional(),
+});
+export type AcademicContextQuery = z.output<typeof academicContextQuerySchema>;

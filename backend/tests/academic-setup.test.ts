@@ -11,6 +11,7 @@ import {
   createSession,
   createStarterSubjects,
   createUserAndLogin,
+  draftSession,
   expectError,
   forceStatus,
   loadReference,
@@ -22,15 +23,6 @@ useTestDatabase();
 beforeEach(async () => {
   await loadReference();
 });
-
-/** A school with MOH (CBSE) and CHD (PSEB) in a DRAFT session, plus English, Hindi, Mathematics and Science. */
-async function draftSession() {
-  const s = await academicSchool();
-  const session = await createSession(s.agent, [s.ref.pin(s.moh.locationId, 'CBSE'), s.ref.pin(s.chd.locationId, 'PSEB')]);
-  const subjects = await createStarterSubjects(s.agent);
-  const sessionUrl = `${API}/academic-sessions/${session.academicSessionId}`;
-  return { ...s, session, subjects, sessionUrl, id: session.academicSessionId };
-}
 
 describe('reference data (AS-01, AS-03)', () => {
   it('seeded grades and boards are visible to every tenant and read-only', async () => {

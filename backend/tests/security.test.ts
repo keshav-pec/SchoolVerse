@@ -3,6 +3,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { GradeOffering, SectionOffering, SubjectOffering } from '../src/modules/academic/offering.model';
 import { EducationBoard } from '../src/modules/academic/reference.model';
+import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '../src/modules/academic/rules.model';
 import { AcademicSession, AcademicTerm } from '../src/modules/academic/session.model';
 import { Subject } from '../src/modules/academic/subject.model';
 import { Location } from '../src/modules/locations/location.model';
@@ -35,6 +36,9 @@ interface AcademicIds {
   otherGradeOfferingId: string;
   sectionId: string;
   subjectOfferingId: string;
+  choiceGroupId: string;
+  constraintId: string;
+  programmeId: string;
   termId: string;
   subjectId: string;
   boardId: string;
@@ -68,6 +72,12 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'GET grade offering', send: (c) => c.get(grade) },
       { name: 'GET sections', send: (c) => c.get(`${grade}/sections`) },
       { name: 'GET subject offerings', send: (c) => c.get(`${grade}/subjects`) },
+      { name: 'GET overview', send: (c) => c.get(`${session}/overview`) },
+      { name: 'GET choice groups', send: (c) => c.get(`${grade}/choice-groups`) },
+      { name: 'GET constraints', send: (c) => c.get(`${grade}/constraints`) },
+      { name: 'GET programmes', send: (c) => c.get(`${API}/academic-programmes`).query({ academicSessionId: x.sessionId }) },
+      { name: 'GET programme', send: (c) => c.get(`${API}/academic-programmes/${x.programmeId}`) },
+      { name: 'GET academic context', send: (c) => c.get(`${API}/academic-context`).query({ academicSessionId: x.sessionId, locationId: x.locationId }) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -106,6 +116,21 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'DELETE subject offering', send: (c) => c.delete(`${API}/subject-offerings/${x.subjectOfferingId}`) },
       { name: 'PATCH term', send: (c) => c.patch(`${API}/terms/${x.termId}`).send({ name: 'Hijacked' }) },
       { name: 'DELETE term', send: (c) => c.delete(`${API}/terms/${x.termId}`) },
+      // Academic rules, lifecycle and clone (Part 2)
+      { name: 'validate session', send: (c) => c.post(`${session}/validate`) },
+      { name: 'publish session', send: (c) => c.post(`${session}/publish`) },
+      { name: 'activate session', send: (c) => c.post(`${session}/activate`) },
+      { name: 'close session', send: (c) => c.post(`${session}/close`) },
+      { name: 'archive session', send: (c) => c.post(`${session}/archive`) },
+      { name: 'clone session', send: (c) => c.post(`${session}/clone`).send({ name: 'Copy', code: 'COPY', startDate: '2030-04-01', endDate: '2031-03-31' }) },
+      { name: 'POST choice group', send: (c) => c.post(`${grade}/choice-groups`).send({ name: 'G', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [x.subjectOfferingId] }) },
+      { name: 'PATCH choice group', send: (c) => c.patch(`${API}/choice-groups/${x.choiceGroupId}`).send({ name: 'Hijacked' }) },
+      { name: 'DELETE choice group', send: (c) => c.delete(`${API}/choice-groups/${x.choiceGroupId}`) },
+      { name: 'POST constraint', send: (c) => c.post(`${grade}/constraints`).send({ type: 'EXCLUDES', subjectOfferingId: x.subjectOfferingId, otherSubjectOfferingId: randomUUID() }) },
+      { name: 'DELETE constraint', send: (c) => c.delete(`${API}/constraints/${x.constraintId}`) },
+      { name: 'POST programme', send: (c) => c.post(`${API}/academic-programmes`).send({ academicSessionId: x.sessionId, locationId: x.locationId, name: 'P', code: 'P9', kind: 'FLEXIBLE', gradeFromId: randomUUID(), gradeToId: randomUUID() }) },
+      { name: 'PATCH programme', send: (c) => c.patch(`${API}/academic-programmes/${x.programmeId}`).send({ name: 'Hijacked' }) },
+      { name: 'DELETE programme', send: (c) => c.delete(`${API}/academic-programmes/${x.programmeId}`) },
     ],
   };
 }
@@ -123,7 +148,17 @@ async function victim() {
   const subjects = await createStarterSubjects(b.agent);
   const [g6, g7] = await addGrades(b.agent, session.academicSessionId, b.moh.locationId, [ref.gradeId.G06!, ref.gradeId.G07!]);
   const section = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data[0];
-  const offering = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [subjects.MATH], offeringType: 'MANDATORY' }).expect(201)).body.data[0];
+  const offered = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [subjects.MATH, subjects.SCI], offeringType: 'ELECTIVE' }).expect(201)).body.data as { subjectCode: string; subjectOfferingId: string }[];
+  const offering = offered.find((o) => o.subjectCode === 'MATH')!;
+  const science = offered.find((o) => o.subjectCode === 'SCI')!;
+  const group = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/choice-groups`).send({ name: 'Electives', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [offering.subjectOfferingId, science.subjectOfferingId] }).expect(201)).body.data;
+  const constraint = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/constraints`).send({ type: 'REQUIRES', subjectOfferingId: science.subjectOfferingId, otherSubjectOfferingId: offering.subjectOfferingId }).expect(201)).body.data;
+  const programme = (
+    await b.agent
+      .post(`${API}/academic-programmes`)
+      .send({ academicSessionId: session.academicSessionId, locationId: b.moh.locationId, name: 'Track', code: 'TRK', kind: 'STREAM', gradeFromId: ref.gradeId.G06, gradeToId: ref.gradeId.G06, subjectRules: [{ subjectOfferingId: offering.subjectOfferingId, requirement: 'REQUIRED' }] })
+      .expect(201)
+  ).body.data;
   const term = (await b.agent.post(`${API}/academic-sessions/${session.academicSessionId}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
   const board = (await b.agent.post(`${API}/boards`).send({ boardCode: 'VICTIM', boardName: 'Victim Board' }).expect(201)).body.data;
   const ruleVersion = (await b.agent.post(`${API}/boards/${board.boardId}/rule-versions`).send({ name: 'v1' }).expect(201)).body.data;
@@ -135,6 +170,9 @@ async function victim() {
     otherGradeOfferingId: g7!.gradeOfferingId,
     sectionId: section.sectionOfferingId,
     subjectOfferingId: offering.subjectOfferingId,
+    choiceGroupId: group.choiceGroupId,
+    constraintId: constraint.constraintId,
+    programmeId: programme.programmeId,
     termId: term.termId,
     subjectId: subjects.MATH!,
     boardId: board.boardId,
@@ -145,7 +183,7 @@ async function victim() {
 
 /** Everything the academic routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
