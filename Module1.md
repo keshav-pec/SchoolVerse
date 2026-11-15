@@ -336,6 +336,31 @@ SchoolVerse/
 
 > **Commit:** `feat(school-setup): add first-time setup wizard, setup overview, downstream master APIs, OpenAPI contracts and full QA/integration test suite`
 
+### Part 4: as built (2026-11-15)
+
+✅ Done. Backend: 208 tests (122 before Part 4 → +86). Frontend: 38 component tests + 6 Playwright browser tests. Typecheck, lint and build are clean in both projects. Decisions made during implementation:
+
+| Topic | What was built | Why |
+|---|---|---|
+| Completing setup | `POST /schools/:id/setup/complete {primaryLocationId?}` runs in one transaction: validate profile, validate the Primary Location, activate it, mark `COMPLETED`, audit. Failures return `SETUP_INCOMPLETE` with `details.fields` (`primaryLocation.phone` …) and change nothing. Idempotent. If a Primary already exists, `primaryLocationId` is ignored. | The activation reuses the Part 2 state machine (`changeLocationStatusInSession`), so the rules can't drift. |
+| Wizard step 3 | Creates the Primary Location as **ACTIVE + Primary** straight away. Resuming a draft instead PATCHes it and activates it. | Step 4 allows additional locations to be Active, and the first location to become ACTIVE auto-becomes Primary. A draft Primary would have lost that race. |
+| Resuming | Steps 1–2 live in `localStorage` (nothing exists server-side yet). After `POST /schools`, `setup.currentStep` is saved by `PATCH /schools/:id/setup`. The wizard is one component instance, so creating the school doesn't rewind it. | Spec item 2. |
+| `setupCompleted` on `SchoolDTO` | New boolean visible to everyone with `school:view`. The detailed `setup` block stays admin-only. | Faculty/Staff must be able to see "Your school is getting set up" without reading configuration. |
+| Guards | `RequireSetupComplete` wraps the app shell: admins go to `/setup`, Faculty/Staff see the waiting screen, Parents pass through. `/setup` redirects finished schools to the Overview. A finished admin lands on Home; the Overview is one click away. | Spec item 4. |
+| Setup status | Weights sum to 100: profile 15, contact 10, identifiers 5, primary location 20, location addresses 10, then Academic Structure 20, Buildings & Rooms 10, Academic Calendar 10. Items are `completed` / `pending` / `upcoming`. `completionPercent` is overall (like the PRD's "78%"); `coreCompletionPercent` covers School Setup only. | Future-module items show as "Coming soon", never as failures. The ring is honest about the whole journey. |
+| Master API | Frozen `MasterLocationDTO` (see `CONTRACTS.md`). `operational` = ACTIVE; `configuration` adds DRAFT + INACTIVE; `all` adds ARCHIVED. Non-operational scopes need `location:view_config`. `GET /master/locations/:id` resolves any status. Limited roles never see DRAFTs (never operational, so nothing can reference them). `validate` treats other tenants' ids as `NOT_FOUND`. | Spec item 7, PRD §16. |
+| In-process contract | `masterService`: `assertOperationalLocation` (404 or `LOCATION_NOT_ACTIVE`), `getPrimaryLocation`, `registerLocationDependency`, plus the read functions. | Future modules import one object. |
+| New error codes | `LOCATION_NOT_ACTIVE` (409), `SETUP_INCOMPLETE` (422). | |
+| Docs | Swagger UI at `/api/docs` (its relaxed CSP applies to that path only; a test guards it). `openapi.yaml` is read at runtime and copied to `dist/docs` on build. `docs/CONTRACTS.md` covers frozen fields, lifecycle, Primary, error catalog, reference pattern and ownership. A test checks that every Module 1 endpoint is documented and every `$ref` resolves. | Acceptance criterion 13. |
+| Seed | Greenfield's setup is completed through the real `completeSetup`; Riverside is left at wizard step 5. `seedDemo()` is exported so the e2e server can reuse it. | Both the "finished" and "resume" paths are demoable. |
+| QA suite | One file per PRD §19 scenario, `tests/qa/qa-14-…` to `qa-29-…` (16 files, 53 tests). The PRD lists scenario 27 after 29; each has its own file regardless. | Spec item 11. |
+| E2E | Playwright runs the Vite server against `npm run e2e:server`: in-memory MongoDB, demo seed, `NODE_ENV=test`. It never reads `backend/.env`, so it cannot touch a real database. Flows: signup → wizard → overview (+ resume), add → set primary → deactivate old → archive (+ live duplicate code), Faculty read-only (+ the API refusing direct calls, + Parent redirect). | Spec item 12. |
+| PRD wording | Toasts now use the PRD §14 text: "Location created successfully.", "Location archived successfully.", "Mohali Campus is now the Primary Location." | Part 3 used friendlier variants. |
+
+**Bugs the tests and the browser caught while building:** the celebration screen would never have shown (the cache update redirected away the instant completion succeeded); the browser draft could be re-written after the school was created; the Locations table overflowed at 1280px.
+
+**Not run:** `npm run seed` against your Atlas database. Run it once to get the new setup states there. A visual pass was done with Playwright screenshots at 1280px and 390px.
+
 ---
 
 ## Story → Part traceability

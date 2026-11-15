@@ -1,23 +1,14 @@
 import { useState } from 'react';
 import { ROLE_DESCRIPTIONS } from '@shared';
-import { Bus, Check, Copy, Flag, Fingerprint, History, MapPinned, School, ShieldCheck, Sparkles, Building } from 'lucide-react';
+import { Check, Copy, Fingerprint, History, School, ShieldCheck, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { CampusScene } from '@/components/illustrations/campus-scene';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RoleBadge } from '@/components/sv/role-badge';
 import { useSession } from '@/lib/auth';
-import { cn, firstName, greetingFor } from '@/lib/utils';
-
-const JOURNEY = [
-  { label: 'School profile', hint: 'Name, contact & official IDs', Icon: School },
-  { label: 'Primary campus', hint: 'Your main location', Icon: MapPinned },
-  { label: 'More campuses', hint: 'Branches & admin offices', Icon: Building },
-  { label: 'Go live', hint: 'Ready for academics', Icon: Flag },
-];
+import { firstName, greetingFor } from '@/lib/utils';
 
 const SAFEGUARDS = [
   { Icon: Fingerprint, title: 'Tenant-isolated', text: 'Your school’s data is walled off from every other workspace.' },
@@ -159,57 +150,6 @@ export function HomePage() {
           </ul>
         </Card>
       </div>
-
-      {/* Journey */}
-      <Card>
-        <CardHeader>
-          <div>
-            <CardTitle>Your setup journey</CardTitle>
-            <CardDescription>
-              {isAdmin ? 'Here’s the route to a fully configured school. Start with your school profile, then add your campuses.' : 'Here’s what your School Admin configures. You can browse the school profile and active campuses.'}
-            </CardDescription>
-          </div>
-          {session.permissions.includes('school:view') && (
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link to="/school-setup/profile">School Profile</Link>
-              </Button>
-              <Button asChild size="sm">
-                <Link to="/school-setup/locations">Locations</Link>
-              </Button>
-            </div>
-          )}
-        </CardHeader>
-        <ol className="relative grid gap-4 sm:grid-cols-4 sm:gap-2">
-          <div className="absolute top-6 right-[12%] left-[12%] hidden h-1 rounded-full bg-[repeating-linear-gradient(90deg,var(--color-line)_0_12px,transparent_12px_20px)] sm:block" aria-hidden="true" />
-          <motion.div
-            className="absolute top-1 left-[8%] hidden text-sun sm:block"
-            animate={{ x: [0, 14, 0] }}
-            transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-            aria-hidden="true"
-          >
-            <Bus className="size-6 drop-shadow" />
-          </motion.div>
-          {JOURNEY.map(({ label, hint, Icon }, i) => (
-            <li key={label} className="relative flex items-center gap-3 sm:flex-col sm:text-center">
-              <span
-                className={cn(
-                  'relative z-10 grid size-12 shrink-0 place-items-center rounded-2xl border-2 border-white shadow-card',
-                  ['bg-brand-soft text-brand', 'bg-coral-soft text-coral', 'bg-lavender-soft text-lavender', 'bg-mint-soft text-mint'][i],
-                )}
-              >
-                <Icon className="size-5" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold">
-                  <span className="text-muted">{i + 1}.</span> {label}
-                </p>
-                <p className="text-[13px] text-muted">{hint}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </Card>
     </div>
   );
 }

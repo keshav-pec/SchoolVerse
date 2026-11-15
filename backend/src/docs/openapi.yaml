@@ -1,0 +1,918 @@
+openapi: 3.0.3
+info:
+  title: SchoolVerse API — Module 1, School & School Locations Setup
+  version: 1.0.0
+  description: |
+    The School and Location master for SchoolVerse, plus the first-time setup flow and the read-only
+    contract that downstream modules build on. Behaviour, frozen fields and ownership rules are in
+    `CONTRACTS.md` next to this file.
+
+    **Conventions**
+    - Success: `{ "data": … }`. Error: `{ "error": { "code", "message", "details?", "requestId" } }`.
+    - IDs are permanent UUIDs. Labels (names, codes) are presentation only: store `locationId`, never a name.
+    - The tenant always comes from the signed-in session, never from the request.
+      Another tenant's ids return **404**, not 403, so ids cannot be enumerated.
+    - Status and Primary are business operations (`/activate`, `/set-primary` …), never PATCH fields.
+servers:
+  - url: /api/v1
+tags:
+  - { name: Auth, description: Sessions }
+  - { name: School, description: School profile, logo and official identifiers }
+  - { name: Locations, description: School locations and their lifecycle }
+  - { name: Setup, description: First-time setup wizard and overview }
+  - { name: Master, description: Read-only contract for downstream modules }
+  - { name: Audit, description: Configuration audit trail }
+  - { name: Dev, description: Non-production helpers (not mounted when NODE_ENV=production) }
+security:
+  - cookieAuth: []
+paths:
+  /health:
+    get:
+      tags: [Auth]
+      summary: Liveness and database state
+      security: []
+      responses:
+        '200': { description: OK }
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create a workspace and its first School Admin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspaceName, fullName, email, password]
+              properties:
+                workspaceName: { type: string, example: Greenfield Public School }
+                fullName: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in (sets httpOnly cookies)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate the refresh token and issue a new access token
+      security: []
+      responses:
+        '200': { description: Cookies renewed }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out
+      responses:
+        '204': { description: Signed out }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current session with the permission list
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /schools/current:
+    get:
+      tags: [School]
+      summary: The tenant's School Master, or null before it exists
+      description: Requires `school:view`.
+      responses:
+        '200':
+          description: School or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/School'
+                    nullable: true
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /schools:
+    post:
+      tags: [School]
+      summary: Create the school (one per tenant in the MVP)
+      description: Requires `school:edit`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SchoolInput' }
+      responses:
+        '201': { $ref: '#/components/responses/School' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /schools/{schoolId}:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    get:
+      tags: [School]
+      summary: Get the school
+      description: Requires `school:view`. Faculty and Staff receive the limited view (no `setup` block).
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [School]
+      summary: Update the school profile (any subset of fields)
+      description: Requires `school:edit`. `null` or `""` clears an optional field. Audited with a field diff.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SchoolInput' }
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /schools/{schoolId}/logo:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    post:
+      tags: [School]
+      summary: Upload the logo (PNG, JPEG or WebP, up to 2 MB)
+      description: The type is detected from the file's bytes. SVG is rejected.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+        '400': { description: FILE_REQUIRED, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+        '413': { description: FILE_TOO_LARGE, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+        '415': { description: UNSUPPORTED_FILE_TYPE, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+    delete:
+      tags: [School]
+      summary: Remove the logo
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+  /schools/{schoolId}/identifiers:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    get:
+      tags: [School]
+      summary: List official identifiers
+      description: Requires `school:view_config`.
+      responses:
+        '200':
+          description: Identifiers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Identifier' } }
+    post:
+      tags: [School]
+      summary: Add an official identifier
+      description: Requires `school:edit`. `identifierType` is free text, so no board is hard-coded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentifierInput' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Identifier' } } } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+  /schools/{schoolId}/identifiers/{identifierId}:
+    parameters:
+      - { $ref: '#/components/parameters/SchoolId' }
+      - { name: identifierId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [School]
+      summary: Update an identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentifierInput' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Identifier' } } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [School]
+      summary: Remove an identifier (prefer status SUPERSEDED to keep history)
+      responses:
+        '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /schools/{schoolId}/locations:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    get:
+      tags: [Locations]
+      summary: List locations with search, filters, sorting and facets
+      description: |
+        Requires `location:view`. The Primary Location is always listed first.
+        Without `location:view_config` (Faculty, Staff) only ACTIVE locations are returned.
+        Default status filter: everything except ARCHIVED.
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Matches name, official name, code or city }
+        - { name: status, in: query, schema: { type: string }, description: 'Comma separated, e.g. ACTIVE,DRAFT' }
+        - { name: type, in: query, schema: { type: string }, description: 'Comma separated location types' }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, default: displayName }, description: 'displayName, locationCode, city, status, locationType, openingDate, createdAt (prefix - for descending)' }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: A page of locations plus facets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LocationList' }
+    post:
+      tags: [Locations]
+      summary: Create a location (Save as Draft or Activate)
+      description: |
+        Requires `location:create`. `intent: ACTIVE` also requires `location:change_status` and `isPrimary: true`
+        requires `location:set_primary`. The first location to become ACTIVE becomes Primary automatically.
+        A DRAFT only needs name, code and type; ACTIVE also needs phone and a structured address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLocation' }
+      responses:
+        '201': { $ref: '#/components/responses/Location' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '409': { description: LOCATION_CODE_TAKEN, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+  /schools/{schoolId}/locations/code-availability:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    get:
+      tags: [Locations]
+      summary: Live code check and suggestion
+      description: Requires `location:view_config`. Archived codes stay reserved.
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: name, in: query, schema: { type: string }, description: Base a suggestion on this name }
+        - { name: excludeLocationId, in: query, schema: { type: string, format: uuid }, description: Ignore this location (edit forms) }
+      responses:
+        '200':
+          description: Availability
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/CodeAvailability' }
+  /locations/{locationId}:
+    parameters: [{ $ref: '#/components/parameters/LocationId' }]
+    get:
+      tags: [Locations]
+      summary: Get a location
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Locations]
+      summary: Edit location details
+      description: |
+        Requires `location:edit`. Sending `status` or `isPrimary` is rejected with `FIELD_NOT_EDITABLE`.
+        `address` replaces the whole address object. Archived locations return `LOCATION_ARCHIVED`.
+        Changing the code of a referenced location returns `LOCATION_CODE_LOCKED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLocation' }
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Locations]
+      summary: Discard a never-used DRAFT location
+      description: Requires `location:archive`. Anything else returns `USE_ARCHIVE_INSTEAD`.
+      responses:
+        '204': { description: Deleted }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /locations/{locationId}/activate:
+    post:
+      tags: [Locations]
+      summary: DRAFT or INACTIVE → ACTIVE
+      description: Requires `location:change_status`. The first active location becomes Primary. Incomplete drafts return `LOCATION_INCOMPLETE` with `details.fields`.
+      parameters: [{ $ref: '#/components/parameters/LocationId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: LOCATION_INCOMPLETE, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+  /locations/{locationId}/deactivate:
+    post:
+      tags: [Locations]
+      summary: ACTIVE → INACTIVE
+      description: Requires `location:change_status`. The Primary Location cannot be deactivated (`PRIMARY_LOCATION_REQUIRED`).
+      parameters: [{ $ref: '#/components/parameters/LocationId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /locations/{locationId}/archive:
+    post:
+      tags: [Locations]
+      summary: DRAFT or INACTIVE → ARCHIVED (terminal)
+      description: |
+        Requires `location:archive`. Blocked with `LOCATION_HAS_DEPENDENCIES` (`details.dependencies[]`) while
+        downstream modules report active records. Archived locations keep their id and code and stay readable.
+      parameters: [{ $ref: '#/components/parameters/LocationId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /locations/{locationId}/set-primary:
+    post:
+      tags: [Locations]
+      summary: Make an ACTIVE location the Primary Location
+      description: Requires `location:set_primary`. The old and new Primary swap in one transaction.
+      parameters: [{ $ref: '#/components/parameters/LocationId' }]
+      responses:
+        '200': { $ref: '#/components/responses/Location' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /schools/{schoolId}/setup-status:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    get:
+      tags: [Setup]
+      summary: Weighted setup checklist and completion percentage
+      description: Requires `setup:manage`. Items are `completed`, `pending`, or `upcoming` (owned by modules not built yet).
+      responses:
+        '200':
+          description: Checklist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/SetupStatus' }
+  /schools/{schoolId}/setup:
+    parameters: [{ $ref: '#/components/parameters/SchoolId' }]
+    patch:
+      tags: [Setup]
+      summary: Remember the wizard step (1–6)
+      description: Requires `setup:manage`. Has no effect once setup is COMPLETED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentStep]
+              properties:
+                currentStep: { type: integer, minimum: 1, maximum: 6 }
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+        '400': { $ref: '#/components/responses/Validation' }
+  /schools/{schoolId}/setup/complete:
+    post:
+      tags: [Setup]
+      summary: Finish first-time setup
+      description: |
+        Requires `setup:manage` and `location:change_status`. One transaction: validates the profile and the
+        Primary Location, activates it (which makes it Primary when none exists), sets `setup.status = COMPLETED`
+        and writes an audit event. Idempotent. Failures return `SETUP_INCOMPLETE` with `details.fields`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                primaryLocationId: { type: string, format: uuid, description: Location to activate when no Primary exists yet }
+      responses:
+        '200': { $ref: '#/components/responses/School' }
+        '422': { description: SETUP_INCOMPLETE, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+
+  /master/school-context:
+    get:
+      tags: [Master]
+      summary: School id, display name, effective defaults and Primary Location id
+      description: Requires `school:view`.
+      responses:
+        '200':
+          description: Context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/MasterSchoolContext' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /master/locations:
+    get:
+      tags: [Master]
+      summary: Locations for selectors and reports
+      description: |
+        Requires `location:view`; `configuration` and `all` also need `location:view_config`.
+        `operational` = ACTIVE only (use for selectors) · `configuration` adds DRAFT and INACTIVE ·
+        `all` adds ARCHIVED (history and reports).
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [operational, configuration, all], default: operational } }
+      responses:
+        '200':
+          description: Locations, Primary first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/MasterLocation' } }
+  /master/locations/validate:
+    post:
+      tags: [Master]
+      summary: Check that location ids may be used
+      description: |
+        `NEW_ASSIGNMENT` is valid only for ACTIVE locations. `HISTORICAL_READ` is valid for any location that
+        exists (including INACTIVE and ARCHIVED). Unknown ids and other tenants' ids are both `NOT_FOUND`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationIds, purpose]
+              properties:
+                locationIds: { type: array, minItems: 1, maxItems: 100, items: { type: string } }
+                purpose: { type: string, enum: [NEW_ASSIGNMENT, HISTORICAL_READ] }
+      responses:
+        '200':
+          description: Per-id result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LocationValidation' }
+  /master/locations/{locationId}:
+    parameters: [{ $ref: '#/components/parameters/LocationId' }]
+    get:
+      tags: [Master]
+      summary: Resolve a location of any status
+      description: So historical records can still show an archived location's name. Limited roles never see DRAFT locations.
+      responses:
+        '200':
+          description: Location
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/MasterLocation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Audit events, newest first
+      description: Requires `audit:view`.
+      parameters:
+        - { name: entityType, in: query, schema: { type: string, enum: [tenant, user, school, school_identifier, school_location] } }
+        - { name: entityId, in: query, schema: { type: string, format: uuid } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses:
+        '200':
+          description: A page of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+                      nextCursor: { type: string, nullable: true }
+  /dev/location-references:
+    post:
+      tags: [Dev]
+      summary: Simulate a downstream reference to a location (QA scenario 23)
+      description: Requires `setup:manage`. Not available in production.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationId, kind]
+              properties:
+                locationId: { type: string, format: uuid }
+                kind: { type: string, enum: [staff, students, academic, inventory, transactions] }
+                count: { type: integer, default: 1 }
+                active: { type: boolean, default: true, description: false = historical only (locks the code, does not block archive) }
+      responses:
+        '201': { description: Created }
+    delete:
+      tags: [Dev]
+      summary: Remove simulated references for a location
+      parameters: [{ name: locationId, in: query, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: Removed }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sv_access
+      description: httpOnly access-token cookie set by /auth/login or /auth/signup.
+  parameters:
+    SchoolId: { name: schoolId, in: path, required: true, schema: { type: string, format: uuid } }
+    LocationId: { name: locationId, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Session:
+      description: The signed-in session
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Session' }
+    School:
+      description: The school
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/School' }
+    Location:
+      description: The location
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/LocationDetail' }
+    Unauthenticated:
+      description: UNAUTHENTICATED / SESSION_EXPIRED / INVALID_CREDENTIALS
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+    Forbidden:
+      description: FORBIDDEN. The permission is missing; details.required lists it.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+    NotFound:
+      description: NOT_FOUND. Also returned for another tenant's ids.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+    Validation:
+      description: VALIDATION_FAILED with details.fields (dotted paths, e.g. address.postalCode)
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+    Conflict:
+      description: A business rule refused the change (see the error code)
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+    RateLimited:
+      description: RATE_LIMITED
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } }
+  schemas:
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable catalog code (see CONTRACTS.md)
+              example: LOCATION_CODE_TAKEN
+            message: { type: string, example: Location code MOH is already in use. }
+            details:
+              type: object
+              additionalProperties: true
+              properties:
+                fields: { type: object, additionalProperties: { type: string } }
+                dependencies:
+                  type: array
+                  items: { $ref: '#/components/schemas/Dependency' }
+            requestId: { type: string }
+    Dependency:
+      type: object
+      properties:
+        key: { type: string }
+        label: { type: string }
+        count: { type: integer }
+        message: { type: string, example: 12 active staff members are assigned to this location. }
+    Session:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            userId: { type: string, format: uuid }
+            email: { type: string }
+            fullName: { type: string }
+            role: { type: string, enum: [SCHOOL_ADMIN, FACULTY, STAFF, PARENT] }
+        tenant:
+          type: object
+          properties:
+            tenantId: { type: string, format: uuid }
+            name: { type: string }
+        permissions: { type: array, items: { type: string } }
+    SchoolInput:
+      type: object
+      properties:
+        schoolCode: { type: string, example: GPS }
+        legalName: { type: string }
+        displayName: { type: string }
+        shortName: { type: string, nullable: true }
+        primaryEmail: { type: string, format: email }
+        primaryPhone: { type: string, example: '+91 98140 11000' }
+        alternatePhone: { type: string, nullable: true }
+        websiteUrl: { type: string, nullable: true }
+        defaultTimezone: { type: string, example: Asia/Kolkata }
+        defaultCurrency: { type: string, example: INR }
+        defaultLocale: { type: string, example: en-IN }
+    School:
+      type: object
+      properties:
+        schoolId: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        schoolCode: { type: string }
+        legalName: { type: string }
+        displayName: { type: string }
+        shortName: { type: string, nullable: true }
+        logoUrl: { type: string, nullable: true }
+        primaryEmail: { type: string }
+        primaryPhone: { type: string, description: E.164 }
+        alternatePhone: { type: string, nullable: true }
+        websiteUrl: { type: string, nullable: true }
+        defaultTimezone: { type: string }
+        defaultCurrency: { type: string }
+        defaultLocale: { type: string }
+        status: { type: string, enum: [ACTIVE, INACTIVE, ARCHIVED] }
+        setupCompleted: { type: boolean }
+        setup:
+          type: object
+          description: Only with `school:view_config`
+          properties:
+            status: { type: string, enum: [IN_PROGRESS, COMPLETED] }
+            currentStep: { type: integer }
+            completedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    IdentifierInput:
+      type: object
+      properties:
+        identifierType: { type: string, example: Affiliation Number }
+        identifierValue: { type: string }
+        issuingAuthority: { type: string, nullable: true }
+        issueDate: { type: string, format: date, nullable: true }
+        expiryDate: { type: string, format: date, nullable: true }
+        documentUrl: { type: string, nullable: true }
+        status: { type: string, enum: [ACTIVE, EXPIRED, SUPERSEDED] }
+    Identifier:
+      allOf:
+        - $ref: '#/components/schemas/IdentifierInput'
+        - type: object
+          properties:
+            identifierId: { type: string, format: uuid }
+            schoolId: { type: string, format: uuid }
+    Address:
+      type: object
+      properties:
+        line1: { type: string, nullable: true }
+        line2: { type: string, nullable: true }
+        locality: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        district: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        postalCode: { type: string, nullable: true, description: Country-aware (IN 6-digit PIN, US ZIP, GB, CA, AU, SG, generic) }
+        country: { type: string, default: IN, description: ISO 3166-1 alpha-2 }
+    CreateLocation:
+      type: object
+      required: [displayName, locationCode, locationType]
+      properties:
+        displayName: { type: string, example: Mohali Campus }
+        locationCode: { type: string, example: MOH, description: '2–10 of A-Z 0-9 -, saved in capitals, unique per school' }
+        locationType: { type: string, enum: [MAIN_CAMPUS, BRANCH_CAMPUS, ADMINISTRATIVE] }
+        intent: { type: string, enum: [DRAFT, ACTIVE], default: DRAFT }
+        isPrimary: { type: boolean, default: false, description: Only valid with intent ACTIVE }
+        officialName: { type: string, nullable: true }
+        openingDate: { type: string, format: date, nullable: true }
+        timezoneOverride: { type: string, nullable: true, description: null = inherit the school default }
+        currencyOverride: { type: string, nullable: true }
+        localeOverride: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        alternatePhone: { type: string, nullable: true }
+        websiteUrl: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        notes: { type: string, nullable: true }
+        address: { $ref: '#/components/schemas/Address' }
+    UpdateLocation:
+      type: object
+      description: Any subset of the CreateLocation fields except `intent` and `isPrimary`.
+      properties:
+        displayName: { type: string }
+        locationCode: { type: string }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        address: { $ref: '#/components/schemas/Address' }
+    Location:
+      type: object
+      properties:
+        locationId: { type: string, format: uuid }
+        schoolId: { type: string, format: uuid }
+        locationCode: { type: string }
+        displayName: { type: string }
+        officialName: { type: string, nullable: true }
+        locationType: { type: string, enum: [MAIN_CAMPUS, BRANCH_CAMPUS, ADMINISTRATIVE] }
+        isPrimary: { type: boolean }
+        status: { type: string, enum: [DRAFT, ACTIVE, INACTIVE, ARCHIVED] }
+        openingDate: { type: string, nullable: true }
+        timezoneOverride: { type: string, nullable: true }
+        currencyOverride: { type: string, nullable: true }
+        localeOverride: { type: string, nullable: true }
+        effectiveDefaults:
+          type: object
+          properties:
+            timezone: { type: string }
+            currency: { type: string }
+            locale: { type: string }
+            inherited:
+              type: object
+              properties:
+                timezone: { type: boolean }
+                currency: { type: boolean }
+                locale: { type: boolean }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        alternatePhone: { type: string, nullable: true }
+        websiteUrl: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        address: { $ref: '#/components/schemas/Address' }
+        staffCount: { type: integer, nullable: true, description: null until the Staff module exists }
+        studentCount: { type: integer, nullable: true, description: null until the Student module exists }
+        notes: { type: string, nullable: true, description: Only with `location:view_config` }
+        statusChangedAt: { type: string, format: date-time, nullable: true }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LocationDetail:
+      allOf:
+        - $ref: '#/components/schemas/Location'
+        - type: object
+          properties:
+            codeLocked: { type: boolean, description: Downstream records reference the location, so the code cannot change }
+            deletable: { type: boolean, description: Only an unreferenced DRAFT can be deleted }
+    LocationList:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Location' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        facets:
+          type: object
+          properties:
+            cities:
+              type: array
+              items:
+                type: object
+                properties:
+                  city: { type: string }
+                  count: { type: integer }
+            statuses: { type: object, additionalProperties: { type: integer } }
+            types: { type: object, additionalProperties: { type: integer } }
+    CodeAvailability:
+      type: object
+      properties:
+        code: { type: string, nullable: true }
+        valid: { type: boolean }
+        available: { type: boolean }
+        message: { type: string, nullable: true }
+        suggestion: { type: string, nullable: true }
+    AuditEvent:
+      type: object
+      properties:
+        auditEventId: { type: string, format: uuid }
+        entityType: { type: string }
+        entityId: { type: string, format: uuid }
+        action: { type: string, example: location.primary_set }
+        actor:
+          type: object
+          properties:
+            userId: { type: string, nullable: true }
+            role: { type: string }
+            name: { type: string, nullable: true }
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              from: {}
+              to: {}
+        metadata: { type: object, additionalProperties: true }
+        occurredAt: { type: string, format: date-time }
+        requestId: { type: string, nullable: true }
+    SetupItem:
+      type: object
+      properties:
+        key: { type: string, example: primary_location }
+        label: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [completed, pending, upcoming] }
+        weight: { type: integer }
+        module: { type: string }
+        href: { type: string, nullable: true }
+    SetupStatus:
+      type: object
+      properties:
+        schoolId: { type: string, format: uuid }
+        setupStatus: { type: string, enum: [IN_PROGRESS, COMPLETED] }
+        currentStep: { type: integer }
+        completionPercent: { type: integer, description: Overall, including modules that are not built yet }
+        coreCompletionPercent: { type: integer, description: This module's own items only }
+        items: { type: array, items: { $ref: '#/components/schemas/SetupItem' } }
+        nextStep: { allOf: [{ $ref: '#/components/schemas/SetupItem' }], nullable: true }
+        summary:
+          type: object
+          properties:
+            schoolName: { type: string }
+            primaryLocation:
+              type: object
+              nullable: true
+              properties:
+                locationId: { type: string, format: uuid }
+                displayName: { type: string }
+                locationCode: { type: string }
+            activeLocations: { type: integer }
+            draftLocations: { type: integer }
+            totalLocations: { type: integer }
+    MasterSchoolContext:
+      type: object
+      properties:
+        schoolId: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        displayName: { type: string }
+        shortName: { type: string, nullable: true }
+        defaults:
+          type: object
+          properties:
+            timezone: { type: string }
+            currency: { type: string }
+            locale: { type: string }
+        primaryLocationId: { type: string, format: uuid, nullable: true }
+        setupCompleted: { type: boolean }
+    MasterLocation:
+      type: object
+      description: Frozen. Store `locationId`; never copy the other fields.
+      properties:
+        locationId: { type: string, format: uuid }
+        schoolId: { type: string, format: uuid }
+        locationCode: { type: string }
+        displayName: { type: string }
+        locationType: { type: string, enum: [MAIN_CAMPUS, BRANCH_CAMPUS, ADMINISTRATIVE] }
+        status: { type: string, enum: [DRAFT, ACTIVE, INACTIVE, ARCHIVED] }
+        isPrimary: { type: boolean }
+        city: { type: string, nullable: true }
+        state: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        effectiveDefaults:
+          type: object
+          properties:
+            timezone: { type: string }
+            currency: { type: string }
+            locale: { type: string }
+    LocationValidation:
+      type: object
+      properties:
+        purpose: { type: string, enum: [NEW_ASSIGNMENT, HISTORICAL_READ] }
+        allValid: { type: boolean }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              locationId: { type: string }
+              valid: { type: boolean }
+              reason: { type: string, enum: [NOT_FOUND, NOT_ACTIVE, ARCHIVED], nullable: true }

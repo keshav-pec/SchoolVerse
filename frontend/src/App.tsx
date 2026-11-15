@@ -10,7 +10,15 @@ import { LocationsPage } from '@/features/locations/locations-page';
 import { SchoolProfilePage } from '@/features/school-profile/school-profile-page';
 import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
-import { GuestOnly, RequireAuth, RequireSetupAccess } from '@/routes/guards';
+import { OverviewPage } from '@/features/setup/overview-page';
+import { SetupWizardPage } from '@/features/setup/wizard/setup-wizard-page';
+import { useAuth } from '@/lib/auth';
+import { GuestOnly, RequireAuth, RequireSetupAccess, RequireSetupComplete } from '@/routes/guards';
+
+function SetupHome() {
+  const { can } = useAuth();
+  return can('setup:manage') ? <OverviewPage /> : <Navigate to="profile" replace />;
+}
 
 const router = createBrowserRouter([
   {
@@ -31,20 +39,27 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
+          // First-time setup runs full screen, outside the app shell.
+          { path: '/setup', element: <SetupWizardPage /> },
           {
             element: <AppShell />,
             children: [
-              { index: true, path: '/', element: <HomePage /> },
               { path: '/restricted', element: <ForbiddenPage /> },
               {
-                path: '/school-setup',
-                element: <RequireSetupAccess />,
+                element: <RequireSetupComplete />,
                 children: [
-                  // The setup overview arrives with the wizard; until then profile is the entry point.
-                  { index: true, element: <Navigate to="profile" replace /> },
-                  { path: 'profile', element: <SchoolProfilePage /> },
-                  { path: 'locations', element: <LocationsPage /> },
-                  { path: 'locations/:locationId', element: <LocationDetailPage /> },
+                  { index: true, path: '/', element: <HomePage /> },
+                  {
+                    path: '/school-setup',
+                    element: <RequireSetupAccess />,
+                    children: [
+                      // Admins land on the overview; Faculty and Staff, who can't see it, on the profile.
+                      { index: true, element: <SetupHome /> },
+                      { path: 'profile', element: <SchoolProfilePage /> },
+                      { path: 'locations', element: <LocationsPage /> },
+                      { path: 'locations/:locationId', element: <LocationDetailPage /> },
+                    ],
+                  },
                 ],
               },
             ],

@@ -1,5 +1,8 @@
 import type {
   IdentifierStatus,
+  LocationInvalidReason,
+  LocationValidationPurpose,
+  SetupItemStatus,
   LocationStatus,
   LocationType,
   Role,
@@ -91,6 +94,8 @@ export interface SchoolDTO {
   defaultCurrency: string;
   defaultLocale: string;
   status: SchoolStatus;
+  /** Whether first-time School Setup is finished. Visible to everyone who can see the school. */
+  setupCompleted: boolean;
   /** Present only for users who can view configuration (`school:view_config`). */
   setup?: SchoolSetupDTO;
   createdAt: string;
@@ -199,4 +204,78 @@ export interface LocationDependencyDTO {
   label: string;
   count: number;
   message: string;
+}
+
+// ───────────────────────────────────────────────────────────── Setup overview (SCH-LOC-13)
+
+export interface SetupItemDTO {
+  key: string;
+  label: string;
+  description: string;
+  status: SetupItemStatus;
+  /** Share of the overall completion percentage (all weights add up to 100). */
+  weight: number;
+  /** Module that owns the item, e.g. `school-setup` or `academic-structure`. */
+  module: string;
+  /** Web route that fixes or opens the item, when one exists today. */
+  href: string | null;
+}
+
+export interface SetupStatusDTO {
+  schoolId: string;
+  setupStatus: SchoolSetupDTO['status'];
+  currentStep: number;
+  /** Overall weighted completion across School Setup and the modules that follow it. */
+  completionPercent: number;
+  /** Completion of this module's own items only. */
+  coreCompletionPercent: number;
+  items: SetupItemDTO[];
+  /** The most useful thing to do next (first pending item, then the first upcoming one). */
+  nextStep: SetupItemDTO | null;
+  summary: {
+    schoolName: string;
+    primaryLocation: { locationId: string; displayName: string; locationCode: string } | null;
+    activeLocations: number;
+    draftLocations: number;
+    totalLocations: number;
+  };
+}
+
+// ───────────────────────────────────────────────────────────── Master (downstream) contract (SCH-LOC-14)
+
+export interface MasterSchoolContextDTO {
+  schoolId: string;
+  tenantId: string;
+  displayName: string;
+  shortName: string | null;
+  defaults: { timezone: string; currency: string; locale: string };
+  primaryLocationId: string | null;
+  setupCompleted: boolean;
+}
+
+/** Deliberately small and frozen: downstream modules store `locationId`, never copy these fields. */
+export interface MasterLocationDTO {
+  locationId: string;
+  schoolId: string;
+  locationCode: string;
+  displayName: string;
+  locationType: LocationType;
+  status: LocationStatus;
+  isPrimary: boolean;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  effectiveDefaults: { timezone: string; currency: string; locale: string };
+}
+
+export interface LocationValidationResultDTO {
+  locationId: string;
+  valid: boolean;
+  reason: LocationInvalidReason | null;
+}
+
+export interface LocationValidationDTO {
+  purpose: LocationValidationPurpose;
+  allValid: boolean;
+  results: LocationValidationResultDTO[];
 }

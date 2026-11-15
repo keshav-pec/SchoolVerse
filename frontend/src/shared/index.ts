@@ -8,3 +8,4 @@ export * from './schemas/fields';
 export * from './schemas/school';
 export * from './schemas/location';
 export * from './schemas/audit';
+export * from './schemas/setup';

@@ -170,9 +170,8 @@ export function AddLocationDrawer({ open, onOpenChange, school, isFirst, onCreat
       async (data) => {
         try {
           const location = await create.mutateAsync(data as unknown as CreateLocationInput);
-          if (location.isPrimary) toast.success(`${location.displayName} is now your Primary Location 🎉`);
-          else if (location.status === 'ACTIVE') toast.success(`${location.displayName} is now active.`);
-          else toast.success(`${location.displayName} saved as a draft.`);
+          // PRD §14 wording; the first Primary also gets the friendly celebration.
+          toast.success(location.isPrimary ? `${location.displayName} is now your Primary Location 🎉` : 'Location created successfully.');
           onOpenChange(false);
           onCreated?.(location);
         } catch (err) {

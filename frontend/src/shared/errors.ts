@@ -50,6 +50,8 @@ export const ERROR_CODES = {
     status: 409,
     message: 'This location cannot be archived because active records are still associated with it.',
   },
+  LOCATION_NOT_ACTIVE: { status: 409, message: 'This location is not active, so it cannot be used for new records.' },
+  SETUP_INCOMPLETE: { status: 422, message: 'Finish the required setup details before completing School Setup.' },
   USE_ARCHIVE_INSTEAD: {
     status: 409,
     message: 'Only draft locations that were never used can be deleted. Archive this location instead.',

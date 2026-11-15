@@ -26,7 +26,8 @@ export const school: SchoolDTO = {
   defaultCurrency: 'INR',
   defaultLocale: 'en-IN',
   status: 'ACTIVE',
-  setup: { status: 'IN_PROGRESS', currentStep: 1, completedAt: null },
+  setupCompleted: true,
+  setup: { status: 'COMPLETED', currentStep: 6, completedAt: '2026-01-02T00:00:00.000Z' },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -81,3 +82,27 @@ export function list(items: LocationDetailDTO[]): LocationListDTO {
     facets: { cities: [...new Set(items.map((l) => l.address.city).filter((c): c is string => !!c))].map((city) => ({ city, count: 1 })), statuses, types },
   };
 }
+
+/** A school whose first-time setup is not finished yet. */
+export function unfinishedSchool(currentStep = 1) {
+  return { ...school, setupCompleted: false, setup: { status: 'IN_PROGRESS' as const, currentStep, completedAt: null } };
+}
+
+export const setupStatus = {
+  schoolId: SCHOOL_ID,
+  setupStatus: 'COMPLETED' as const,
+  currentStep: 6,
+  completionPercent: 55,
+  coreCompletionPercent: 92,
+  items: [
+    { key: 'school_profile', label: 'School Profile', description: 'Name, legal name, code and operational defaults.', status: 'completed' as const, weight: 15, module: 'school-setup', href: '/school-setup/profile' },
+    { key: 'primary_location', label: 'Primary Location', description: 'Your main campus.', status: 'completed' as const, weight: 20, module: 'school-setup', href: '/school-setup/locations' },
+    { key: 'official_identifiers', label: 'Official Identifiers', description: 'Affiliation, registration or UDISE+ numbers.', status: 'pending' as const, weight: 5, module: 'school-setup', href: '/school-setup/profile' },
+    { key: 'academic_structure', label: 'Academic Structure', description: 'Academic years, grades, sections and subjects.', status: 'upcoming' as const, weight: 20, module: 'academic-structure', href: null },
+    { key: 'buildings_rooms', label: 'Buildings & Rooms', description: 'Buildings and rooms for each campus.', status: 'upcoming' as const, weight: 10, module: 'buildings-rooms', href: null },
+    { key: 'academic_calendar', label: 'Academic Calendar', description: 'Terms, holidays and key dates.', status: 'upcoming' as const, weight: 10, module: 'academic-calendar', href: null },
+  ],
+  nextStep: null as unknown,
+  summary: { schoolName: 'Greenfield Public School', primaryLocation: { locationId: '22222222-2222-4222-8222-222222222222', displayName: 'Mohali Campus', locationCode: 'MOH' }, activeLocations: 2, draftLocations: 1, totalLocations: 3 },
+};
+setupStatus.nextStep = setupStatus.items[2];

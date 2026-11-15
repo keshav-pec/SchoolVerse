@@ -8,8 +8,8 @@ export const schoolKeys = {
 };
 
 /** The tenant's School Master, or `null` before it has been created. */
-export function useCurrentSchool() {
-  return useQuery({ queryKey: schoolKeys.current, queryFn: () => api.get<SchoolDTO | null>('/schools/current'), placeholderData: keepPreviousData });
+export function useCurrentSchool(enabled = true) {
+  return useQuery({ queryKey: schoolKeys.current, queryFn: () => api.get<SchoolDTO | null>('/schools/current'), placeholderData: keepPreviousData, enabled });
 }
 
 export function useCreateSchool() {

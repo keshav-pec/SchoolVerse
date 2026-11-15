@@ -3,6 +3,9 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
+// The Playwright tests point the dev server at a throw-away API (see e2e/).
+const API_TARGET = process.env.API_PROXY_TARGET ?? 'http://localhost:4000';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -29,15 +32,15 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}'], // e2e/ belongs to Playwright
     css: false,
   },
   server: {
     port: 5180,
     // Same-origin API in development so httpOnly cookies just work.
     proxy: {
-      '/api': { target: 'http://localhost:4000', changeOrigin: false },
-      '/uploads': { target: 'http://localhost:4000', changeOrigin: false },
+      '/api': { target: API_TARGET, changeOrigin: false },
+      '/uploads': { target: API_TARGET, changeOrigin: false },
     },
   },
 });

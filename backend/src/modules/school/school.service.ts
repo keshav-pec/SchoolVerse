@@ -42,6 +42,7 @@ export function toSchoolDTO(doc: SchoolDoc, options: { includeConfig: boolean })
     defaultCurrency: doc.defaultCurrency,
     defaultLocale: doc.defaultLocale,
     status: doc.status,
+    setupCompleted: doc.setup?.status === 'COMPLETED',
     ...(options.includeConfig
       ? {
           setup: {

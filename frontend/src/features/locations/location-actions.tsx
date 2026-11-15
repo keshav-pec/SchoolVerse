@@ -182,7 +182,7 @@ export function LocationActions({ location, schoolId, deletable, currentPrimaryN
         description={`Archived locations are kept for history only. ${name} can’t be edited, reactivated or used for new assignments, and its code stays reserved.`}
         confirmLabel="Archive location"
         loadingLabel="Archiving…"
-        onConfirm={run('archive', `${name} has been archived.`)}
+        onConfirm={run('archive', 'Location archived successfully.')}
       >
         {dependencies.length > 0 && (
           <Alert tone="warning" title="This location can’t be archived yet">
@@ -212,7 +212,7 @@ export function LocationActions({ location, schoolId, deletable, currentPrimaryN
         loadingLabel="Switching…"
         onConfirm={async () => {
           await primary.mutateAsync(location.locationId);
-          toast.success(`${name} is now the Primary Location 🎉`);
+          toast.success(`${name} is now the Primary Location.`);
         }}
       />
 
@@ -241,7 +241,7 @@ export function LocationActions({ location, schoolId, deletable, currentPrimaryN
         setChosen={setChosen}
         onConfirm={async (target, targetName) => {
           await primary.mutateAsync(target);
-          toast.success(`${targetName} is now the Primary Location 🎉`);
+          toast.success(`${targetName} is now the Primary Location.`);
         }}
       />
     </>

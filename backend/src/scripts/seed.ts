@@ -1,12 +1,13 @@
 /**
  * Seeds two isolated demo tenants with one user per role, a School Master each, and the
  * PRD §19 standard location dataset (Mohali MOH primary/active, Chandigarh CHD active,
- * Panchkula PKL draft) for Greenfield.
+ * Panchkula PKL draft) for Greenfield. Greenfield's setup is completed; Riverside's is left mid-wizard.
  * Idempotent: re-running removes the previous demo data for these tenants first.
  *
  *   npm run seed
  */
 import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { createIdentifierSchema, createLocationSchema, createSchoolSchema, permissionsFor, type Role } from '@shared';
 import { env } from '../config/env';
 import { connectDatabase, disconnectDatabase } from '../db/connection';
@@ -17,6 +18,7 @@ import { createLocation } from '../modules/locations/location.service';
 import { SchoolIdentifier } from '../modules/school/school-identifier.model';
 import { School } from '../modules/school/school.model';
 import { createIdentifier, createSchool } from '../modules/school/school.service';
+import { completeSetup, saveSetupProgress } from '../modules/setup/setup.service';
 import type { ServiceContext } from '../platform/rbac/tenant-context';
 import { hashPassword } from '../platform/auth/password';
 import { Session } from '../platform/auth/session.model';
@@ -32,6 +34,9 @@ interface DemoTenant {
   users: { email: string; fullName: string; role: Role }[];
   school: Record<string, unknown>;
   identifiers?: Record<string, unknown>[];
+  /** `true` = first-time setup already finished; otherwise the admin is sent to the wizard (resuming at `resumeStep`). */
+  setupComplete: boolean;
+  resumeStep?: number;
   locations: Record<string, unknown>[];
 }
 
@@ -48,6 +53,7 @@ const DEMO_TENANTS: DemoTenant[] = [
       primaryPhone: '+91 98140 11000',
       websiteUrl: 'greenfield.demo',
     },
+    setupComplete: true,
     identifiers: [
       { identifierType: 'Affiliation Number', identifierValue: '1630457', issuingAuthority: 'CBSE', issueDate: '2012-04-01' },
       { identifierType: 'UDISE+ Code', identifierValue: '03200101203', issuingAuthority: 'Ministry of Education' },
@@ -95,6 +101,9 @@ const DEMO_TENANTS: DemoTenant[] = [
   {
     slug: 'riverside-academy',
     name: 'Riverside Academy',
+    // Left mid-setup on purpose: signing in as this admin shows the wizard resuming at the Review step.
+    setupComplete: false,
+    resumeStep: 5,
     users: [{ email: 'admin@riverside.demo', fullName: 'Meera Iyer', role: 'SCHOOL_ADMIN' }],
     school: {
       schoolCode: 'RVA',
@@ -131,8 +140,9 @@ async function wipeTenant(tenantId: string) {
   await Tenant.deleteOne({ _id: tenantId });
 }
 
-async function main() {
-  await connectDatabase(env.MONGODB_URI);
+/** Loads the demo tenants into whatever database is currently connected. */
+export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
+  const log = quiet ? () => undefined : console.log;
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   for (const def of DEMO_TENANTS) {
@@ -159,20 +169,30 @@ async function main() {
     for (const identifier of def.identifiers ?? []) await createIdentifier(ctx, school._id, createIdentifierSchema.parse(identifier));
     const created = [];
     for (const loc of def.locations) created.push(await createLocation(ctx, school._id, createLocationSchema.parse(loc)));
+    if (def.setupComplete) await completeSetup(ctx, school._id);
+    else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);
 
-    console.log(`✔ ${def.name}`);
-    for (const u of def.users) console.log(`    ${u.role.padEnd(13)} ${u.email}`);
+    log(`✔ ${def.name} — setup ${def.setupComplete ? 'completed' : `in progress (step ${def.resumeStep ?? 1})`}`);
+    for (const u of def.users) log(`    ${u.role.padEnd(13)} ${u.email}`);
     for (const l of created) {
-      console.log(`    📍 ${l.locationCode.padEnd(4)} ${l.displayName} — ${l.status}${l.isPrimary ? ' · Primary' : ''}`);
+      log(`    📍 ${l.locationCode.padEnd(4)} ${l.displayName} — ${l.status}${l.isPrimary ? ' · Primary' : ''}`);
     }
   }
 
-  console.log(`\nAll demo accounts use the password: ${DEMO_PASSWORD}\n`);
+  log(`\nAll demo accounts use the password: ${DEMO_PASSWORD}\n`);
+}
+
+async function main() {
+  await connectDatabase(env.MONGODB_URI);
+  await seedDemo();
   await disconnectDatabase();
 }
 
-main().catch(async (err) => {
-  console.error('Seed failed:', err);
-  await disconnectDatabase().catch(() => undefined);
-  process.exit(1);
-});
+// Run only when executed directly (`npm run seed`), not when imported by the e2e server.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(async (err) => {
+    console.error('Seed failed:', err);
+    await disconnectDatabase().catch(() => undefined);
+    process.exit(1);
+  });
+}

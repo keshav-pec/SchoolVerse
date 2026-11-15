@@ -353,7 +353,12 @@ const ACTION_AUDIT: Record<LocationAction, string> = {
 };
 
 export async function changeLocationStatus(ctx: ServiceContext, locationId: string, action: LocationAction) {
-  return withTransaction(async (session) => {
+  return withTransaction((session) => changeLocationStatusInSession(session, ctx, locationId, action));
+}
+
+/** The same operation inside the caller's transaction (setup completion activates the primary location with it). */
+export async function changeLocationStatusInSession(session: ClientSession, ctx: ServiceContext, locationId: string, action: LocationAction) {
+  {
     const current = await getLocationOrThrow(ctx, locationId, session);
     await lockSchoolLocations(session, ctx.tenantId, current.schoolId);
     // Re-read after taking the school lock so the checks below see the latest committed state.
@@ -415,7 +420,7 @@ export async function changeLocationStatus(ctx: ServiceContext, locationId: stri
     const after = await reload(ctx, locationId, session);
     if (to === 'ACTIVE') await assignPrimaryIfNone(session, ctx, after); // Rule 1
     return reload(ctx, locationId, session);
-  });
+  }
 }
 
 // ───────────────────────────────────────────────────────────── primary (SCH-LOC-07)

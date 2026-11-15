@@ -1,12 +1,11 @@
 import { useState, type ComponentType } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
-import { Building2, ChevronDown, House, LogOut, MapPinned, Menu, Rocket, School, UserRound } from 'lucide-react';
-import { toast } from 'sonner';
+import { Building2, ChevronDown, House, LayoutDashboard, LogOut, MapPinned, Menu, PanelLeftClose, PanelLeftOpen, School, UserRound } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { Logo } from '@/components/sv/logo';
+import { Logo, LogoMark } from '@/components/sv/logo';
 import { RoleBadge } from '@/components/sv/role-badge';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -33,6 +32,7 @@ const NAV: NavSection[] = [
   {
     label: 'School Setup',
     items: [
+      { to: '/school-setup', label: 'Overview', Icon: LayoutDashboard, permission: 'setup:manage', end: true },
       { to: '/school-setup/profile', label: 'School Profile', Icon: School, permission: 'school:view' },
       { to: '/school-setup/locations', label: 'Locations', Icon: MapPinned, permission: 'location:view' },
     ],
@@ -48,30 +48,31 @@ const CRUMBS: [string, string[]][] = [
 
 function crumbsFor(pathname: string): string[] {
   if (pathname === '/') return ['Home'];
+  if (pathname === '/school-setup') return ['School Setup', 'Overview'];
   return CRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? ['Page'];
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { can } = useAuth();
   const session = useSession();
 
   return (
-    <div className="flex h-full flex-col bg-navy px-3 pt-5 pb-3 text-navy-text">
-      <div className="px-2.5 pb-6">
-        <Logo tone="light" />
+    <div className={cn('flex h-full flex-col overflow-hidden bg-navy pt-5 pb-3 text-navy-text', collapsed ? 'px-2' : 'px-3')}>
+      <div className={cn('pb-6', collapsed ? 'flex justify-center' : 'px-2.5')}>
+        {collapsed ? <LogoMark className="size-9" /> : <Logo tone="light" />}
       </div>
 
-      <div className="mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3">
+      <div title={collapsed ? session.tenant.name : undefined} className={cn('mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3', collapsed && 'justify-center px-0')}>
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/30 text-brand-300">
           <Building2 className="size-[18px]" />
         </span>
-        <div className="min-w-0">
+        <div className={cn('min-w-0', collapsed && 'hidden')}>
           <p className="truncate text-sm font-semibold text-white" title={session.tenant.name}>
             {session.tenant.name}
           </p>
           <p className="text-xs text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</p>
         </div>
-        <span className="ml-auto size-1.5 shrink-0 rounded-full bg-mint" title="Workspace active" />
+        <span className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')} title="Workspace active" />
       </div>
 
       <nav className="mt-2 flex-1 overflow-y-auto" aria-label="Main">
@@ -80,23 +81,26 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           if (items.length === 0) return null;
           return (
             <div key={section.label ?? i}>
-              {section.label && <p className="px-3.5 pt-5 pb-2.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">{section.label}</p>}
-              <ul className="mt-3 space-y-0.5">
+              {section.label && !collapsed && <p className="px-3.5 pt-5 pb-2.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">{section.label}</p>}
+              <ul className={cn('space-y-0.5', collapsed ? 'mt-4' : 'mt-3')}>
                 {items.map(({ to, label, Icon, end }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
                       end={end}
                       onClick={onNavigate}
+                      title={collapsed ? label : undefined}
+                      aria-label={collapsed ? label : undefined}
                       className={({ isActive }) =>
                         cn(
+                          collapsed && 'justify-center px-0',
                           'relative flex min-h-11 items-center gap-3 rounded-lg px-3.5 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white',
                           isActive && 'bg-navy-600 text-white before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[#5084ff]',
                         )
                       }
                     >
-                      <Icon className="size-[18px]" />
-                      {label}
+                      <Icon className="size-[18px] shrink-0" />
+                      {!collapsed && label}
                     </NavLink>
                   </li>
                 ))}
@@ -106,13 +110,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="mx-1 mb-3 rounded-[10px] border border-[#2d4160] p-3.5 text-[13px]">
-        <Rocket className="mb-2 size-[18px] text-[#85a7e5]" />
-        <p className="font-semibold text-[#e3eafb]">Coming next</p>
-        <p className="mt-1 leading-relaxed text-navy-muted">Guided setup, the school overview and academic structure.</p>
-      </div>
-
-      <div className="flex items-center justify-between border-t border-[#2a3d5b] px-2 pt-3">
+      <div className={cn('flex items-center justify-between border-t border-[#2a3d5b] px-2 pt-3', collapsed && 'hidden')}>
         <div>
           <p className="text-[13px] font-semibold text-[#e3eafb]">SchoolVerse ERP</p>
           <p className="text-[11px] text-navy-muted">Module 1 · School Setup</p>
@@ -126,12 +124,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 function UserMenu() {
   const session = useSession();
   const { logout } = useAuth();
-  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await logout();
-    toast.success('Signed out. See you soon! 👋');
-    navigate('/login', { replace: true });
+    // Hard redirect so no stale in-memory state can bounce the user back to '/'.
+    window.location.replace('/login');
   };
 
   return (
@@ -167,17 +164,23 @@ function UserMenu() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sv.sidebar.collapsed') === '1');
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      localStorage.setItem('sv.sidebar.collapsed', c ? '0' : '1');
+      return !c;
+    });
   const location = useLocation();
   const session = useSession();
 
   return (
-    <div className="min-h-dvh md:pl-[248px]">
+    <div className={cn('min-h-dvh transition-[padding] duration-200', collapsed ? 'md:pl-[72px]' : 'md:pl-[248px]')}>
       <a href="#main" className="sr-only z-50 rounded-lg bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3">
         Skip to content
       </a>
 
-      <aside className="fixed inset-y-0 left-0 hidden w-[248px] md:block">
-        <SidebarContent />
+      <aside className={cn('fixed inset-y-0 left-0 hidden transition-[width] duration-200 md:block', collapsed ? 'w-[72px]' : 'w-[248px]')}>
+        <SidebarContent collapsed={collapsed} />
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -194,6 +197,15 @@ export function AppShell() {
           aria-label="Open menu"
         >
           <Menu className="size-5" />
+        </button>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="hidden size-10 place-items-center rounded-lg text-ink hover:bg-ink/5 md:grid"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
         </button>
         <nav aria-label="Breadcrumb" className="min-w-0 truncate text-sm text-muted">
           <span className="hidden sm:inline">{session.tenant.name}</span>

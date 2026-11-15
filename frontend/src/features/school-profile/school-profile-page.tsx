@@ -1,13 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { useForm, useWatch, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createSchoolSchema, DEFAULT_CURRENCY, DEFAULT_LOCALE, DEFAULT_TIMEZONE, SCHOOL_PROFILE_FIELDS, updateSchoolSchema, type SchoolDTO, type UpdateSchoolInput } from '@shared';
+import { createSchoolSchema, SCHOOL_PROFILE_FIELDS, updateSchoolSchema, type SchoolDTO, type UpdateSchoolInput } from '@shared';
 import { Rocket } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ComboboxField, SelectField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
@@ -15,42 +14,11 @@ import { SaveBar } from '@/components/sv/save-bar';
 import { useAuth } from '@/lib/auth';
 import { applyServerErrors } from '@/lib/errors';
 import { formatPhone } from '@/lib/format';
-import { currencyOptions, LOCALE_OPTIONS, localeLabel, timeZoneOptions } from '@/lib/options';
+import { localeLabel } from '@/lib/options';
 import { useCreateSchool, useCurrentSchool, useUpdateSchool } from './api';
 import { IdentifiersCard } from './identifiers-card';
 import { LogoUploader } from './logo-uploader';
-
-interface SchoolFormValues {
-  schoolCode: string;
-  legalName: string;
-  displayName: string;
-  shortName: string;
-  primaryEmail: string;
-  primaryPhone: string;
-  alternatePhone: string;
-  websiteUrl: string;
-  defaultTimezone: string;
-  defaultCurrency: string;
-  defaultLocale: string;
-}
-
-const s = (v: string | null | undefined) => v ?? '';
-
-function valuesOf(school: SchoolDTO | null): SchoolFormValues {
-  return {
-    schoolCode: s(school?.schoolCode),
-    legalName: s(school?.legalName),
-    displayName: s(school?.displayName),
-    shortName: s(school?.shortName),
-    primaryEmail: s(school?.primaryEmail),
-    primaryPhone: s(school?.primaryPhone),
-    alternatePhone: s(school?.alternatePhone),
-    websiteUrl: s(school?.websiteUrl),
-    defaultTimezone: school?.defaultTimezone ?? DEFAULT_TIMEZONE,
-    defaultCurrency: school?.defaultCurrency ?? DEFAULT_CURRENCY,
-    defaultLocale: school?.defaultLocale ?? DEFAULT_LOCALE,
-  };
-}
+import { ContactFields, DefaultsFields, IdentityFields, schoolFormValues, type SchoolFormValues } from './school-fields';
 
 function ProfileSkeleton() {
   return (
@@ -109,13 +77,12 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
 
   const form = useForm<SchoolFormValues>({
     resolver: zodResolver(creating ? createSchoolSchema : updateSchoolSchema) as unknown as Resolver<SchoolFormValues>,
-    defaultValues: valuesOf(school),
+    defaultValues: schoolFormValues(school),
     mode: 'onTouched',
   });
-  const { errors, isDirty, isSubmitting } = form.formState;
+  const { isDirty, isSubmitting } = form.formState;
   const displayName = useWatch({ control: form.control, name: 'displayName' });
   const shortName = useWatch({ control: form.control, name: 'shortName' });
-  const timezone = useWatch({ control: form.control, name: 'defaultTimezone' });
 
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
@@ -129,14 +96,12 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
       const patch: Record<string, unknown> = {};
       for (const f of SCHOOL_PROFILE_FIELDS) if (dirty[f]) patch[f] = (values as unknown as Record<string, unknown>)[f];
       const saved = await update.mutateAsync(patch as UpdateSchoolInput);
-      form.reset(valuesOf(saved));
+      form.reset(schoolFormValues(saved));
       toast.success('School profile updated successfully.');
     } catch (err) {
       setFormError(applyServerErrors(err, form.setError, SCHOOL_PROFILE_FIELDS));
     }
   });
-
-  const err = (f: keyof SchoolFormValues) => errors[f]?.message;
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-6 pb-24">
@@ -158,12 +123,7 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
           <p className="mb-6 rounded-xl bg-canvas p-4 text-sm text-muted">You can add a logo right after creating the profile.</p>
         )}
 
-        <div className="grid gap-5 sm:grid-cols-2">
-          <TextField label="School name" required placeholder="e.g. Greenfield Public School" hint="Shown across the app." error={err('displayName')} {...form.register('displayName')} />
-          <TextField label="Short name" placeholder="e.g. Greenfield" hint="Optional. Used where space is tight." error={err('shortName')} {...form.register('shortName')} />
-          <TextField label="Legal name" required hint="As registered with the board or society." containerClassName="sm:col-span-2" error={err('legalName')} {...form.register('legalName')} />
-          <TextField label="School code" required placeholder="e.g. GPS-01" hint="2–20 letters, numbers or hyphens. Saved in capitals." className="font-mono uppercase" error={err('schoolCode')} {...form.register('schoolCode')} />
-        </div>
+        <IdentityFields form={form} />
 
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3" aria-label="Preview">
           <span className="text-[11px] font-bold tracking-widest text-muted uppercase">Preview</span>
@@ -179,12 +139,7 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
             <CardDescription>The main way families and officials reach the school.</CardDescription>
           </div>
         </CardHeader>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <TextField label="Primary email" type="email" required autoComplete="email" error={err('primaryEmail')} {...form.register('primaryEmail')} />
-          <TextField label="Primary phone" type="tel" required autoComplete="tel" placeholder="98765 43210" hint="Indian numbers need no country code." error={err('primaryPhone')} {...form.register('primaryPhone')} />
-          <TextField label="Alternate phone" type="tel" error={err('alternatePhone')} {...form.register('alternatePhone')} />
-          <TextField label="Website" placeholder="www.school.edu.in" error={err('websiteUrl')} {...form.register('websiteUrl')} />
-        </div>
+        <ContactFields form={form} />
       </Card>
 
       <Card>
@@ -194,35 +149,11 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
             <CardDescription>Every location inherits these unless you override them there.</CardDescription>
           </div>
         </CardHeader>
-        <div className="grid gap-5 sm:grid-cols-3">
-          <ComboboxField
-            label="Time zone"
-            required
-            value={timezone}
-            onChange={(v) => form.setValue('defaultTimezone', v, { shouldDirty: true, shouldValidate: true })}
-            options={timeZoneOptions()}
-            searchPlaceholder="Search time zones…"
-            error={err('defaultTimezone')}
-          />
-          <SelectField label="Currency" required error={err('defaultCurrency')} {...form.register('defaultCurrency')}>
-            {currencyOptions().map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Language & region" required error={err('defaultLocale')} {...form.register('defaultLocale')}>
-            {LOCALE_OPTIONS.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </SelectField>
-        </div>
+        <DefaultsFields form={form} />
       </Card>
 
       {school ? (
-        <SaveBar visible={isDirty} saving={isSubmitting} onDiscard={() => { form.reset(valuesOf(school)); setFormError(null); }} />
+        <SaveBar visible={isDirty} saving={isSubmitting} onDiscard={() => { form.reset(schoolFormValues(school)); setFormError(null); }} />
       ) : (
         <div className="flex justify-end">
           <Button type="submit" size="lg" loading={isSubmitting} loadingText="Creating profile…">

@@ -112,6 +112,25 @@ export const BASICS_FIELDS: Path[] = ['displayName', 'locationCode', 'locationTy
 export const ADDRESS_FIELDS: Path[] = ['address.line1', 'address.line2', 'address.locality', 'address.city', 'address.district', 'address.state', 'address.postalCode', 'address.country', 'latitude', 'longitude'];
 export const CONTACT_FIELDS: Path[] = ['email', 'phone', 'alternatePhone', 'websiteUrl', 'notes'];
 export const DEFAULTS_FIELDS: Path[] = ['timezoneOverride', 'currencyOverride', 'localeOverride'];
+/** Keys a location PATCH may carry (the dotted audit paths collapse to `address`). */
+export const LOCATION_PATCH_FIELDS = [
+  'displayName',
+  'locationCode',
+  'locationType',
+  'officialName',
+  'openingDate',
+  'timezoneOverride',
+  'currencyOverride',
+  'localeOverride',
+  'email',
+  'phone',
+  'alternatePhone',
+  'websiteUrl',
+  'latitude',
+  'longitude',
+  'notes',
+  'address',
+] as const;
 export const ALL_LOCATION_FIELDS: Path[] = [...BASICS_FIELDS, ...ADDRESS_FIELDS, ...CONTACT_FIELDS, ...DEFAULTS_FIELDS, 'intent'];
 
 function useFieldError(form: LocationForm) {
@@ -438,4 +457,65 @@ export function DefaultsFields({ form, school }: SectionProps & { school: Pick<S
 
 function TimeZoneSelect({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
   return <Combobox id={id} value={value} onChange={onChange} options={timeZoneOptions()} searchPlaceholder="Search time zones…" />;
+}
+
+/**
+ * Build a PATCH body from only the fields that changed. `address` is sent as a whole object
+ * (that is how the API replaces it) as soon as any address field changed.
+ */
+export function buildLocationPatch(fields: readonly string[], dirty: Record<string, unknown>, values: Record<string, unknown>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  for (const key of fields) {
+    if (dirty[key]) patch[key] = values[key];
+  }
+  return patch;
+}
+
+/** Every location section stacked, for places that edit a whole location in one go (wizard, edit drawer). */
+export function LocationEditorFields({
+  form,
+  school,
+  location,
+  canCheckCode,
+  showPrimary,
+  autoSuggest,
+  showNotes,
+}: {
+  form: LocationForm;
+  school: Pick<SchoolDTO, 'schoolId' | 'defaultTimezone' | 'defaultCurrency' | 'defaultLocale'>;
+  location?: Pick<LocationDetailDTO, 'locationId' | 'codeLocked' | 'locationCode'>;
+  canCheckCode: boolean;
+  showPrimary?: boolean;
+  autoSuggest?: boolean;
+  showNotes?: boolean;
+}) {
+  const heading = 'mb-4 text-base font-bold text-ink';
+  return (
+    <div className="space-y-8">
+      <section aria-labelledby="sec-basics">
+        <h3 id="sec-basics" className={heading}>
+          Basics
+        </h3>
+        <BasicsFields form={form} schoolId={school.schoolId} location={location} canCheckCode={canCheckCode} showPrimary={showPrimary} autoSuggest={autoSuggest} />
+      </section>
+      <section aria-labelledby="sec-address">
+        <h3 id="sec-address" className={heading}>
+          Address
+        </h3>
+        <AddressFields form={form} />
+      </section>
+      <section aria-labelledby="sec-contact">
+        <h3 id="sec-contact" className={heading}>
+          Contact
+        </h3>
+        <ContactFields form={form} showNotes={showNotes ?? false} />
+      </section>
+      <section aria-labelledby="sec-defaults">
+        <h3 id="sec-defaults" className={heading}>
+          Operational defaults
+        </h3>
+        <DefaultsFields form={form} school={school} />
+      </section>
+    </div>
+  );
 }

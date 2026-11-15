@@ -85,6 +85,29 @@ export type LocationAction = (typeof LOCATION_ACTIONS)[number];
 export const LOCATION_CREATE_INTENTS = ['DRAFT', 'ACTIVE'] as const;
 export type LocationCreateIntent = (typeof LOCATION_CREATE_INTENTS)[number];
 
+// ───────────────────────────────────────────────────────────── Setup wizard & overview (PRD §12, §14)
+
+/** Wizard steps (PRD §12). */
+export const SETUP_STEPS = ['IDENTITY', 'CONTACT', 'PRIMARY_LOCATION', 'ADDITIONAL_LOCATIONS', 'REVIEW', 'COMPLETE'] as const;
+export type SetupStep = (typeof SETUP_STEPS)[number];
+export const SETUP_STEP_COUNT = SETUP_STEPS.length;
+
+/** `upcoming` = belongs to a module that is not built yet; it never counts as an error. */
+export const SETUP_ITEM_STATUSES = ['completed', 'pending', 'upcoming'] as const;
+export type SetupItemStatus = (typeof SETUP_ITEM_STATUSES)[number];
+
+// ───────────────────────────────────────────────────────────── Master (downstream) API (PRD §16)
+
+/** `operational` = ACTIVE only (selectors) · `configuration` adds DRAFT + INACTIVE · `all` adds ARCHIVED (history). */
+export const MASTER_LOCATION_SCOPES = ['operational', 'configuration', 'all'] as const;
+export type MasterLocationScope = (typeof MASTER_LOCATION_SCOPES)[number];
+
+export const LOCATION_VALIDATION_PURPOSES = ['NEW_ASSIGNMENT', 'HISTORICAL_READ'] as const;
+export type LocationValidationPurpose = (typeof LOCATION_VALIDATION_PURPOSES)[number];
+
+export const LOCATION_INVALID_REASONS = ['NOT_FOUND', 'NOT_ACTIVE', 'ARCHIVED'] as const;
+export type LocationInvalidReason = (typeof LOCATION_INVALID_REASONS)[number];
+
 // ───────────────────────────────────────────────────────────── Audit (PRD §18)
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -94,6 +117,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'school.updated': 'School profile updated',
   'school.logo_updated': 'Logo updated',
   'school.logo_removed': 'Logo removed',
+  'school.setup_completed': 'School setup completed',
   'school_identifier.created': 'Official identifier added',
   'school_identifier.updated': 'Official identifier updated',
   'school_identifier.deleted': 'Official identifier removed',

@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from './core/error-handler';
 import { logger } from './core/logger';
 import { requestId } from './core/request-id';
 import { PUBLIC_UPLOAD_PREFIX, storage } from './core/storage/storage';
+import { createDocsRouter } from './docs/swagger';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
 import { apiRouter } from './routes';
 
@@ -29,6 +30,8 @@ export function createApp() {
       customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'),
     }),
   );
+  // API documentation has its own (relaxed) security headers, so it is mounted before the global helmet.
+  app.use('/api', createDocsRouter());
   app.use(helmet());
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   app.use(express.json({ limit: '100kb' }));
