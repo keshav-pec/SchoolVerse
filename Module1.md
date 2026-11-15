@@ -196,11 +196,35 @@ SchoolVerse/
 - archive blocked by dependencies
 - delete restricted to unreferenced drafts
 - code lock
-- PATCH ignores status/isPrimary
+- PATCH rejects status/isPrimary (`FIELD_NOT_EDITABLE`) and leaves the record unchanged
 - audit rows for each mutation
 - cross-tenant ID manipulation returns 404 on every route
 
 > **Commit:** `feat(school-setup): add School & Location master domain with lifecycle state machine, primary invariant, code rules, dependency checks and audit events`
+
+### Part 2: as built (2026-11-15)
+
+✅ Done. 122 backend tests pass (26 from Part 1 + 96 new), and typecheck, lint and build are clean. Decisions made during implementation:
+
+| Topic | What was built | Why |
+|---|---|---|
+| Draft completeness | A DRAFT only needs name, code and type. `intent: "ACTIVE"` or `/activate` also requires phone + address line 1, city, state, postal code and country; otherwise the API returns `LOCATION_INCOMPLETE` with `details.fields`. ACTIVE/INACTIVE locations can't have those fields cleared later. | PRD §10 defines DRAFT as "configuration incomplete", so the wizard and Add Location flow can save part-way. |
+| Inherited defaults | Fields are `timezoneOverride` / `currencyOverride` / `localeOverride` (`null` = inherit). Responses add `effectiveDefaults { timezone, currency, locale, inherited }`. | Same pattern for all three defaults; the UI gets the resolved values directly. |
+| PATCH and lifecycle fields | `status` / `isPrimary` in a PATCH body is **rejected** with `FIELD_NOT_EDITABLE`, not silently ignored. | A client bug can't look like a successful status change. |
+| Search | Escaped, case-insensitive regex on name, official name, code and city, instead of a Mongo text index. | Partial matches ("chand", "pk") are what a search box needs, and a school has few locations. |
+| Primary concurrency | Every primary-affecting transaction first bumps `schools.locationsVersion`. Concurrent ones write-conflict and the driver retries them in turn. The partial unique index `one_primary_per_school` stays as the last line of defense. | Verified by tests with concurrent `set-primary` calls and concurrent first activations. |
+| Code rules | Archived locations keep their code reserved. `code-availability` also takes `name` (suggestion) and `excludeLocationId` (edit forms). Suggestions: one meaningful word → first 3 letters (MOH), several → initials (ND), then `MOH2`, `MOH3`… | Historical reports must never become ambiguous. |
+| Address | `address.country` is an ISO 3166-1 alpha-2 code (default `IN`). Postal-code rules exist for IN, US, GB, CA, AU and SG, with a generic fallback. | Needed for country-aware validation; the UI shows the country name. |
+| Phone | Normalized to E.164 with libphonenumber-js. National numbers are read as Indian; other countries need `+<code>`. | India-first deployment. |
+| Permissions | Added `school:view_config` (identifiers + setup metadata). Faculty/Staff see school profile fields but no identifiers, only ACTIVE locations, and no `notes`. `DELETE /locations/:id` requires `location:archive`. Creating with `intent: ACTIVE` / `isPrimary: true` also requires `location:change_status` / `location:set_primary`. | Matches PRD §7 "Limited" and keeps high-impact actions under explicit permissions. |
+| Archived locations | Read-only: PATCH returns `LOCATION_ARCHIVED`. | "Historical only" (PRD §10). |
+| Logo | `POST/DELETE /schools/:id/logo` (field `logo`, ≤ 2 MB). The type is detected from the file's bytes (PNG/JPEG/WebP); SVG is rejected. Files are served at `/uploads/...` (`UPLOAD_DIR`) and the Vite dev server proxies `/uploads`. | Client MIME types can't be trusted, and SVG can carry scripts. |
+| Simulated references | `location_references` + `POST/DELETE /api/v1/dev/location-references` (`kind`: staff, students, academic, inventory, transactions; `active: false` = historical only). Registered and mounted only when `NODE_ENV !== 'production'`. | QA scenario 23 and the archive-blocked UI in Part 3. |
+| Seed | Moved forward from Part 4: `npm run seed` now creates both schools, Greenfield's identifiers and the PRD §19 locations (MOH/CHD/PKL) through the domain services, so the seed also writes an audit trail. | Makes the API demoable now. Part 4 still owns the rest of item 10. |
+
+**Endpoints added:** `GET /schools/current` · `POST /schools` · `GET|PATCH /schools/:schoolId` · `POST|DELETE /schools/:schoolId/logo` · `GET|POST /schools/:schoolId/identifiers` · `PATCH|DELETE /schools/:schoolId/identifiers/:identifierId` · `GET|POST /schools/:schoolId/locations` · `GET /schools/:schoolId/locations/code-availability` · `GET|PATCH|DELETE /locations/:locationId` · `POST /locations/:locationId/{activate,deactivate,archive,set-primary}` · `GET /audit` · dev-only `/dev/location-references`.
+
+**New error codes:** `SCHOOL_ALREADY_EXISTS`, `SCHOOL_CODE_TAKEN`, `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, `FILE_REQUIRED`, `LOCATION_CODE_TAKEN`, `LOCATION_CODE_LOCKED`, `LOCATION_ARCHIVED`, `FIELD_NOT_EDITABLE`, `INVALID_STATUS_TRANSITION`, `LOCATION_INCOMPLETE`, `PRIMARY_LOCATION_REQUIRED`, `PRIMARY_REQUIRES_ACTIVE`, `LOCATION_HAS_DEPENDENCIES`, `USE_ARCHIVE_INSTEAD`.
 
 ---
 

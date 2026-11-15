@@ -6,6 +6,7 @@ import { createUserAndLogin, signupAdmin } from './helpers/factories';
 describe('RBAC matrix (PRD §7)', () => {
   const adminOnly: Permission[] = [
     'school:edit',
+    'school:view_config',
     'location:view_config',
     'location:create',
     'location:edit',

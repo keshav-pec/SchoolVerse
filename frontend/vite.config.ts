@@ -31,6 +31,7 @@ export default defineConfig({
     // Same-origin API in development so httpOnly cookies just work.
     proxy: {
       '/api': { target: 'http://localhost:4000', changeOrigin: false },
+      '/uploads': { target: 'http://localhost:4000', changeOrigin: false },
     },
   },
 });

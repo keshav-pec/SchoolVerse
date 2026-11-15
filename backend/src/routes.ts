@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import { isProd } from './config/env';
 import { ok } from './core/http';
+import { auditRouter } from './modules/audit/audit.routes';
+import { devRouter } from './modules/dependencies/dev.routes';
+import { locationRouter } from './modules/locations/location.routes';
+import { schoolRouter } from './modules/school/school.routes';
 import { authRouter } from './platform/auth/auth.routes';
 import { userRouter } from './platform/users/user.routes';
 
@@ -18,3 +23,8 @@ apiRouter.get('/health', (_req, res) => {
 
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
+apiRouter.use('/schools', schoolRouter);
+apiRouter.use('/locations', locationRouter);
+apiRouter.use('/audit', auditRouter);
+// Simulated downstream references for QA (scenario 23). Never mounted in production.
+if (!isProd) apiRouter.use('/dev', devRouter);

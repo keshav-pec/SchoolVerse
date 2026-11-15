@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import type { Permission } from '@shared';
 import { AppError } from '../../core/errors';
 
@@ -8,9 +8,14 @@ import { AppError } from '../../core/errors';
  */
 export function requirePermission(...required: Permission[]): RequestHandler {
   return (req, _res, next) => {
-    if (!req.auth) throw new AppError('UNAUTHENTICATED');
-    const missing = required.filter((p) => !req.auth!.permissions.includes(p));
-    if (missing.length > 0) throw new AppError('FORBIDDEN', undefined, { required: missing });
+    assertPermissions(req, ...required);
     next();
   };
+}
+
+/** Imperative form for permissions that depend on the request body (e.g. "create AND set primary"). */
+export function assertPermissions(req: Request, ...required: Permission[]) {
+  if (!req.auth) throw new AppError('UNAUTHENTICATED');
+  const missing = required.filter((p) => !req.auth!.permissions.includes(p));
+  if (missing.length > 0) throw new AppError('FORBIDDEN', undefined, { required: missing });
 }

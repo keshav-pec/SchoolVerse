@@ -5,8 +5,8 @@ The friendly School ERP. **Module 1: School & School Locations Setup.** See [Mod
 | Part | Scope | Status |
 |---|---|---|
 | 1 | Platform foundation: auth, tenant isolation, RBAC, audit infra, app shell | ✅ Done |
-| 2 | School & Location master domain (API) | ⏳ Next |
-| 3 | School Profile & Locations UI | — |
+| 2 | School & Location master domain (API) | ✅ Done |
+| 3 | School Profile & Locations UI | ⏳ Next |
 | 4 | Setup wizard, overview, master APIs, QA | — |
 
 ## Layout
@@ -51,6 +51,16 @@ Demo password for every seeded account: `Welcome@123`.
 | parent@greenfield.demo | Parent (no config access) |
 | admin@riverside.demo | School Admin of a second, isolated tenant |
 
+The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
+
+| Location | Code | Primary | Status |
+|---|---|---|---|
+| Mohali Campus | MOH | Yes | Active |
+| Chandigarh Campus | CHD | No | Active |
+| Panchkula Campus | PKL | No | Draft |
+
+Riverside Academy has one active campus that reuses the code `MOH`, because codes only have to be unique within a school.
+
 > Running MongoDB locally? Start it as a replica set: `mongod --replSet rs0`, then `mongosh --eval "rs.initiate()"`.
 > Transactions (primary-location switch, audit writes) don't work on a standalone server.
 
@@ -67,6 +77,21 @@ Demo password for every seeded account: `Welcome@123`.
 | frontend | `npm run sync-shared` | Refresh `src/shared` from the backend |
 | both | `npm run typecheck` / `npm run lint` | TypeScript / ESLint |
 
+## API overview (Module 1 so far)
+
+All routes are under `/api/v1`, require a session cookie, and are scoped to the caller's tenant.
+
+| Area | Routes |
+|---|---|
+| School | `GET /schools/current` · `POST /schools` · `GET`/`PATCH /schools/:schoolId` · `POST`/`DELETE /schools/:schoolId/logo` |
+| Identifiers | `GET`/`POST /schools/:schoolId/identifiers` · `PATCH`/`DELETE /schools/:schoolId/identifiers/:identifierId` |
+| Locations | `GET`/`POST /schools/:schoolId/locations` · `GET /schools/:schoolId/locations/code-availability` · `GET`/`PATCH`/`DELETE /locations/:locationId` |
+| Lifecycle | `POST /locations/:locationId/activate` · `/deactivate` · `/archive` · `/set-primary` |
+| Audit | `GET /audit?entityType=&entityId=&cursor=&limit=` |
+| Dev only | `POST`/`DELETE /dev/location-references` simulates downstream references (archive blocked, code locked). Not mounted in production. |
+
+Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, default `backend/uploads`).
+
 ## Architecture rules (carried into every module)
 
 - **Tenant isolation is structural.** `tenantId` comes only from the verified session. A Mongoose plugin throws `TENANT_SCOPE_MISSING` on any unscoped query. Cross-tenant IDs return 404.
@@ -74,3 +99,5 @@ Demo password for every seeded account: `Welcome@123`.
 - **IDs are permanent UUIDs.** Labels are for display only.
 - **Errors are deterministic:** `{ error: { code, message, details?, requestId } }`. Codes live in `backend/src/shared/errors.ts`.
 - **Audit is append-only** and written in the same transaction as the change it records.
+- **Status and Primary change only through business operations** (`/activate`, `/set-primary`, …), never through PATCH.
+- **Downstream modules reference `locationId`**, never names or codes. They register a dependency checker (`modules/dependencies/registry.ts`) so archive, code-lock and delete rules account for their records.

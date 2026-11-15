@@ -6,7 +6,8 @@ import type { Role } from './enums';
  */
 export const PERMISSIONS = [
   // School master
-  'school:view',
+  'school:view', // profile, contact and operational defaults
+  'school:view_config', // official identifiers + setup/audit metadata
   'school:edit',
   // School locations
   'location:view', // operational (ACTIVE) locations, limited fields

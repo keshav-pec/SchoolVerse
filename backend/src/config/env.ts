@@ -33,6 +33,8 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
   WEB_ORIGIN: z.string().url().default('http://localhost:5180'),
   COOKIE_SECURE: booleanish.default(false),
+  /** Local folder for uploaded files (school logos). Swap the storage adapter for S3 later. */
+  UPLOAD_DIR: z.string().min(1).default('uploads'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 

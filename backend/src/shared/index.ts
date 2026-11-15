@@ -4,3 +4,7 @@ export * from './errors';
 export * from './dto';
 export * from './schemas/common';
 export * from './schemas/auth';
+export * from './schemas/fields';
+export * from './schemas/school';
+export * from './schemas/location';
+export * from './schemas/audit';

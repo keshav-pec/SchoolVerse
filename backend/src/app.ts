@@ -7,10 +7,15 @@ import { env, isProd } from './config/env';
 import { errorHandler, notFoundHandler } from './core/error-handler';
 import { logger } from './core/logger';
 import { requestId } from './core/request-id';
+import { PUBLIC_UPLOAD_PREFIX, storage } from './core/storage/storage';
+import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
 import { apiRouter } from './routes';
 
 export function createApp() {
   const app = express();
+
+  // Until downstream modules register real checkers, dev/test use simulated references (never prod).
+  if (!isProd) registerSimulatedDependencies();
 
   app.disable('x-powered-by');
   if (isProd) app.set('trust proxy', 1);
@@ -29,6 +34,11 @@ export function createApp() {
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
+  // Uploaded images (school logos). Names are unguessable UUIDs and only sniffed image types are stored.
+  app.use(
+    PUBLIC_UPLOAD_PREFIX,
+    express.static(storage.rootDir, { index: false, dotfiles: 'deny', fallthrough: true, maxAge: '7d', immutable: true }),
+  );
   app.use('/api/v1', apiRouter);
 
   app.use(notFoundHandler);
