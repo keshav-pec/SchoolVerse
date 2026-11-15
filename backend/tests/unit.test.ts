@@ -1,18 +1,22 @@
 import {
   createLocationSchema,
   createSchoolSchema,
+  hasPermission,
   LOCATION_ACTIONS,
   LOCATION_STATUSES,
   missingActivationFields,
   normalizeLocationCode,
   postalCodeError,
+  ROLES,
   suggestLocationCodeBase,
   updateLocationSchema,
   type LocationAction,
   type LocationStatus,
+  type Permission,
 } from '@shared';
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../src/core/errors';
+import { diffFields } from '../src/modules/audit/diff';
 import { assertTransition, availableActions, canTransition } from '../src/modules/locations/lifecycle';
 
 describe('location lifecycle state machine (SCH-LOC-06)', () => {
@@ -150,5 +154,52 @@ describe('field validation (PRD §18)', () => {
   it('a draft cannot be created as Primary', () => {
     const res = createLocationSchema.safeParse({ displayName: 'X', locationCode: 'XX', locationType: 'MAIN_CAMPUS', isPrimary: true });
     expect(res.success).toBe(false);
+  });
+});
+
+describe('audit diffFields (SCH-LOC-10)', () => {
+  it('captures only changed, whitelisted fields with previous and new values', () => {
+    const before = { name: 'Mohali', phone: '+91 98', secret: 'a', address: { city: 'Mohali', state: 'PB' } };
+    const after = { name: 'Mohali', phone: '+91 99', secret: 'b', address: { city: 'SAS Nagar', state: 'PB' } };
+    expect(diffFields(before, after, ['name', 'phone', 'address.city', 'address.state'])).toEqual([
+      { field: 'phone', from: '+91 98', to: '+91 99' },
+      { field: 'address.city', from: 'Mohali', to: 'SAS Nagar' },
+    ]);
+  });
+
+  it('treats undefined and null as equal, serialises dates and ignores key order', () => {
+    const d1 = new Date('2026-01-01T00:00:00Z');
+    const d2 = new Date('2026-06-01T00:00:00Z');
+    expect(diffFields({ a: undefined, d: d1 }, { a: null, d: d2 }, ['a', 'd'])).toEqual([
+      { field: 'd', from: d1.toISOString(), to: d2.toISOString() },
+    ]);
+    expect(diffFields({ o: { x: 1, y: 2 } }, { o: { y: 2, x: 1 } }, ['o'])).toEqual([]);
+  });
+});
+
+describe('RBAC matrix (PRD §7)', () => {
+  const adminOnly: Permission[] = [
+    'school:edit',
+    'school:view_config',
+    'location:view_config',
+    'location:create',
+    'location:edit',
+    'location:set_primary',
+    'location:change_status',
+    'location:archive',
+    'setup:manage',
+    'audit:view',
+  ];
+
+  it('defines the four baseline roles: admin has everything, Faculty/Staff read-only, Parents nothing', () => {
+    expect([...ROLES]).toEqual(['SCHOOL_ADMIN', 'FACULTY', 'STAFF', 'PARENT']);
+    for (const p of adminOnly) expect(hasPermission('SCHOOL_ADMIN', p)).toBe(true);
+    for (const role of ['FACULTY', 'STAFF'] as const) {
+      expect(hasPermission(role, 'school:view')).toBe(true);
+      expect(hasPermission(role, 'location:view')).toBe(true);
+      for (const p of adminOnly) expect(hasPermission(role, p)).toBe(false);
+    }
+    expect(hasPermission('PARENT', 'school:view')).toBe(false);
+    expect(hasPermission('PARENT', 'location:view')).toBe(false);
   });
 });

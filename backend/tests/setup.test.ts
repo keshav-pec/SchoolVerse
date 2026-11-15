@@ -1,14 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import type { SetupStatusDTO } from '@shared';
 import { School } from '../src/modules/school/school.model';
-import { useTestDatabase } from './helpers/db';
-import { createUserAndLogin, signupAdmin } from './helpers/factories';
-import { API, createLocation, draftLocationBody, getLocation, nextPhone, setupSchool } from './helpers/school';
-import { auditFor, expectError } from './qa/qa';
+import {
+  API,
+  auditFor,
+  createLocation,
+  createUserAndLogin,
+  draftLocationBody,
+  expectError,
+  getLocation,
+  nextPhone,
+  pklAddress,
+  seededSchool,
+  setupSchool,
+  signupAdmin,
+  useTestDatabase,
+  type Agent,
+} from './helpers';
 
 useTestDatabase();
 
-const status = async (agent: Awaited<ReturnType<typeof setupSchool>>['agent'], schoolId: string) =>
+const status = async (agent: Agent, schoolId: string) =>
   (await agent.get(`${API}/schools/${schoolId}/setup-status`).expect(200)).body.data as SetupStatusDTO;
 
 describe('setup progress (SCH-LOC-12)', () => {
@@ -87,8 +99,7 @@ describe('completing setup (SCH-LOC-12)', () => {
     const { agent, school } = await setupSchool();
     const draft = await createLocation(agent, school.schoolId, draftLocationBody({ locationCode: 'MOH' }));
     const error = expectError(await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({ primaryLocationId: draft.locationId }), 422, 'SETUP_INCOMPLETE');
-    const fields = (error.details as { fields: Record<string, string> }).fields;
-    expect(Object.keys(fields)).toEqual(expect.arrayContaining(['primaryLocation.phone', 'primaryLocation.address.line1']));
+    expect(Object.keys(error.details.fields)).toEqual(expect.arrayContaining(['primaryLocation.phone', 'primaryLocation.address.line1']));
     expect((await getLocation(agent, draft.locationId)).status).toBe('DRAFT');
     expect((await agent.get(`${API}/schools/current`)).body.data.setupCompleted).toBe(false);
   });
@@ -96,7 +107,7 @@ describe('completing setup (SCH-LOC-12)', () => {
   it('needs a Primary Location', async () => {
     const { agent, school } = await setupSchool();
     const error = expectError(await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({}), 422, 'SETUP_INCOMPLETE');
-    expect((error.details as { fields: Record<string, string> }).fields.primaryLocation).toMatch(/Primary Location/);
+    expect(error.details.fields.primaryLocation).toMatch(/Primary Location/);
   });
 
   it('refuses an archived location and other-school ids as the Primary', async () => {
@@ -108,15 +119,15 @@ describe('completing setup (SCH-LOC-12)', () => {
   });
 
   it('keeps an existing Primary and ignores primaryLocationId', async () => {
-    const { agent, school, moh, pkl } = await setupSchool({ seedLocations: true });
-    const res = await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({ primaryLocationId: pkl!.locationId }).expect(200);
+    const { agent, school, moh, pkl } = await seededSchool();
+    const res = await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({ primaryLocationId: pkl.locationId }).expect(200);
     expect(res.body.data.setupCompleted).toBe(true);
-    expect((await getLocation(agent, moh!.locationId)).isPrimary).toBe(true);
-    expect((await getLocation(agent, pkl!.locationId)).status).toBe('DRAFT'); // additional drafts stay drafts
+    expect((await getLocation(agent, moh.locationId)).isPrimary).toBe(true);
+    expect((await getLocation(agent, pkl.locationId)).status).toBe('DRAFT'); // additional drafts stay drafts
   });
 
   it('is idempotent and never rewinds progress afterwards', async () => {
-    const { agent, school } = await setupSchool({ seedLocations: true });
+    const { agent, school } = await seededSchool();
     const first = (await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({}).expect(200)).body.data;
     const second = (await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({}).expect(200)).body.data;
     expect(second.setup.completedAt).toBe(first.setup.completedAt);
@@ -161,15 +172,12 @@ describe('setup overview (SCH-LOC-13)', () => {
   });
 
   it('moves to the Academic Structure recommendation once Module 1 is done', async () => {
-    const { agent, school } = await setupSchool({ seedLocations: true });
+    const { agent, school, pkl } = await seededSchool();
     await agent.post(`${API}/schools/${school.schoolId}/identifiers`).send({ identifierType: 'Affiliation Number', identifierValue: '1630457' }).expect(201);
     // The seeded Panchkula draft has no address yet, so addresses stay pending until it is fixed.
     const partial = await status(agent, school.schoolId);
     expect(partial.items.find((i) => i.key === 'location_addresses')!.status).toBe('pending');
-    await agent
-      .patch(`${API}/locations/${(await agent.get(`${API}/schools/${school.schoolId}/locations`).query({ q: 'PKL' })).body.data.items[0].locationId}`)
-      .send({ address: { line1: 'Sector 5', city: 'Panchkula', state: 'Haryana', postalCode: '134109', country: 'IN' } })
-      .expect(200);
+    await agent.patch(`${API}/locations/${pkl.locationId}`).send({ address: pklAddress }).expect(200);
 
     const done = await status(agent, school.schoolId);
     expect(done.coreCompletionPercent).toBe(100);
@@ -178,13 +186,6 @@ describe('setup overview (SCH-LOC-13)', () => {
     expect(done.summary).toMatchObject({ activeLocations: 2, draftLocations: 1, totalLocations: 3, primaryLocation: { locationCode: 'MOH' } });
   });
 
-  it('is admin-only', async () => {
-    const { tenantId, school } = await setupSchool();
-    for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
-      const { agent } = await createUserAndLogin(tenantId, role);
-      expectError(await agent.get(`${API}/schools/${school.schoolId}/setup-status`), 403, 'FORBIDDEN');
-    }
-  });
 
   it('a workspace without a school simply has no overview', async () => {
     const { agent } = await signupAdmin('No School Yet');

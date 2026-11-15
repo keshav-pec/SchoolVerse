@@ -69,7 +69,7 @@ Greenfield's first-time setup is **completed**, so its admin goes straight to th
 | Folder | Command | What it does |
 |---|---|---|
 | backend | `npm run dev` | API with hot reload |
-| backend | `npm test` | Test suite incl. the PRD §19 QA scenarios (in-memory MongoDB replica set, no setup needed) |
+| backend | `npm test` | Test suite incl. the PRD §19 QA scenarios (in-memory MongoDB, no setup needed) |
 | backend | `npm run seed` | Reset and reload demo data |
 | backend | `npm run e2e:server` | Throw-away API on :4100 (in-memory DB + seed) used by the Playwright tests. Never reads `.env`. |
 | backend | `npm run build` / `npm start` | Bundle to `dist/` and run it |
@@ -108,40 +108,33 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 3. **Finish** calls `POST /schools/:id/setup/complete`. In one transaction it validates the profile and the Primary Location, activates it, marks setup `COMPLETED` and writes an audit event. Confetti, then the **Overview**.
 4. Until then: an admin is redirected to the wizard, and Faculty/Staff see "Your school is getting set up".
 
-## Acceptance criteria (PRD §20)
+## Tests
 
-Run everything with `npm test` in `backend/` and `frontend/`, plus `npm run e2e` in `frontend/`.
-QA scenario files are named after the PRD §19 scenario they cover (`backend/tests/qa/qa-NN-*.test.ts`).
+| Suite | Where | Run |
+|---|---|---|
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `setup`, `master` | `npm test` |
+| Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only) | `npm run e2e` |
+
+Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
+Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).
+
+**Acceptance criteria (PRD §20)**
 
 | # | Criterion | Verified by |
 |---|---|---|
-| 1 | School can be created and maintained within a tenant | `tests/school.test.ts` · `frontend/.../school-profile.test.tsx` |
-| 2 | Primary location created through guided onboarding | `tests/setup.test.ts` (completing setup) · `qa-14` · e2e `signup-wizard-overview` |
-| 3 | Multiple locations under one school | `qa-15` · `tests/locations.test.ts` |
-| 4 | Location codes unique per school and validated | `qa-16` · `tests/location-rules.test.ts` · `location-ui.test.tsx` (duplicate error) · e2e duplicate code |
-| 5 | Exactly one active Primary Location enforced | `qa-17` (atomic + concurrent) · `qa-20` · `tests/locations.test.ts` |
-| 6 | Draft, Active, Inactive and Archived states | `qa-19` · `qa-21` · `qa-22` · `tests/locations.test.ts` (every transition) |
-| 7 | Historical locations kept without new operational use | `qa-24` · `qa-25` |
-| 8 | Tenant isolation on every query and mutation | `qa-26` · `tests/location-security.test.ts` · `tests/tenant-scope.test.ts` |
-| 9 | Role permissions enforced server-side | `qa-27` · `qa-29` · `tests/rbac-isolation.test.ts` · e2e `faculty-read-only` |
-| 10 | Key configuration changes audit-logged | `qa-28` · `qa-18` · `tests/setup.test.ts` (setup audit) |
-| 11 | Downstream modules can consume stable `school_id` / `location_id` | `tests/master.test.ts` · `CONTRACTS.md` |
-| 12 | Inactive/Archived locations excluded from selectors | `qa-24` · `tests/master.test.ts` |
-| 13 | APIs and database contracts documented | `tests/docs.test.ts` · `openapi.yaml` · `CONTRACTS.md` |
-| 14 | Automated tests cover critical invariants | the whole backend and frontend suites |
-| 15 | QA passes all critical scenarios | `backend/tests/qa/` (scenarios 14–29) + the three Playwright flows |
+| 1 | School created and maintained within a tenant | `school` · `school-profile.test.tsx` |
+| 2 | Primary location through guided onboarding | `setup` · `locations` (QA 14) · e2e signup-wizard-overview |
+| 3–6 | Multiple locations · unique codes · one Primary · Draft/Active/Inactive/Archived | `locations` (QA 15–23) · `unit` · `location-ui.test.tsx` · e2e locations-lifecycle |
+| 7, 12 | Historical locations kept, excluded from selectors | `master` (QA 24/25) |
+| 8 | Tenant isolation on every query and mutation | `security` (QA 26) · `platform` (tenant-scope plugin) |
+| 9 | Role permissions enforced server-side | `security` (QA 27/29) · `platform` · e2e faculty-read-only |
+| 10 | Configuration changes audit-logged, in the same transaction | `security` (QA 28) · `locations` · `setup` |
+| 11 | Stable `school_id` / `location_id` for downstream modules | `master` · `CONTRACTS.md` |
+| 13 | APIs and contracts documented | `/api/docs` · `openapi.yaml` · `CONTRACTS.md` · `platform` |
+| 14–15 | Critical invariants and QA scenarios automated | all of the above |
 
-**Definition of Done**
-
-| Area | Where |
-|---|---|
-| Frontend: states, forms, validation, responsive | RTL tests; e2e at 1280px; tables stack to cards under 768px |
-| Backend: rules, transitions, APIs | `tests/` |
-| Database: constraints and indexes | partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools |
-| Security: isolation and permissions | `qa-26`, `qa-27`, `qa-29` |
-| Audit | `qa-28`; written in the same transaction as the change |
-| Documentation | `/api/docs`, `CONTRACTS.md` |
-| Integration readiness | `masterService` + `/master/*`; modules register a dependency checker |
+Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px.
 
 ## Architecture rules (carried into every module)
 

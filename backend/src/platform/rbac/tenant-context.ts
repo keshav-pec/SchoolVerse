@@ -16,11 +16,6 @@ export function scoped<T extends Record<string, unknown>>(req: Request, filter?:
   return { ...(filter ?? ({} as T)), tenantId: tenantIdOf(req) };
 }
 
-export function actorOf(req: Request): AuditActor {
-  if (!req.auth) throw new AppError('UNAUTHENTICATED');
-  return { userId: req.auth.userId, role: req.auth.role };
-}
-
 /**
  * Everything a domain service needs to know about the caller. Services never read `req`,
  * so they can be reused by future in-process callers (e.g. the setup wizard, master APIs).

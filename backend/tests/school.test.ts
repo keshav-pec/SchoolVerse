@@ -1,12 +1,10 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { storage } from '../src/core/storage/storage';
 import { AuditEvent } from '../src/modules/audit/audit.model';
-import { useTestDatabase } from './helpers/db';
-import { app, createUserAndLogin, signupAdmin } from './helpers/factories';
-import { API, createSchool, validSchool } from './helpers/school';
-import request from 'supertest';
+import { API, app, createSchool, createUserAndLogin, signupAdmin, useTestDatabase, validSchool } from './helpers';
 
 useTestDatabase();
 

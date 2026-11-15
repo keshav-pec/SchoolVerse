@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import { Location } from '../src/modules/locations/location.model';
-import { useTestDatabase } from './helpers/db';
 import {
   activeLocationBody,
   API,
@@ -9,8 +8,11 @@ import {
   draftLocationBody,
   getLocation,
   nextPhone,
+  pklAddress,
+  seededSchool,
   setupSchool,
-} from './helpers/school';
+  useTestDatabase,
+} from './helpers';
 
 useTestDatabase();
 
@@ -38,9 +40,9 @@ describe('creating locations (SCH-LOC-02/03)', () => {
   });
 
   it('QA 15: a second active location leaves the Primary alone', async () => {
-    const { school, tenantId, moh, chd } = await setupSchool({ seedLocations: true });
-    expect(chd!.isPrimary).toBe(false);
-    expect(await primaryIds(tenantId, school.schoolId)).toEqual([moh!.locationId]);
+    const { school, tenantId, moh, chd } = await seededSchool();
+    expect(chd.isPrimary).toBe(false);
+    expect(await primaryIds(tenantId, school.schoolId)).toEqual([moh.locationId]);
   });
 
   it('a draft never becomes Primary, even when it is the only location', async () => {
@@ -51,7 +53,7 @@ describe('creating locations (SCH-LOC-02/03)', () => {
   });
 
   it('isPrimary on create moves Primary to the new active location in the same transaction', async () => {
-    const { agent, school, tenantId, moh } = await setupSchool({ seedLocations: true });
+    const { agent, school, tenantId, moh } = await seededSchool();
     const del = await createLocation(
       agent,
       school.schoolId,
@@ -59,7 +61,7 @@ describe('creating locations (SCH-LOC-02/03)', () => {
     );
     expect(del.isPrimary).toBe(true);
     expect(await primaryIds(tenantId, school.schoolId)).toEqual([del.locationId]);
-    expect((await getLocation(agent, moh!.locationId)).isPrimary).toBe(false);
+    expect((await getLocation(agent, moh.locationId)).isPrimary).toBe(false);
   });
 
   it('activating at creation requires phone + structured address', async () => {
@@ -90,7 +92,7 @@ describe('creating locations (SCH-LOC-02/03)', () => {
 
 describe('location code rules (SCH-LOC-08)', () => {
   it('QA 16: a duplicate code in the same school is rejected, case-insensitively', async () => {
-    const { agent, school } = await setupSchool({ seedLocations: true });
+    const { agent, school } = await seededSchool();
     for (const code of ['MOH', ' moh ', 'Moh']) {
       const res = await agent
         .post(`${API}/schools/${school.schoolId}/locations`)
@@ -105,13 +107,13 @@ describe('location code rules (SCH-LOC-08)', () => {
   });
 
   it('the same code is fine in another tenant’s school', async () => {
-    await setupSchool({ seedLocations: true, workspace: 'Tenant A' });
+    await seededSchool('Tenant A');
     const b = await setupSchool({ workspace: 'Tenant B' });
     await createLocation(b.agent, b.school.schoolId, activeLocationBody());
   });
 
   it('code availability: live check + suggestion from the name', async () => {
-    const { agent, school, moh } = await setupSchool({ seedLocations: true });
+    const { agent, school, moh } = await seededSchool();
     const url = `${API}/schools/${school.schoolId}/locations/code-availability`;
 
     const free = await agent.get(url).query({ code: 'del01' }).expect(200);
@@ -129,53 +131,53 @@ describe('location code rules (SCH-LOC-08)', () => {
     expect(invalid.body.data).toMatchObject({ valid: false, available: false });
 
     // Editing MOH itself: its own code counts as available.
-    const self = await agent.get(url).query({ code: 'MOH', excludeLocationId: moh!.locationId }).expect(200);
+    const self = await agent.get(url).query({ code: 'MOH', excludeLocationId: moh.locationId }).expect(200);
     expect(self.body.data.available).toBe(true);
 
     await agent.get(url).expect(400);
   });
 
   it('the code can change until the location is referenced, then it is locked; the id never changes', async () => {
-    const { agent, school, chd } = await setupSchool({ seedLocations: true });
-    const renamed = await agent.patch(`${API}/locations/${chd!.locationId}`).send({ locationCode: 'chd1' }).expect(200);
-    expect(renamed.body.data).toMatchObject({ locationId: chd!.locationId, locationCode: 'CHD1', codeLocked: false });
+    const { agent, chd } = await seededSchool();
+    const renamed = await agent.patch(`${API}/locations/${chd.locationId}`).send({ locationCode: 'chd1' }).expect(200);
+    expect(renamed.body.data).toMatchObject({ locationId: chd.locationId, locationCode: 'CHD1', codeLocked: false });
 
-    await agent.post(`${API}/dev/location-references`).send({ locationId: chd!.locationId, kind: 'staff', count: 3, active: false }).expect(201);
-    expect((await getLocation(agent, chd!.locationId)).codeLocked).toBe(true);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: chd.locationId, kind: 'staff', count: 3, active: false }).expect(201);
+    expect((await getLocation(agent, chd.locationId)).codeLocked).toBe(true);
 
-    const locked = await agent.patch(`${API}/locations/${chd!.locationId}`).send({ locationCode: 'CHD' }).expect(409);
+    const locked = await agent.patch(`${API}/locations/${chd.locationId}`).send({ locationCode: 'CHD' }).expect(409);
     expect(locked.body.error.code).toBe('LOCATION_CODE_LOCKED');
     // Other fields remain editable.
-    await agent.patch(`${API}/locations/${chd!.locationId}`).send({ displayName: 'Chandigarh Sector 17' }).expect(200);
-    expect(school.schoolId).toBeTruthy();
+    await agent.patch(`${API}/locations/${chd.locationId}`).send({ displayName: 'Chandigarh Sector 17' }).expect(200);
   });
 
   it('changing the code to one already in use is rejected', async () => {
-    const { agent, chd } = await setupSchool({ seedLocations: true });
-    const res = await agent.patch(`${API}/locations/${chd!.locationId}`).send({ locationCode: 'pkl' }).expect(409);
+    const { agent, chd } = await seededSchool();
+    const res = await agent.patch(`${API}/locations/${chd.locationId}`).send({ locationCode: 'pkl' }).expect(409);
     expect(res.body.error.code).toBe('LOCATION_CODE_TAKEN');
   });
 });
 
 describe('editing locations (SCH-LOC-05)', () => {
   it('QA 18: edits structured address and contact data with a field-level audit diff', async () => {
-    const { agent, tenantId, chd } = await setupSchool({ seedLocations: true });
+    const { agent, tenantId, chd } = await seededSchool();
     const phone = nextPhone();
     const res = await agent
-      .patch(`${API}/locations/${chd!.locationId}`)
+      .patch(`${API}/locations/${chd.locationId}`)
       .send({
         phone,
+        email: 'NEW@Greenfield.edu.in',
         alternatePhone: '+91 172 270 0000',
         websiteUrl: 'chd.greenfield.edu.in',
         address: { line1: 'Plot 4, Sector 17-C', city: 'Chandigarh', state: 'Chandigarh', postalCode: '160017', district: 'Chandigarh' },
       })
       .expect(200);
     expect(res.body.data.address).toMatchObject({ line1: 'Plot 4, Sector 17-C', district: 'Chandigarh', country: 'IN' });
-    expect(res.body.data.websiteUrl).toBe('https://chd.greenfield.edu.in');
+    expect(res.body.data).toMatchObject({ websiteUrl: 'https://chd.greenfield.edu.in', email: 'new@greenfield.edu.in' });
 
-    const audit = await AuditEvent.findOne({ tenantId, entityId: chd!.locationId, action: 'location.updated' }).lean();
+    const audit = await AuditEvent.findOne({ tenantId, entityId: chd.locationId, action: 'location.updated' }).lean();
     const fields = audit!.changes.map((c) => c.field).sort();
-    expect(fields).toEqual(['address.district', 'address.line1', 'alternatePhone', 'phone', 'websiteUrl'].sort());
+    expect(fields).toEqual(['address.district', 'address.line1', 'alternatePhone', 'email', 'phone', 'websiteUrl'].sort());
     expect(audit!.changes.find((c) => c.field === 'address.line1')).toEqual({
       field: 'address.line1',
       from: 'Sector 17',
@@ -184,71 +186,71 @@ describe('editing locations (SCH-LOC-05)', () => {
   });
 
   it('PATCH rejects status and isPrimary and leaves the record unchanged', async () => {
-    const { agent, chd, moh } = await setupSchool({ seedLocations: true });
-    const res = await agent.patch(`${API}/locations/${chd!.locationId}`).send({ status: 'ARCHIVED', isPrimary: true, displayName: 'X' }).expect(400);
+    const { agent, chd, moh } = await seededSchool();
+    const res = await agent.patch(`${API}/locations/${chd.locationId}`).send({ status: 'ARCHIVED', isPrimary: true, displayName: 'X' }).expect(400);
     expect(res.body.error.code).toBe('FIELD_NOT_EDITABLE');
     expect(Object.keys(res.body.error.details.fields).sort()).toEqual(['isPrimary', 'status']);
-    const after = await getLocation(agent, chd!.locationId);
+    const after = await getLocation(agent, chd.locationId);
     expect(after).toMatchObject({ status: 'ACTIVE', isPrimary: false, displayName: 'Chandigarh Campus' });
-    expect((await getLocation(agent, moh!.locationId)).isPrimary).toBe(true);
+    expect((await getLocation(agent, moh.locationId)).isPrimary).toBe(true);
   });
 
   it('an active location cannot lose required contact/address fields; a draft can', async () => {
-    const { agent, chd, pkl } = await setupSchool({ seedLocations: true });
-    const res = await agent.patch(`${API}/locations/${chd!.locationId}`).send({ phone: '' }).expect(400);
+    const { agent, chd, pkl } = await seededSchool();
+    const res = await agent.patch(`${API}/locations/${chd.locationId}`).send({ phone: '' }).expect(400);
     expect(res.body.error.details.fields.phone).toBeDefined();
-    await agent.patch(`${API}/locations/${pkl!.locationId}`).send({ phone: nextPhone() }).expect(200);
-    await agent.patch(`${API}/locations/${pkl!.locationId}`).send({ phone: null }).expect(200);
+    await agent.patch(`${API}/locations/${pkl.locationId}`).send({ phone: nextPhone() }).expect(200);
+    await agent.patch(`${API}/locations/${pkl.locationId}`).send({ phone: null }).expect(200);
   });
 
   it('checks the postal code against the address country', async () => {
-    const { agent, pkl } = await setupSchool({ seedLocations: true });
-    const res = await agent.patch(`${API}/locations/${pkl!.locationId}`).send({ address: { postalCode: '1340' } }).expect(400);
+    const { agent, pkl } = await seededSchool();
+    const res = await agent.patch(`${API}/locations/${pkl.locationId}`).send({ address: { postalCode: '1340' } }).expect(400);
     expect(res.body.error.details.fields['address.postalCode']).toMatch(/PIN/);
-    await agent.patch(`${API}/locations/${pkl!.locationId}`).send({ address: { postalCode: '94105', country: 'US' } }).expect(200);
+    await agent.patch(`${API}/locations/${pkl.locationId}`).send({ address: { postalCode: '94105', country: 'US' } }).expect(200);
   });
 
   it('archived locations are read-only', async () => {
-    const { agent, pkl } = await setupSchool({ seedLocations: true });
-    await agent.post(`${API}/locations/${pkl!.locationId}/archive`).expect(200);
-    const res = await agent.patch(`${API}/locations/${pkl!.locationId}`).send({ displayName: 'Revived' }).expect(409);
+    const { agent, pkl } = await seededSchool();
+    await agent.post(`${API}/locations/${pkl.locationId}/archive`).expect(200);
+    const res = await agent.patch(`${API}/locations/${pkl.locationId}`).send({ displayName: 'Revived' }).expect(409);
     expect(res.body.error.code).toBe('LOCATION_ARCHIVED');
   });
 });
 
 describe('lifecycle over the API (SCH-LOC-06)', () => {
   it('QA 19: deactivates a non-primary location and reactivates it', async () => {
-    const { agent, chd } = await setupSchool({ seedLocations: true });
-    const off = await agent.post(`${API}/locations/${chd!.locationId}/deactivate`).expect(200);
+    const { agent, chd } = await seededSchool();
+    const off = await agent.post(`${API}/locations/${chd.locationId}/deactivate`).expect(200);
     expect(off.body.data).toMatchObject({ status: 'INACTIVE', isPrimary: false });
     expect(off.body.data.statusChangedAt).toBeTruthy();
-    const on = await agent.post(`${API}/locations/${chd!.locationId}/activate`).expect(200);
+    const on = await agent.post(`${API}/locations/${chd.locationId}/activate`).expect(200);
     expect(on.body.data.status).toBe('ACTIVE');
   });
 
   it('QA 20: the Primary cannot be deactivated (or archived) without a replacement', async () => {
-    const { agent, moh } = await setupSchool({ seedLocations: true });
-    const res = await agent.post(`${API}/locations/${moh!.locationId}/deactivate`).expect(409);
+    const { agent, moh } = await seededSchool();
+    const res = await agent.post(`${API}/locations/${moh.locationId}/deactivate`).expect(409);
     expect(res.body.error).toMatchObject({
       code: 'PRIMARY_LOCATION_REQUIRED',
       message: 'Set another active location as Primary before deactivating this location.',
     });
-    const archive = await agent.post(`${API}/locations/${moh!.locationId}/archive`).expect(409);
+    const archive = await agent.post(`${API}/locations/${moh.locationId}/archive`).expect(409);
     expect(archive.body.error.code).toBe('PRIMARY_LOCATION_REQUIRED');
-    expect((await getLocation(agent, moh!.locationId)).status).toBe('ACTIVE');
+    expect((await getLocation(agent, moh.locationId)).status).toBe('ACTIVE');
   });
 
   it('QA 21: activates a draft once it is complete', async () => {
-    const { agent, pkl } = await setupSchool({ seedLocations: true });
-    const incomplete = await agent.post(`${API}/locations/${pkl!.locationId}/activate`).expect(422);
+    const { agent, pkl } = await seededSchool();
+    const incomplete = await agent.post(`${API}/locations/${pkl.locationId}/activate`).expect(422);
     expect(incomplete.body.error.code).toBe('LOCATION_INCOMPLETE');
     expect(Object.keys(incomplete.body.error.details.fields)).toContain('address.postalCode');
 
     await agent
-      .patch(`${API}/locations/${pkl!.locationId}`)
-      .send({ phone: nextPhone(), address: { line1: 'Sector 5', city: 'Panchkula', state: 'Haryana', postalCode: '134109' } })
+      .patch(`${API}/locations/${pkl.locationId}`)
+      .send({ phone: nextPhone(), address: pklAddress })
       .expect(200);
-    const res = await agent.post(`${API}/locations/${pkl!.locationId}/activate`).expect(200);
+    const res = await agent.post(`${API}/locations/${pkl.locationId}/activate`).expect(200);
     expect(res.body.data).toMatchObject({ status: 'ACTIVE', isPrimary: false });
   });
 
@@ -261,61 +263,61 @@ describe('lifecycle over the API (SCH-LOC-06)', () => {
   });
 
   it('QA 22: archives an unused location (draft or inactive), never directly from active', async () => {
-    const { agent, chd, pkl } = await setupSchool({ seedLocations: true });
-    const archived = await agent.post(`${API}/locations/${pkl!.locationId}/archive`).expect(200);
+    const { agent, chd, pkl } = await seededSchool();
+    const archived = await agent.post(`${API}/locations/${pkl.locationId}/archive`).expect(200);
     expect(archived.body.data).toMatchObject({ status: 'ARCHIVED', isPrimary: false });
     expect(archived.body.data.archivedAt).toBeTruthy();
 
-    const direct = await agent.post(`${API}/locations/${chd!.locationId}/archive`).expect(409);
+    const direct = await agent.post(`${API}/locations/${chd.locationId}/archive`).expect(409);
     expect(direct.body.error.code).toBe('INVALID_STATUS_TRANSITION');
-    await agent.post(`${API}/locations/${chd!.locationId}/deactivate`).expect(200);
-    await agent.post(`${API}/locations/${chd!.locationId}/archive`).expect(200);
+    await agent.post(`${API}/locations/${chd.locationId}/deactivate`).expect(200);
+    await agent.post(`${API}/locations/${chd.locationId}/archive`).expect(200);
   });
 
   it('archived is terminal and can never become Primary', async () => {
-    const { agent, pkl } = await setupSchool({ seedLocations: true });
-    await agent.post(`${API}/locations/${pkl!.locationId}/archive`).expect(200);
+    const { agent, pkl } = await seededSchool();
+    await agent.post(`${API}/locations/${pkl.locationId}/archive`).expect(200);
     for (const action of ['activate', 'deactivate', 'archive']) {
-      const res = await agent.post(`${API}/locations/${pkl!.locationId}/${action}`).expect(409);
+      const res = await agent.post(`${API}/locations/${pkl.locationId}/${action}`).expect(409);
       expect(res.body.error.code).toBe('INVALID_STATUS_TRANSITION');
     }
-    const primary = await agent.post(`${API}/locations/${pkl!.locationId}/set-primary`).expect(409);
+    const primary = await agent.post(`${API}/locations/${pkl.locationId}/set-primary`).expect(409);
     expect(primary.body.error).toMatchObject({ code: 'PRIMARY_REQUIRES_ACTIVE', message: 'An archived location can never be the Primary Location.' });
   });
 });
 
 describe('changing the Primary Location (SCH-LOC-07)', () => {
   it('QA 17: switches Primary atomically and audits both locations', async () => {
-    const { agent, school, tenantId, moh, chd } = await setupSchool({ seedLocations: true });
-    const res = await agent.post(`${API}/locations/${chd!.locationId}/set-primary`).expect(200);
-    expect(res.body.data).toMatchObject({ locationId: chd!.locationId, isPrimary: true });
-    expect(await primaryIds(tenantId, school.schoolId)).toEqual([chd!.locationId]);
+    const { agent, school, tenantId, moh, chd } = await seededSchool();
+    const res = await agent.post(`${API}/locations/${chd.locationId}/set-primary`).expect(200);
+    expect(res.body.data).toMatchObject({ locationId: chd.locationId, isPrimary: true });
+    expect(await primaryIds(tenantId, school.schoolId)).toEqual([chd.locationId]);
 
-    const set = await AuditEvent.findOne({ tenantId, entityId: chd!.locationId, action: 'location.primary_set' }).lean();
-    expect(set?.metadata).toMatchObject({ reason: 'SET_BY_USER', previousPrimaryLocationId: moh!.locationId, previousPrimaryCode: 'MOH' });
-    const unset = await AuditEvent.findOne({ tenantId, entityId: moh!.locationId, action: 'location.primary_unset' }).lean();
-    expect(unset?.metadata).toMatchObject({ newPrimaryLocationId: chd!.locationId });
+    const set = await AuditEvent.findOne({ tenantId, entityId: chd.locationId, action: 'location.primary_set' }).lean();
+    expect(set?.metadata).toMatchObject({ reason: 'SET_BY_USER', previousPrimaryLocationId: moh.locationId, previousPrimaryCode: 'MOH' });
+    const unset = await AuditEvent.findOne({ tenantId, entityId: moh.locationId, action: 'location.primary_unset' }).lean();
+    expect(unset?.metadata).toMatchObject({ newPrimaryLocationId: chd.locationId });
 
     // The old Primary can now be deactivated.
-    await agent.post(`${API}/locations/${moh!.locationId}/deactivate`).expect(200);
+    await agent.post(`${API}/locations/${moh.locationId}/deactivate`).expect(200);
   });
 
   it('setting the current Primary again is a no-op', async () => {
-    const { agent, tenantId, moh } = await setupSchool({ seedLocations: true });
-    await agent.post(`${API}/locations/${moh!.locationId}/set-primary`).expect(200);
+    const { agent, tenantId, moh } = await seededSchool();
+    await agent.post(`${API}/locations/${moh.locationId}/set-primary`).expect(200);
     expect(await AuditEvent.countDocuments({ tenantId, action: 'location.primary_set' })).toBe(1);
   });
 
   it('only an ACTIVE location can be made Primary', async () => {
-    const { agent, chd, pkl } = await setupSchool({ seedLocations: true });
-    const draft = await agent.post(`${API}/locations/${pkl!.locationId}/set-primary`).expect(409);
+    const { agent, chd, pkl } = await seededSchool();
+    const draft = await agent.post(`${API}/locations/${pkl.locationId}/set-primary`).expect(409);
     expect(draft.body.error.code).toBe('PRIMARY_REQUIRES_ACTIVE');
-    await agent.post(`${API}/locations/${chd!.locationId}/deactivate`).expect(200);
-    await agent.post(`${API}/locations/${chd!.locationId}/set-primary`).expect(409);
+    await agent.post(`${API}/locations/${chd.locationId}/deactivate`).expect(200);
+    await agent.post(`${API}/locations/${chd.locationId}/set-primary`).expect(409);
   });
 
   it('concurrent set-primary calls always leave exactly one Primary', async () => {
-    const { agent, school, tenantId } = await setupSchool({ seedLocations: true });
+    const { agent, school, tenantId } = await seededSchool();
     const extra = await Promise.all(
       ['AAA', 'BBB', 'CCC'].map((code, i) =>
         createLocation(agent, school.schoolId, activeLocationBody({ locationCode: code, displayName: `Campus ${i}`, email: null })),
@@ -342,21 +344,21 @@ describe('changing the Primary Location (SCH-LOC-07)', () => {
   });
 
   it('the database itself refuses a second Primary', async () => {
-    const { school, tenantId, chd } = await setupSchool({ seedLocations: true });
-    await expect(Location.updateOne({ _id: chd!.locationId, tenantId }, { $set: { isPrimary: true } })).rejects.toMatchObject({ code: 11000 });
+    const { school, tenantId, chd } = await seededSchool();
+    await expect(Location.updateOne({ _id: chd.locationId, tenantId }, { $set: { isPrimary: true } })).rejects.toMatchObject({ code: 11000 });
     expect(await primaryIds(tenantId, school.schoolId)).toHaveLength(1);
   });
 });
 
 describe('dependencies, archive and delete (SCH-LOC-11)', () => {
   it('QA 23: archive is blocked while active records reference the location', async () => {
-    const { agent, chd } = await setupSchool({ seedLocations: true });
-    await agent.post(`${API}/locations/${chd!.locationId}/deactivate`).expect(200);
-    await agent.post(`${API}/dev/location-references`).send({ locationId: chd!.locationId, kind: 'staff', count: 12 }).expect(201);
-    await agent.post(`${API}/dev/location-references`).send({ locationId: chd!.locationId, kind: 'students', count: 483 }).expect(201);
-    await agent.post(`${API}/dev/location-references`).send({ locationId: chd!.locationId, kind: 'inventory', count: 4, active: false }).expect(201);
+    const { agent, chd } = await seededSchool();
+    await agent.post(`${API}/locations/${chd.locationId}/deactivate`).expect(200);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: chd.locationId, kind: 'staff', count: 12 }).expect(201);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: chd.locationId, kind: 'students', count: 483 }).expect(201);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: chd.locationId, kind: 'inventory', count: 4, active: false }).expect(201);
 
-    const res = await agent.post(`${API}/locations/${chd!.locationId}/archive`).expect(409);
+    const res = await agent.post(`${API}/locations/${chd.locationId}/archive`).expect(409);
     expect(res.body.error).toMatchObject({
       code: 'LOCATION_HAS_DEPENDENCIES',
       message: 'This location cannot be archived because active records are still associated with it.',
@@ -365,34 +367,34 @@ describe('dependencies, archive and delete (SCH-LOC-11)', () => {
       { key: 'simulated.staff', label: 'Active staff', count: 12, message: '12 active staff members are assigned to this location.' },
       { key: 'simulated.students', label: 'Active students', count: 483, message: '483 active student enrollments belong to this location.' },
     ]);
-    expect((await getLocation(agent, chd!.locationId)).status).toBe('INACTIVE');
+    expect((await getLocation(agent, chd.locationId)).status).toBe('INACTIVE');
 
     // Once only historical references remain, archive succeeds (history stays intact).
-    await agent.delete(`${API}/dev/location-references`).query({ locationId: chd!.locationId }).expect(200);
-    await agent.post(`${API}/dev/location-references`).send({ locationId: chd!.locationId, kind: 'staff', count: 12, active: false }).expect(201);
-    await agent.post(`${API}/locations/${chd!.locationId}/archive`).expect(200);
+    await agent.delete(`${API}/dev/location-references`).query({ locationId: chd.locationId }).expect(200);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: chd.locationId, kind: 'staff', count: 12, active: false }).expect(201);
+    await agent.post(`${API}/locations/${chd.locationId}/archive`).expect(200);
   });
 
   it('delete only works for a never-referenced DRAFT', async () => {
-    const { agent, tenantId, chd, pkl } = await setupSchool({ seedLocations: true });
-    const notDraft = await agent.delete(`${API}/locations/${chd!.locationId}`).expect(409);
+    const { agent, tenantId, chd, pkl } = await seededSchool();
+    const notDraft = await agent.delete(`${API}/locations/${chd.locationId}`).expect(409);
     expect(notDraft.body.error.code).toBe('USE_ARCHIVE_INSTEAD');
 
-    await agent.post(`${API}/dev/location-references`).send({ locationId: pkl!.locationId, kind: 'academic', active: false }).expect(201);
-    expect((await getLocation(agent, pkl!.locationId)).deletable).toBe(false);
-    const referenced = await agent.delete(`${API}/locations/${pkl!.locationId}`).expect(409);
+    await agent.post(`${API}/dev/location-references`).send({ locationId: pkl.locationId, kind: 'academic', active: false }).expect(201);
+    expect((await getLocation(agent, pkl.locationId)).deletable).toBe(false);
+    const referenced = await agent.delete(`${API}/locations/${pkl.locationId}`).expect(409);
     expect(referenced.body.error.code).toBe('USE_ARCHIVE_INSTEAD');
 
-    await agent.delete(`${API}/dev/location-references`).query({ locationId: pkl!.locationId }).expect(200);
-    await agent.delete(`${API}/locations/${pkl!.locationId}`).expect(204);
-    await agent.get(`${API}/locations/${pkl!.locationId}`).expect(404);
-    expect(await AuditEvent.countDocuments({ tenantId, entityId: pkl!.locationId, action: 'location.deleted' })).toBe(1);
+    await agent.delete(`${API}/dev/location-references`).query({ locationId: pkl.locationId }).expect(200);
+    await agent.delete(`${API}/locations/${pkl.locationId}`).expect(204);
+    await agent.get(`${API}/locations/${pkl.locationId}`).expect(404);
+    expect(await AuditEvent.countDocuments({ tenantId, entityId: pkl.locationId, action: 'location.deleted' })).toBe(1);
   });
 });
 
 describe('listing, search and filters (SCH-LOC-04)', () => {
   it('lists Primary first with facets, hiding archived by default', async () => {
-    const { agent, school, pkl } = await setupSchool({ seedLocations: true });
+    const { agent, school } = await seededSchool();
     await createLocation(agent, school.schoolId, draftLocationBody({ displayName: 'Old Annexe', locationCode: 'OLD' }));
     const old = await agent.get(`${API}/schools/${school.schoolId}/locations`).query({ q: 'annexe' }).expect(200);
     await agent.post(`${API}/locations/${old.body.data.items[0].locationId}/archive`).expect(200);
@@ -411,11 +413,10 @@ describe('listing, search and filters (SCH-LOC-04)', () => {
 
     const archived = await agent.get(`${API}/schools/${school.schoolId}/locations`).query({ status: 'ARCHIVED' }).expect(200);
     expect(archived.body.data.items.map((l: { locationCode: string }) => l.locationCode)).toEqual(['OLD']);
-    expect(pkl).toBeTruthy();
   });
 
   it('searches name, code and city; filters by status, type and city; paginates and sorts', async () => {
-    const { agent, school } = await setupSchool({ seedLocations: true });
+    const { agent, school } = await seededSchool();
     const list = (query: Record<string, string | number>) =>
       agent.get(`${API}/schools/${school.schoolId}/locations`).query(query).expect(200).then((r) => r.body.data);
     const codes = (data: { items: { locationCode: string }[] }) => data.items.map((l) => l.locationCode);

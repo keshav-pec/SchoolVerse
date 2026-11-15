@@ -1,8 +1,14 @@
+import { randomUUID } from 'node:crypto';
+import mongoose, { Schema } from 'mongoose';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SKIP_TENANT_SCOPE, tenantScopePlugin } from '../src/db/plugins/tenant-scope';
+import { loadOpenApiDocument } from '../src/docs/swagger';
 import { AuditEvent } from '../src/modules/audit/audit.model';
-import { useTestDatabase } from './helpers/db';
-import { app, PASSWORD, signupAdmin, uniqueEmail } from './helpers/factories';
+import { User } from '../src/platform/users/user.model';
+import { API, app, createUserAndLogin, PASSWORD, signupAdmin, uniqueEmail, useTestDatabase } from './helpers';
+
+useTestDatabase();
 
 function cookieNames(res: request.Response): string[] {
   const raw = res.headers['set-cookie'] as unknown as string[] | undefined;
@@ -17,8 +23,7 @@ function cookieOf(res: request.Response, name: string): string {
 }
 const refreshCookieOf = (res: request.Response) => cookieOf(res, 'sv_refresh');
 
-describe('auth (platform foundation)', () => {
-  useTestDatabase();
+describe('auth', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('signup creates a tenant + School Admin, sets httpOnly cookies and records audit events', async () => {
@@ -122,5 +127,84 @@ describe('auth (platform foundation)', () => {
   it('unknown routes return ROUTE_NOT_FOUND', async () => {
     const res = await request(app).get('/api/v1/nope').expect(404);
     expect(res.body.error.code).toBe('ROUTE_NOT_FOUND');
+  });
+});
+
+describe('users: server-side enforcement & tenant isolation (SCH-LOC-09, SCH-LOC-15)', () => {
+  it('non-admin roles are rejected by the server even when calling the API directly', async () => {
+    const { session } = await signupAdmin();
+    for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
+      const { agent } = await createUserAndLogin(session.tenant.tenantId, role);
+      const res = await agent.get(`${API}/users`).expect(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    }
+  });
+
+  it('an admin only sees their own tenant, and other tenants’ ids are 404', async () => {
+    const a = await signupAdmin('Tenant A');
+    const b = await signupAdmin('Tenant B');
+    await createUserAndLogin(a.session.tenant.tenantId, 'FACULTY');
+
+    const listA = await a.agent.get(`${API}/users`).expect(200);
+    expect(listA.body.data.total).toBe(2);
+    expect(listA.body.data.items.every((u: { tenantId: string }) => u.tenantId === a.session.tenant.tenantId)).toBe(true);
+    expect((await b.agent.get(`${API}/users`).expect(200)).body.data.total).toBe(1);
+
+    const res = await a.agent.get(`${API}/users/${b.session.user.userId}`).expect(404);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+    await a.agent.get(`${API}/users/${a.session.user.userId}`).expect(200);
+  });
+
+  it('role changes take effect immediately (role is re-read on every request)', async () => {
+    const { session } = await signupAdmin();
+    const { agent, userId } = await createUserAndLogin(session.tenant.tenantId, 'FACULTY');
+    await agent.get(`${API}/users`).expect(403);
+    await User.updateOne({ _id: userId, tenantId: session.tenant.tenantId }, { role: 'SCHOOL_ADMIN' });
+    await agent.get(`${API}/users`).expect(200);
+  });
+});
+
+describe('tenantScopePlugin (SCH-LOC-15)', () => {
+  const widgetSchema = new Schema({ _id: { type: String, default: () => randomUUID() }, tenantId: String, name: String });
+  widgetSchema.plugin(tenantScopePlugin);
+  const Widget = mongoose.model('ScopeTestWidget', widgetSchema);
+
+  it('rejects queries, aggregations and inserts without a tenantId', async () => {
+    await expect(Widget.find({})).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.findById(randomUUID())).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.countDocuments({ name: 'x' })).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.updateMany({}, { name: 'y' })).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.deleteOne({ name: 'x' })).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.aggregate([{ $match: { name: 'x' } }])).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+    await expect(Widget.create({ name: 'orphan' })).rejects.toMatchObject({ code: 'TENANT_SCOPE_MISSING' });
+  });
+
+  it('returns only the requesting tenant’s rows, with explicit system lookups as the escape hatch', async () => {
+    await Widget.create([
+      { tenantId: 'tenant-a', name: 'A1' },
+      { tenantId: 'tenant-a', name: 'A2' },
+      { tenantId: 'tenant-b', name: 'B1' },
+    ]);
+    expect((await Widget.find({ tenantId: 'tenant-a' }).lean()).map((r) => r.name).sort()).toEqual(['A1', 'A2']);
+    await expect(Widget.aggregate([{ $match: { tenantId: 'tenant-b' } }])).resolves.toHaveLength(1);
+    expect(await Widget.countDocuments({}).setOptions(SKIP_TENANT_SCOPE)).toBe(3);
+  });
+});
+
+describe('API documentation (SCH-LOC-14)', () => {
+  it('the OpenAPI spec resolves every $ref', () => {
+    const spec = loadOpenApiDocument() as unknown as { components: Record<string, Record<string, unknown>> };
+    const refs = [...JSON.stringify(spec).matchAll(/"\$ref":"#\/components\/(\w+)\/(\w+)"/g)];
+    expect(refs.length).toBeGreaterThan(20);
+    for (const [, kind, name] of refs) expect(spec.components[kind!]?.[name!], `#/components/${kind}/${name}`).toBeDefined();
+  });
+
+  it('serves Swagger UI and the raw spec without auth, keeping the strict CSP on the API itself', async () => {
+    const ui = await request(app).get('/api/docs/').expect(200);
+    expect(ui.text).toContain('swagger-ui');
+    expect(ui.headers['content-security-policy']).toBeUndefined();
+    expect((await request(app).get('/api/docs.json').expect(200)).body.info.title).toMatch(/SchoolVerse/);
+    const health = await request(app).get(`${API}/health`).expect(200);
+    expect(health.headers['content-security-policy']).toContain("default-src 'self'");
   });
 });

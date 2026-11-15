@@ -1,8 +1,5 @@
-import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import type { Permission } from '@shared';
 import { LogoMark } from '@/components/sv/logo';
-import { ForbiddenPage } from '@/features/errors/forbidden-page';
 import { GettingSetUpPage } from '@/features/setup/getting-set-up-page';
 import { useCurrentSchool } from '@/features/school-profile/api';
 import { ErrorState } from '@/components/sv/error-state';
@@ -34,12 +31,6 @@ export function GuestOnly() {
   if (isLoading) return <FullScreenLoader label="Just a moment…" />;
   if (session) return <Navigate to="/" replace />;
   return <Outlet />;
-}
-
-/** Renders a friendly 403 page instead of the content when a permission is missing. */
-export function RequirePermission({ permission, children }: { permission: Permission; children: ReactNode }) {
-  const { can } = useAuth();
-  return can(permission) ? <>{children}</> : <ForbiddenPage />;
 }
 
 /**

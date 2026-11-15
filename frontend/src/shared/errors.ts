@@ -75,10 +75,6 @@ export interface ApiErrorDetails {
   [key: string]: unknown;
 }
 
-export interface ApiSuccess<T> {
-  data: T;
-}
-
 export function defaultMessageFor(code: string): string {
   return (ERROR_CODES as Record<string, { message: string }>)[code]?.message ?? ERROR_CODES.INTERNAL_ERROR.message;
 }

@@ -128,12 +128,6 @@ export async function getLocationOrThrow(ctx: ServiceContext, locationId: string
   return doc;
 }
 
-export async function getLocationWithSchool(ctx: ServiceContext, locationId: string) {
-  const location = await getLocationOrThrow(ctx, locationId);
-  const school = await getSchoolOrThrow(ctx, location.schoolId);
-  return { location, school };
-}
-
 const SORT_FIELDS: Record<string, string> = {
   displayName: 'displayName',
   locationCode: 'locationCode',

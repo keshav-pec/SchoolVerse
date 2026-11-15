@@ -25,3 +25,5 @@ window.matchMedia ??= ((query: string) => ({
   removeListener: () => {},
   dispatchEvent: () => false,
 })) as typeof window.matchMedia;
+// jsdom logs "Not implemented" for scrollTo; the wizard calls it on every step change.
+window.scrollTo = (() => {}) as typeof window.scrollTo;
