@@ -7,6 +7,8 @@ this page need an architecture review once a downstream module depends on it (PR
 
 Machine-readable API: [`openapi.yaml`](./openapi.yaml), served with Swagger UI at `/api/docs`.
 
+Module 2 (Academic Structure: sessions, grades, sections, subjects, rules, programmes, the academic context) has its own contract: [`ACADEMIC_CONTRACTS.md`](./ACADEMIC_CONTRACTS.md).
+
 ## 1. The reference pattern
 
 | Bad pattern | Required pattern |

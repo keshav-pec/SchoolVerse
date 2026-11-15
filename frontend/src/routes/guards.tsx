@@ -61,3 +61,17 @@ export function RequireSetupComplete() {
   if (can('setup:manage')) return <Navigate to="/setup" replace />;
   return <GettingSetUpPage />;
 }
+
+/** Academics: anyone with `academic:view` (admins, plus a read-only view for Faculty and Staff). Parents see the restricted page. */
+export function RequireAcademicAccess() {
+  const { can } = useAuth();
+  if (!can('academic:view')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}
+
+/** Configuration pages (session setup, subject master) are for admins; limited roles go back to the read-only page. */
+export function RequireAcademicConfig() {
+  const { can } = useAuth();
+  if (!can('academic:view_config')) return <Navigate to="/academics" replace />;
+  return <Outlet />;
+}

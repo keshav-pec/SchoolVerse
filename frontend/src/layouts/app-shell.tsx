@@ -1,7 +1,7 @@
 import { useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
-import { Building2, ChevronDown, House, LayoutDashboard, LogOut, MapPinned, Menu, PanelLeftClose, PanelLeftOpen, School, UserRound } from 'lucide-react';
+import { Building2, ChevronDown, GraduationCap, House, Library, LayoutDashboard, LogOut, MapPinned, Menu, PanelLeftClose, PanelLeftOpen, School } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
@@ -15,6 +15,8 @@ interface NavItem {
   label: string;
   Icon: ComponentType<{ className?: string }>;
   permission?: Permission;
+  /** Hidden for users who hold this permission (they get a richer item instead). */
+  hideWith?: Permission;
   end?: boolean;
 }
 
@@ -37,10 +39,20 @@ const NAV: NavSection[] = [
       { to: '/school-setup/locations', label: 'Locations', Icon: MapPinned, permission: 'location:view' },
     ],
   },
+  {
+    label: 'Academics',
+    items: [
+      { to: '/academics', label: 'Academic Setup', Icon: GraduationCap, permission: 'academic:view_config', end: true },
+      { to: '/academics/subjects', label: 'Subject master', Icon: Library, permission: 'academic:view_config' },
+      { to: '/academics', label: 'Academic Structure', Icon: GraduationCap, permission: 'academic:view', hideWith: 'academic:view_config', end: true },
+    ],
+  },
 ];
 
 /** Breadcrumb labels, longest match first. */
 const CRUMBS: [string, string[]][] = [
+  ['/academics/sessions/', ['Academics', 'Academic Setup', 'Session']],
+  ['/academics/subjects', ['Academics', 'Subject master']],
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
@@ -49,6 +61,7 @@ const CRUMBS: [string, string[]][] = [
 function crumbsFor(pathname: string): string[] {
   if (pathname === '/') return ['Home'];
   if (pathname === '/school-setup') return ['School Setup', 'Overview'];
+  if (pathname === '/academics') return ['Academics', 'Academic Setup'];
   return CRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? ['Page'];
 }
 
@@ -77,7 +90,7 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
 
       <nav className="mt-2 flex-1 overflow-y-auto" aria-label="Main">
         {NAV.map((section, i) => {
-          const items = section.items.filter((item) => !item.permission || can(item.permission));
+          const items = section.items.filter((item) => (!item.permission || can(item.permission)) && !(item.hideWith && can(item.hideWith)));
           if (items.length === 0) return null;
           return (
             <div key={section.label ?? i}>
@@ -113,7 +126,7 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
       <div className={cn('flex items-center justify-between border-t border-[#2a3d5b] px-2 pt-3', collapsed && 'hidden')}>
         <div>
           <p className="text-[13px] font-semibold text-[#e3eafb]">SchoolVerse ERP</p>
-          <p className="text-[11px] text-navy-muted">Module 1 · School Setup</p>
+          <p className="text-[11px] text-navy-muted">Modules 1–2 · Setup &amp; Academics</p>
         </div>
         <span className="rounded-[5px] border border-[#455b7b] px-1.5 py-0.5 text-[11px] text-[#c8d8f0]">v0.1</span>
       </div>
@@ -151,9 +164,6 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <UserRound /> My profile <span className="ml-auto text-[11px] text-muted">Soon</span>
-        </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleLogout} className="text-danger data-[highlighted]:bg-danger-soft [&_svg]:text-danger">
           <LogOut /> Sign out
         </DropdownMenuItem>

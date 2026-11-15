@@ -44,16 +44,24 @@ test('add a location, make it Primary, deactivate the old Primary, then archive 
   await page.getByRole('alertdialog').getByRole('button', { name: /deactivate location/i }).click();
   await expect(page.getByRole('row', { name: /Mohali Campus/ })).toContainText('Inactive');
 
-  // ── and archived: it leaves the default list
+  // ── Mohali has grades in the active academic session, so Academic Structure blocks archiving it
   await page.getByRole('button', { name: 'Actions for Mohali Campus' }).click();
   await page.getByRole('menuitem', { name: /^archive/i }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: /archive location/i }).click();
+  await expect(page.getByRole('alertdialog')).toContainText(/set up at this location/i);
+  await page.getByRole('alertdialog').getByRole('button', { name: /cancel/i }).click();
+  await expect(page.getByRole('row', { name: /Mohali Campus/ })).toContainText('Inactive');
+
+  // ── a campus nothing refers to (the Panchkula draft) archives fine and leaves the default list
+  await page.getByRole('button', { name: 'Actions for Panchkula Campus' }).click();
+  await page.getByRole('menuitem', { name: /^archive/i }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: /archive location/i }).click();
   await expectToast(page, 'Location archived successfully.');
-  await expect(page.getByRole('row', { name: /Mohali Campus/ })).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /Panchkula Campus/ })).toHaveCount(0);
 
   // ── archived locations are still there under their filter, read-only
   await page.getByRole('button', { name: /^archived/i }).click();
-  await expect(page.getByRole('row', { name: /Mohali Campus/ })).toContainText('Archived');
+  await expect(page.getByRole('row', { name: /Panchkula Campus/ })).toContainText('Archived');
 });
 
 test('a duplicate location code is caught while typing', async ({ page }) => {

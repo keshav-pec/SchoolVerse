@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup.** See [Module1.md](Module1.md) for the full plan.
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -8,6 +8,14 @@ The friendly School ERP. **Module 1: School & School Locations Setup.** See [Mod
 | 2 | School & Location master domain (API) | ✅ Done |
 | 3 | School Profile & Locations UI | ✅ Done |
 | 4 | Setup wizard, overview, master APIs, QA | ✅ Done |
+
+**Module 2: Academic Structure & Session Setup**
+
+| Part | Scope | Status |
+|---|---|---|
+| 1 | Boards, grade master, subjects, sessions, grade / section / subject offerings, terms (API) | ✅ Done |
+| 2 | Choice rules, programmes, clone, validation engine, lifecycle, academic context (API) | ✅ Done |
+| 3 | Academic Setup UI, QA and integration hardening | ✅ Done |
 
 ## Layout
 
@@ -59,6 +67,8 @@ The seed also creates each tenant's School Master and the PRD §19 location data
 | Chandigarh Campus | CHD | No | Active |
 | Panchkula Campus | PKL | No | Draft |
 
+**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (grades Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Grade VI language choice group, Grade XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 15-grade master are built-in reference data shared by every school.
+
 Greenfield's first-time setup is **completed**, so its admin goes straight to the app. Riverside Academy has one active campus that reuses the code `MOH` (codes only have to be unique within a school) and an unfinished setup. A workspace you create through **Sign up** always starts in the wizard.
 
 > Running MongoDB locally? Start it as a replica set: `mongod --replSet rs0`, then `mongosh --eval "rs.initiate()"`.
@@ -83,7 +93,7 @@ Greenfield's first-time setup is **completed**, so its admin goes straight to th
 ## API
 
 Interactive docs: **http://localhost:4000/api/docs** (Swagger UI), raw spec at `/api/docs.json`.
-The spec is [`backend/src/docs/openapi.yaml`](backend/src/docs/openapi.yaml); rules, frozen fields and the downstream pattern are in [`backend/src/docs/CONTRACTS.md`](backend/src/docs/CONTRACTS.md).
+The spec is [`backend/src/docs/openapi.yaml`](backend/src/docs/openapi.yaml); rules, frozen fields and the downstream pattern are in [`backend/src/docs/CONTRACTS.md`](backend/src/docs/CONTRACTS.md) (school and locations) and [`backend/src/docs/ACADEMIC_CONTRACTS.md`](backend/src/docs/ACADEMIC_CONTRACTS.md) (academic structure).
 
 All routes are under `/api/v1`, require a session cookie, and are scoped to the caller's tenant.
 
@@ -96,6 +106,12 @@ All routes are under `/api/v1`, require a session cookie, and are scoped to the 
 | Setup | `GET /schools/:schoolId/setup-status` · `PATCH /schools/:schoolId/setup` (wizard step) · `POST /schools/:schoolId/setup/complete` |
 | Master (downstream, read-only) | `GET /master/school-context` · `GET /master/locations?scope=operational\|configuration\|all` · `GET /master/locations/:id` · `POST /master/locations/validate` |
 | Audit | `GET /audit?entityType=&entityId=&cursor=&limit=` |
+| Academic reference | `GET /boards` · `/boards/:id/rule-versions` · `/grades` · `POST /boards` (a school's own board) |
+| Subjects | `GET`/`POST /subjects` · `GET`/`PATCH /subjects/:id` · `PUT /subjects/:id/board-codes` · `DELETE /subjects/:id/board-codes/:ruleVersionId` |
+| Sessions | `GET`/`POST /academic-sessions` · `GET /academic-sessions/current` · `GET`/`PATCH`/`DELETE /academic-sessions/:id` · `GET …/overview` · `POST …/validate` · `…/publish` · `…/activate` · `…/close` · `…/archive` · `…/clone` |
+| Offerings and terms | `…/grade-offerings` · `/grade-offerings/:id` (+ `/sections`, `/subjects`, `/subjects/copy-from/:otherId`) · `/sections/:id` · `/subject-offerings/:id` · `…/terms` · `/terms/:id` |
+| Rules | `/grade-offerings/:id/choice-groups` · `/choice-groups/:id` · `/grade-offerings/:id/constraints` · `/constraints/:id` · `/academic-programmes` |
+| Academic context | `GET /academic-context?academicSessionId=&locationId=&gradeId=` |
 | Dev only | `POST`/`DELETE /dev/location-references` simulates downstream references (archive blocked, code locked). Not mounted in production. |
 
 Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, default `backend/uploads`).
@@ -112,9 +128,9 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 
 | Suite | Where | Run |
 |---|---|---|
-| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `setup`, `master` | `npm test` |
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
-| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only) | `npm run e2e` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only, visual pass at 1280px and 390px → `e2e/screenshots/`) | `npm run e2e` |
 
 Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
 Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).
@@ -134,7 +150,28 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | 13 | APIs and contracts documented | `/api/docs` · `openapi.yaml` · `CONTRACTS.md` · `platform` |
 | 14–15 | Critical invariants and QA scenarios automated | all of the above |
 
-Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px.
+**Acceptance criteria — Academic Structure (PRD §23.2 scenarios, which §24 is checked against)**
+
+| Criterion | Verified by |
+|---|---|
+| QA 1 · a session with explicit dates, not tied to April–March | `academic-setup` (QA 1) |
+| QA 2 · clone copies structure only and remaps ids | `academic-lifecycle` (QA 2) · e2e academics (clone) |
+| QA 3–4 · one then many locations; the same grade differently at two locations | `academic-setup` (QA 3, QA 4) |
+| QA 5–6 · grades and sections in bulk; a duplicate section is blocked in any case | `academic-setup` (QA 5, QA 6) · `academic.test.tsx` (bulk section add) |
+| QA 7–8 · subject master + board codes; mandatory and elective offerings | `academic-setup` (QA 7, QA 8) |
+| QA 9–11 · language groups, CHOOSE_ONE / CHOOSE_N, REQUIRES / EXCLUDES | `academic-rules` (QA 9, 10, 11) |
+| QA 12 · impossible rules are detected and named | `academic-rules` (QA 12 + engine unit tests) · `academic.test.tsx` (validation panel) |
+| QA 13–14 · senior-secondary programmes and flexible combinations | `academic-rules` (QA 13, QA 14) |
+| QA 15 · terms outside the session or overlapping are blocked | `academic-setup` (QA 15) |
+| QA 16 · validate then publish; an error blocks publishing | `academic-lifecycle` (QA 16) · e2e academics (build → publish → activate) |
+| QA 17 · unsafe change blocked on an active session with dependencies | `academic-lifecycle` (QA 17 + stub consumer) |
+| QA 18 · a closed session is readable and read-only; one active session per school | `academic-lifecycle` (QA 18, concurrent activation) · e2e academics (close) · `academic.test.tsx` (Close dialog) |
+| QA 19–22 · role matrix: admin edits, Faculty/Staff read-only, Parents 403 | `security` (route matrix) · `academic-setup` · e2e academics (Faculty) · `academic.test.tsx` |
+| QA 23 · cross-tenant ids return 404 on every route | `security` (route matrix) |
+| QA 24 · audit rows for each mutation, with old and new values | `academic-setup` · `academic-lifecycle` (QA 24) |
+| Downstream contract · Location → Session → Grade → Section → Subject | `academic-lifecycle` (stub consumer through `academicService`) · `ACADEMIC_CONTRACTS.md` |
+
+Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px. Academic: partial unique `one_active_session_per_school`, unique `(sessionId, locationId, gradeId)` for grade offerings, `(gradeOfferingId, sectionCode)` for sections.
 
 ## Architecture rules (carried into every module)
 

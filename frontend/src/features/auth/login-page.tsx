@@ -76,7 +76,7 @@ export function LoginPage() {
       {import.meta.env.DEV && (
         <div className="mt-8 rounded-2xl border border-dashed border-lavender/50 bg-lavender-soft/60 p-4">
           <p className="flex items-center gap-2 text-sm font-semibold text-[#5b4bd1]">
-            <FlaskConical className="size-4" /> Demo accounts <span className="font-normal text-muted">(after npm run seed)</span>
+            <FlaskConical className="size-4" /> Demo accounts <span className="font-normal text-muted">(testing purpose only)</span>
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {DEMO_ACCOUNTS.map((a) => (

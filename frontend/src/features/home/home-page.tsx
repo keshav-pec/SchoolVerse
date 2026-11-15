@@ -54,7 +54,7 @@ export function HomePage() {
         <div className="relative grid items-center gap-6 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <Badge tone="sun" className="mb-4">
-              <Sparkles /> Workspace ready
+              <Sparkles /> Admin Workspace
             </Badge>
             <h1 className="text-[28px] leading-tight font-extrabold sm:text-[34px]">
               {greetingFor()}, {firstName(session.user.fullName)} <span className="inline-block animate-wiggle origin-bottom">👋</span>
@@ -62,7 +62,7 @@ export function HomePage() {
             <p className="mt-3 max-w-lg text-[15px] text-navy-text">
               Welcome to <strong className="text-white">{session.tenant.name}</strong> on SchoolVerse.{' '}
               {isAdmin
-                ? 'Next you’ll set up your school profile and campuses. Everything else in the ERP builds on them.'
+                ? ''
                 : 'Your School Admin is setting up the school. You’ll see campuses and details here once they’re ready.'}
             </p>
           </div>

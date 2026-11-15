@@ -61,6 +61,11 @@ function ChecklistGroup({ title, tone, icon: Icon, items }: { title: string; ton
                   <Link to={item.href}>Fix</Link>
                 </Button>
               )}
+              {item.status === 'upcoming' && item.href && (
+                <Button asChild variant="outline" size="sm">
+                  <Link to={item.href}>Start</Link>
+                </Button>
+              )}
               {item.status === 'completed' && <Badge tone="success">Done</Badge>}
             </li>
           );
@@ -196,6 +201,7 @@ export function OverviewPage() {
             <div className="space-y-6">
               <ChecklistGroup title="Completed" tone="bg-success-soft text-success" icon={Check} items={completed} />
               <ChecklistGroup title="Pending" tone="bg-warning-soft text-warning" icon={CircleDashed} items={pending} />
+              <ChecklistGroup title="Coming next" tone="bg-brand-soft text-brand" icon={Sparkles} items={data.items.filter((i) => i.status === 'upcoming' && i.href)} />
             </div>
           </Card>
           {can('audit:view') && <ActivityFeed />}

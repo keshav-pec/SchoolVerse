@@ -5,6 +5,10 @@ import { NotFoundPage } from '@/features/errors/not-found-page';
 import { ForbiddenPage } from '@/features/errors/forbidden-page';
 import { RouteError } from '@/features/errors/route-error';
 import { HomePage } from '@/features/home/home-page';
+import { AcademicStructurePage } from '@/features/academic/academic-structure-page';
+import { AcademicsPage } from '@/features/academic/academics-page';
+import { SessionPage } from '@/features/academic/session-page';
+import { SubjectsPage } from '@/features/academic/subjects-page';
 import { LocationDetailPage } from '@/features/locations/location-detail-page';
 import { LocationsPage } from '@/features/locations/locations-page';
 import { SchoolProfilePage } from '@/features/school-profile/school-profile-page';
@@ -13,11 +17,17 @@ import { AuthLayout } from '@/layouts/auth-layout';
 import { OverviewPage } from '@/features/setup/overview-page';
 import { SetupWizardPage } from '@/features/setup/wizard/setup-wizard-page';
 import { useAuth } from '@/lib/auth';
-import { GuestOnly, RequireAuth, RequireSetupAccess, RequireSetupComplete } from '@/routes/guards';
+import { GuestOnly, RequireAcademicAccess, RequireAcademicConfig, RequireAuth, RequireSetupAccess, RequireSetupComplete } from '@/routes/guards';
 
 function SetupHome() {
   const { can } = useAuth();
   return can('setup:manage') ? <OverviewPage /> : <Navigate to="profile" replace />;
+}
+
+/** Admins get the Academic Setup dashboard; Faculty and Staff get the read-only Academic Structure page. */
+function AcademicsHome() {
+  const { can } = useAuth();
+  return can('academic:view_config') ? <AcademicsPage /> : <AcademicStructurePage />;
 }
 
 const router = createBrowserRouter([
@@ -58,6 +68,20 @@ const router = createBrowserRouter([
                       { path: 'profile', element: <SchoolProfilePage /> },
                       { path: 'locations', element: <LocationsPage /> },
                       { path: 'locations/:locationId', element: <LocationDetailPage /> },
+                    ],
+                  },
+                  {
+                    path: '/academics',
+                    element: <RequireAcademicAccess />,
+                    children: [
+                      { index: true, element: <AcademicsHome /> },
+                      {
+                        element: <RequireAcademicConfig />,
+                        children: [
+                          { path: 'sessions/:sessionId', element: <SessionPage /> },
+                          { path: 'subjects', element: <SubjectsPage /> },
+                        ],
+                      },
                     ],
                   },
                 ],

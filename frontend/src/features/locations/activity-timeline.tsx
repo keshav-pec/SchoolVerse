@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { fieldLabel, formatAuditValue, formatDateTime, formatRelative } from '@/lib/format';
+import { useSessionAudit } from '../academic/api';
 import { useAuditTrail } from './api';
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
@@ -44,8 +45,11 @@ function Diff({ change }: { change: AuditEventDTO['changes'][number] }) {
   );
 }
 
-export function ActivityTimeline({ entityType, entityId, enabled }: { entityType: string; entityId: string; enabled: boolean }) {
-  const q = useAuditTrail(entityType, entityId, enabled);
+/** One entity's history, or (with `academicSessionId`) everything that happened inside one academic session. */
+export function ActivityTimeline({ entityType = '', entityId, academicSessionId, enabled }: { entityType?: string; entityId?: string; academicSessionId?: string; enabled: boolean }) {
+  const byEntity = useAuditTrail(entityType, entityId, enabled && !academicSessionId);
+  const bySession = useSessionAudit(academicSessionId, enabled && !!academicSessionId);
+  const q = academicSessionId ? bySession : byEntity;
   const events = q.data?.pages.flatMap((p) => p.items) ?? [];
 
   if (q.isLoading) {
@@ -64,7 +68,7 @@ export function ActivityTimeline({ entityType, entityId, enabled }: { entityType
     );
   }
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} />;
-  if (events.length === 0) return <EmptyState illustration={<History className="size-12 text-muted" aria-hidden="true" />} title="No activity yet" description="Changes to this location will show up here." />;
+  if (events.length === 0) return <EmptyState illustration={<History className="size-12 text-muted" aria-hidden="true" />} title="No activity yet" description="Changes will show up here." />;
 
   return (
     <div>

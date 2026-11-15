@@ -110,5 +110,7 @@ export function formatAuditValue(field: string, value: unknown): string {
     if (field === 'address.country') return countryName(value);
     return value;
   }
+  if (Array.isArray(value)) return value.length === 0 ? 'empty' : `${value.length} item${value.length === 1 ? '' : 's'}`;
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }

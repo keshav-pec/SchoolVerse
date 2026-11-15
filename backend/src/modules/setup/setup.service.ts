@@ -212,7 +212,7 @@ export async function getSetupStatus(ctx: ServiceContext, schoolId: string): Pro
       description: 'Academic years, grades, sections and subjects.',
       weight: 20,
       module: 'academic-structure',
-      href: null,
+      href: '/academics',
       done: activeSessions > 0,
       upcoming: activeSessions === 0 && plannedSessions === 0,
     },

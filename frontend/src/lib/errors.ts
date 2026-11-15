@@ -13,11 +13,24 @@ const UI_MESSAGES: Record<string, string> = {
   USE_ARCHIVE_INSTEAD: 'Only draft locations that were never used can be discarded. Archive this location instead.',
   LOCATION_HAS_DEPENDENCIES: 'This location cannot be archived because active records are still associated with it.',
   FORBIDDEN: "You don't have permission to do that. Ask your School Admin.",
+  SESSION_READ_ONLY: 'This session is closed, so it can no longer be changed. Make the change in the next session’s plan.',
+  USE_DEACTIVATE_INSTEAD: 'Items can only be deleted while the session is a draft. Deactivate this one instead.',
+  SESSION_NOT_DRAFT: 'Only a draft session can be deleted.',
+  ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
+
+/** `ACADEMIC_HAS_DEPENDENCIES` lists what depends on the item, so say it. */
+function dependencyLines(error: ApiError): string[] {
+  const deps = (error.details as { dependencies?: { message?: string }[] } | undefined)?.dependencies;
+  return Array.isArray(deps) ? deps.map((d) => d.message).filter((m): m is string => Boolean(m)) : [];
+}
 
 /** Friendly copy for any thrown value. */
 export function messageFor(error: unknown): string {
-  if (error instanceof ApiError) return UI_MESSAGES[error.code] ?? (error.message || defaultMessageFor(error.code));
+  if (error instanceof ApiError) {
+    if (error.code === 'ACADEMIC_HAS_DEPENDENCIES') return [error.message, ...dependencyLines(error)].join(' ');
+    return UI_MESSAGES[error.code] ?? (error.message || defaultMessageFor(error.code));
+  }
   return defaultMessageFor('INTERNAL_ERROR');
 }
 
