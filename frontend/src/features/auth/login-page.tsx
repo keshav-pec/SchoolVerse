@@ -73,29 +73,29 @@ export function LoginPage() {
         </Link>
       </p>
 
-      {import.meta.env.DEV && (
-        <div className="mt-8 rounded-2xl border border-dashed border-lavender/50 bg-lavender-soft/60 p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold text-[#5b4bd1]">
-            <FlaskConical className="size-4" /> Demo accounts <span className="font-normal text-muted">(testing purpose only)</span>
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {DEMO_ACCOUNTS.map((a) => (
-              <button
-                key={a.email}
-                type="button"
-                onClick={() => {
-                  setValue('email', a.email, { shouldValidate: true });
-                  setValue('password', DEMO_PASSWORD, { shouldValidate: true });
-                }}
-                className="rounded-lg border border-line bg-white px-3 py-2 text-left text-xs transition hover:-translate-y-px hover:border-lavender hover:shadow-card"
-              >
-                <span className="block font-semibold text-ink">{ROLE_LABELS[a.role]}</span>
-                <span className="block truncate text-muted">{a.email}</span>
-              </button>
-            ))}
-          </div>
+      {/* {import.meta.env.DEV && ( */}
+      <div className="mt-8 rounded-2xl border border-dashed border-lavender/50 bg-lavender-soft/60 p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold text-[#5b4bd1]">
+          <FlaskConical className="size-4" /> Demo accounts <span className="font-normal text-muted">(testing purpose only)</span>
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {DEMO_ACCOUNTS.map((a) => (
+            <button
+              key={a.email}
+              type="button"
+              onClick={() => {
+                setValue('email', a.email, { shouldValidate: true });
+                setValue('password', DEMO_PASSWORD, { shouldValidate: true });
+              }}
+              className="rounded-lg border border-line bg-white px-3 py-2 text-left text-xs transition hover:-translate-y-px hover:border-lavender hover:shadow-card"
+            >
+              <span className="block font-semibold text-ink">{ROLE_LABELS[a.role]}</span>
+              <span className="block truncate text-muted">{a.email}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+      {/* )} */}
     </div>
   );
 }
