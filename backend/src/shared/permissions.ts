@@ -17,6 +17,11 @@ export const PERMISSIONS = [
   'location:set_primary',
   'location:change_status',
   'location:archive',
+  // Academic structure (Module 2)
+  'academic:view', // PUBLISHED / ACTIVE / CLOSED sessions, structure fields only
+  'academic:view_config', // DRAFT sessions, validation results, audit
+  'academic:manage', // create / edit / delete configuration
+  'academic:publish', // validate, publish, activate, close, clone
   // Setup & governance
   'setup:manage',
   'audit:view',
@@ -25,7 +30,7 @@ export const PERMISSIONS = [
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-const LIMITED_VIEW: Permission[] = ['school:view', 'location:view'];
+const LIMITED_VIEW: Permission[] = ['school:view', 'location:view', 'academic:view'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SCHOOL_ADMIN: PERMISSIONS,

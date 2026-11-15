@@ -17,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
         <TooltipProvider>
           <App />
         </TooltipProvider>
-        <Toaster position="top-right" richColors closeButton toastOptions={{ style: { fontFamily: 'var(--font-sans)', borderRadius: 12 } }} />
+        <Toaster position="bottom-left" richColors closeButton toastOptions={{ style: { fontFamily: 'var(--font-sans)', borderRadius: 12 } }} />
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

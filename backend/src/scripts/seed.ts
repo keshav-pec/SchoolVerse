@@ -12,7 +12,12 @@ import { createIdentifierSchema, createLocationSchema, createSchoolSchema, permi
 import { env } from '../config/env';
 import { connectDatabase, disconnectDatabase } from '../db/connection';
 import { AuditEvent } from '../modules/audit/audit.model';
+import { seedReferenceData, seedStarterSubjects } from '../modules/academic/reference.seed';
 import { LocationReference } from '../modules/dependencies/simulated-references';
+import { GradeOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
+import { BoardRuleVersion, EducationBoard } from '../modules/academic/reference.model';
+import { AcademicSession, AcademicTerm } from '../modules/academic/session.model';
+import { BoardSubjectDefinition, Subject } from '../modules/academic/subject.model';
 import { Location } from '../modules/locations/location.model';
 import { createLocation } from '../modules/locations/location.service';
 import { SchoolIdentifier } from '../modules/school/school-identifier.model';
@@ -136,6 +141,16 @@ async function wipeTenant(tenantId: string) {
     User.deleteMany({ tenantId }),
     Session.deleteMany({ tenantId }),
     UserLocationAccess.deleteMany({ tenantId }),
+    // Academic structure (Module 2)
+    AcademicSession.deleteMany({ tenantId }),
+    AcademicTerm.deleteMany({ tenantId }),
+    GradeOffering.deleteMany({ tenantId }),
+    SectionOffering.deleteMany({ tenantId }),
+    SubjectOffering.deleteMany({ tenantId }),
+    Subject.deleteMany({ tenantId }),
+    BoardSubjectDefinition.deleteMany({ tenantId }),
+    EducationBoard.deleteMany({ tenantId }),
+    BoardRuleVersion.deleteMany({ tenantId }),
   ]);
   await Tenant.deleteOne({ _id: tenantId });
 }
@@ -144,6 +159,7 @@ async function wipeTenant(tenantId: string) {
 export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
   const log = quiet ? () => undefined : console.log;
   const passwordHash = await hashPassword(DEMO_PASSWORD);
+  await seedReferenceData(); // system boards, rule versions and the grade master
 
   for (const def of DEMO_TENANTS) {
     const previous = await Tenant.findOne({ slug: def.slug }).lean();
@@ -169,7 +185,10 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
     for (const identifier of def.identifiers ?? []) await createIdentifier(ctx, school._id, createIdentifierSchema.parse(identifier));
     const created = [];
     for (const loc of def.locations) created.push(await createLocation(ctx, school._id, createLocationSchema.parse(loc)));
-    if (def.setupComplete) await completeSetup(ctx, school._id);
+    if (def.setupComplete) {
+      await completeSetup(ctx, school._id);
+      await seedStarterSubjects(ctx);
+    }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);
 
     log(`✔ ${def.name} — setup ${def.setupComplete ? 'completed' : `in progress (step ${def.resumeStep ?? 1})`}`);

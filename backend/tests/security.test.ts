@@ -1,17 +1,55 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
+import { GradeOffering, SectionOffering, SubjectOffering } from '../src/modules/academic/offering.model';
+import { EducationBoard } from '../src/modules/academic/reference.model';
+import { AcademicSession, AcademicTerm } from '../src/modules/academic/session.model';
+import { Subject } from '../src/modules/academic/subject.model';
 import { Location } from '../src/modules/locations/location.model';
 import { School } from '../src/modules/school/school.model';
-import { API, app, createUserAndLogin, draftLocationBody, expectError, seededSchool, setupSchool, useTestDatabase, validSchool, type Agent } from './helpers';
+import {
+  addGrades,
+  API,
+  app,
+  createSession,
+  createStarterSubjects,
+  createUserAndLogin,
+  draftLocationBody,
+  expectError,
+  loadReference,
+  seededSchool,
+  setupSchool,
+  useTestDatabase,
+  validSchool,
+  type Agent,
+} from './helpers';
 
 useTestDatabase();
 
 type Call = { name: string; send: (agent: Agent) => Promise<{ status: number; body: { error?: { code: string } } }> };
 
-/** Every School, Location, Setup and Master route that takes an id, pointed at the given ids. */
-function routes(ids: { schoolId: string; locationId: string; identifierId: string }): { reads: Call[]; mutations: Call[] } {
+interface AcademicIds {
+  sessionId: string;
+  locationId: string;
+  gradeOfferingId: string;
+  otherGradeOfferingId: string;
+  sectionId: string;
+  subjectOfferingId: string;
+  termId: string;
+  subjectId: string;
+  boardId: string;
+  ruleVersionId: string;
+}
+
+/** Every School, Location, Setup, Master and Academic route that takes an id, pointed at the given ids. */
+function routes(ids: { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds }): { reads: Call[]; mutations: Call[] } {
   const s = `${API}/schools/${ids.schoolId}`;
   const l = `${API}/locations/${ids.locationId}`;
+  const x = ids.academic;
+  const session = `${API}/academic-sessions/${x.sessionId}`;
+  const grade = `${API}/grade-offerings/${x.gradeOfferingId}`;
+  const subject = `${API}/subjects/${x.subjectId}`;
+  const board = `${API}/boards/${x.boardId}`;
   return {
     reads: [
       { name: 'GET school', send: (a) => a.get(s) },
@@ -20,7 +58,16 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'GET code-availability', send: (a) => a.get(`${s}/locations/code-availability`).query({ code: 'ZZZ' }) },
       { name: 'GET location', send: (a) => a.get(l) },
       { name: 'GET setup-status', send: (a) => a.get(`${s}/setup-status`) },
-      { name: 'GET master location', send: (a) => a.get(`${API}/master/locations/${ids.locationId}`) },
+      { name: 'GET master location', send: (c) => c.get(`${API}/master/locations/${ids.locationId}`) },
+      // Academic structure (Module 2)
+      { name: 'GET rule versions of a board', send: (c) => c.get(`${board}/rule-versions`) },
+      { name: 'GET subject', send: (c) => c.get(subject) },
+      { name: 'GET academic session', send: (c) => c.get(session) },
+      { name: 'GET session grade offerings', send: (c) => c.get(`${session}/grade-offerings`) },
+      { name: 'GET session terms', send: (c) => c.get(`${session}/terms`) },
+      { name: 'GET grade offering', send: (c) => c.get(grade) },
+      { name: 'GET sections', send: (c) => c.get(`${grade}/sections`) },
+      { name: 'GET subject offerings', send: (c) => c.get(`${grade}/subjects`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -37,6 +84,28 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'DELETE location', send: (a) => a.delete(l) },
       { name: 'PATCH setup', send: (a) => a.patch(`${s}/setup`).send({ currentStep: 4 }) },
       { name: 'complete setup', send: (a) => a.post(`${s}/setup/complete`).send({}) },
+      // Academic structure (Module 2)
+      { name: 'POST rule version', send: (c) => c.post(`${board}/rule-versions`).send({ name: 'Hijack' }) },
+      { name: 'publish rule version', send: (c) => c.post(`${board}/rule-versions/${x.ruleVersionId}/publish`) },
+      { name: 'PATCH subject', send: (c) => c.patch(subject).send({ name: 'Hijacked' }) },
+      { name: 'PUT board code', send: (c) => c.put(`${subject}/board-codes`).send({ boardRuleVersionId: x.ruleVersionId, boardSubjectCode: '999' }) },
+      { name: 'DELETE board code', send: (c) => c.delete(`${subject}/board-codes/${x.ruleVersionId}`) },
+      { name: 'POST session naming a foreign location', send: (c) => c.post(`${API}/academic-sessions`).send({ name: 'Evil', code: 'EVIL', startDate: '2030-04-01', endDate: '2031-03-31', locations: [{ locationId: ids.locationId, boardId: x.boardId, boardRuleVersionId: x.ruleVersionId }] }) },
+      { name: 'PATCH academic session', send: (c) => c.patch(session).send({ name: 'Hijacked' }) },
+      { name: 'DELETE academic session', send: (c) => c.delete(session) },
+      { name: 'POST grade offerings', send: (c) => c.post(`${session}/grade-offerings`).send({ locationId: x.locationId, gradeIds: [randomUUID()] }) },
+      { name: 'POST term', send: (c) => c.post(`${session}/terms`).send({ name: 'T', code: 'T9', startDate: '2026-05-01', endDate: '2026-05-31' }) },
+      { name: 'PATCH grade offering', send: (c) => c.patch(grade).send({ displayName: 'Hijacked' }) },
+      { name: 'DELETE grade offering', send: (c) => c.delete(grade) },
+      { name: 'POST sections', send: (c) => c.post(`${grade}/sections`).send({ codes: ['Z'] }) },
+      { name: 'POST subject offerings', send: (c) => c.post(`${grade}/subjects`).send({ subjectIds: [x.subjectId], offeringType: 'MANDATORY' }) },
+      { name: 'copy subject offerings', send: (c) => c.post(`${grade}/subjects/copy-from/${x.otherGradeOfferingId}`) },
+      { name: 'PATCH section', send: (c) => c.patch(`${API}/sections/${x.sectionId}`).send({ displayName: 'Hijacked' }) },
+      { name: 'DELETE section', send: (c) => c.delete(`${API}/sections/${x.sectionId}`) },
+      { name: 'PATCH subject offering', send: (c) => c.patch(`${API}/subject-offerings/${x.subjectOfferingId}`).send({ offeringType: 'ELECTIVE' }) },
+      { name: 'DELETE subject offering', send: (c) => c.delete(`${API}/subject-offerings/${x.subjectOfferingId}`) },
+      { name: 'PATCH term', send: (c) => c.patch(`${API}/terms/${x.termId}`).send({ name: 'Hijacked' }) },
+      { name: 'DELETE term', send: (c) => c.delete(`${API}/terms/${x.termId}`) },
     ],
   };
 }
@@ -47,7 +116,37 @@ async function victim() {
     .post(`${API}/schools/${b.school.schoolId}/identifiers`)
     .send({ identifierType: 'Affiliation Number', identifierValue: '1630001' })
     .expect(201);
-  return { ...b, identifierId: ident.body.data.identifierId as string };
+
+  // A small academic tree for the same school: session → grade → section / subject offering / term, plus an own board.
+  const ref = await loadReference();
+  const session = await createSession(b.agent, [ref.pin(b.moh.locationId), ref.pin(b.chd.locationId, 'PSEB')]);
+  const subjects = await createStarterSubjects(b.agent);
+  const [g6, g7] = await addGrades(b.agent, session.academicSessionId, b.moh.locationId, [ref.gradeId.G06!, ref.gradeId.G07!]);
+  const section = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data[0];
+  const offering = (await b.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [subjects.MATH], offeringType: 'MANDATORY' }).expect(201)).body.data[0];
+  const term = (await b.agent.post(`${API}/academic-sessions/${session.academicSessionId}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
+  const board = (await b.agent.post(`${API}/boards`).send({ boardCode: 'VICTIM', boardName: 'Victim Board' }).expect(201)).body.data;
+  const ruleVersion = (await b.agent.post(`${API}/boards/${board.boardId}/rule-versions`).send({ name: 'v1' }).expect(201)).body.data;
+
+  const academic: AcademicIds = {
+    sessionId: session.academicSessionId,
+    locationId: b.moh.locationId,
+    gradeOfferingId: g6!.gradeOfferingId,
+    otherGradeOfferingId: g7!.gradeOfferingId,
+    sectionId: section.sectionOfferingId,
+    subjectOfferingId: offering.subjectOfferingId,
+    termId: term.termId,
+    subjectId: subjects.MATH!,
+    boardId: board.boardId,
+    ruleVersionId: ruleVersion.ruleVersionId,
+  };
+  return { ...b, identifierId: ident.body.data.identifierId as string, academic };
+}
+
+/** Everything the academic routes own for a tenant, so tests can prove a refused call changed nothing. */
+async function academicSnapshot(tenantId: string) {
+  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard] as unknown as (typeof Subject)[];
+  return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
 describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
@@ -56,8 +155,9 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     const b = await victim();
     const before = await Location.find({ tenantId: b.tenantId }).sort({ _id: 1 }).lean();
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
+    const academicBefore = await academicSnapshot(b.tenantId);
 
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
     for (const call of [...reads, ...mutations]) {
       const res = await call.send(attacker.agent);
       expect(res.status, `${call.name} → ${res.status} ${JSON.stringify(res.body)}`).toBe(404);
@@ -66,6 +166,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 
     expect(await Location.find({ tenantId: b.tenantId }).sort({ _id: 1 }).lean()).toEqual(before);
     expect(await School.findOne({ tenantId: b.tenantId }).lean()).toEqual(schoolBefore);
+    expect(await academicSnapshot(b.tenantId)).toEqual(academicBefore);
   });
 
   it('a body cannot smuggle a tenantId or schoolId into another tenant', async () => {
@@ -104,7 +205,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('every protected route rejects an anonymous caller with 401', async () => {
     const b = await victim();
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
     for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations']) {
@@ -125,7 +226,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
 
   it('Faculty, Staff and Parents are refused every mutation, even calling the API directly', async () => {
     const b = await victim();
-    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId });
+    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
     for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
       const user = await createUserAndLogin(b.tenantId, role);
       for (const call of mutations) {
@@ -142,7 +243,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('Parents cannot read any school or location data', async () => {
     const b = await victim();
     const parent = await createUserAndLogin(b.tenantId, 'PARENT');
-    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId });
+    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic });
     for (const call of reads) expect((await call.send(parent.agent)).status, call.name).toBe(403);
   });
 

@@ -205,11 +205,18 @@ export const optionalLongitudeSchema = z.preprocess(
 
 // ───────────────────────────────────────────────────────────── dates (date-only, no time zone shift)
 
-function isRealDate(value: string): boolean {
+export function isRealDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const d = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
+
+/** Required calendar date as `YYYY-MM-DD`. */
+export const requiredDateSchema = z
+  .string({ message: 'Date is required.' })
+  .trim()
+  .min(1, { message: 'Date is required.' })
+  .refine(isRealDate, { message: 'Enter a valid date (YYYY-MM-DD).' });
 
 /** Optional calendar date as `YYYY-MM-DD`. */
 export const optionalDateSchema = z.preprocess(

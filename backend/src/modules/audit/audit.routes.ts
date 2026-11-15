@@ -27,12 +27,13 @@ export const auditRouter = Router();
 auditRouter.use(authenticate, requirePermission('audit:view'));
 
 auditRouter.get('/', validate({ query: auditQuerySchema }), async (req, res) => {
-  const { entityType, entityId, cursor, limit } = res.locals.query as AuditQuery;
+  const { entityType, entityId, academicSessionId, cursor, limit } = res.locals.query as AuditQuery;
   const tenantId = tenantIdOf(req);
 
   const filter: Record<string, unknown> = { tenantId };
   if (entityType) filter.entityType = entityType;
   if (entityId) filter.entityId = entityId;
+  if (academicSessionId) filter['metadata.academicSessionId'] = academicSessionId;
   if (cursor) {
     const { at, id } = decodeCursor(cursor);
     filter.$or = [{ occurredAt: { $lt: at } }, { occurredAt: at, _id: { $lt: id } }];

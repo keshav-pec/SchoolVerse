@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import type { AuditEventDTO, LocationDetailDTO, Role, SchoolDTO } from '@shared';
+import type { AcademicSessionDTO, AuditEventDTO, LocationDetailDTO, Role, SchoolDTO, SessionStatus } from '@shared';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
+import { BoardRuleVersion, EducationBoard, GradeMaster } from '../src/modules/academic/reference.model';
+import { seedReferenceData } from '../src/modules/academic/reference.seed';
+import { AcademicSession } from '../src/modules/academic/session.model';
 import { hashPassword } from '../src/platform/auth/password';
 import { User } from '../src/platform/users/user.model';
 
@@ -167,5 +170,81 @@ export function expectError(res: ErrorResponse, status: number, code: string) {
 
 export async function auditFor(agent: Agent, entityId: string): Promise<AuditEventDTO[]> {
   const res = await agent.get(`${API}/audit`).query({ entityType: 'school_location', entityId, limit: 100 }).expect(200);
+  return res.body.data.items as AuditEventDTO[];
+}
+
+// ───────────────────────────────────────────────────────────── academic structure (Module 2)
+
+/**
+ * The seeded system data: boards, their `2026-27` rule versions and the grade master. Collections are wiped between
+ * tests, so call this in `beforeEach` (or at the start of a test). Idempotent.
+ */
+export async function loadReference() {
+  await seedReferenceData();
+  const [boards, versions, grades] = await Promise.all([
+    EducationBoard.find({ tenantId: null }).lean(),
+    BoardRuleVersion.find({ tenantId: null }).lean(),
+    GradeMaster.find().lean(),
+  ]);
+  const gradeId = Object.fromEntries(grades.map((g) => [g.canonicalCode, g._id])) as Record<string, string>;
+  const boardId = Object.fromEntries(boards.map((b) => [b.boardCode, b._id])) as Record<string, string>;
+  const ruleVersionId = (code: string) => versions.find((v) => v.boardId === boardId[code])!._id;
+  /** A session location entry: this location follows the given built-in board (latest published rule version). */
+  const pin = (locationId: string, boardCode = 'CBSE', extra: Record<string, unknown> = {}) => ({
+    locationId,
+    boardId: boardId[boardCode]!,
+    boardRuleVersionId: ruleVersionId(boardCode),
+    ...extra,
+  });
+  return { boardId, ruleVersionId, gradeId, pin };
+}
+export type Reference = Awaited<ReturnType<typeof loadReference>>;
+
+/** A seeded school (MOH, CHD active, PKL draft) plus the reference data. */
+export async function academicSchool(workspace?: string) {
+  const s = await seededSchool(workspace);
+  return { ...s, ref: await loadReference() };
+}
+
+export function sessionBody(locations: Record<string, unknown>[], overrides: Record<string, unknown> = {}) {
+  return { name: 'Academic Year 2026-27', code: '2026-27', startDate: '2026-04-01', endDate: '2027-03-31', locations, ...overrides };
+}
+
+export async function createSession(agent: Agent, locations: Record<string, unknown>[], overrides: Record<string, unknown> = {}): Promise<AcademicSessionDTO> {
+  const res = await agent.post(`${API}/academic-sessions`).send(sessionBody(locations, overrides));
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return res.body.data as AcademicSessionDTO;
+}
+
+/** There are no lifecycle endpoints until Part 2, so tests move a session to another status directly. */
+export async function forceStatus(tenantId: string, academicSessionId: string, status: SessionStatus) {
+  await AcademicSession.updateOne({ _id: academicSessionId, tenantId }, { $set: { status } });
+}
+
+const STARTER = [
+  { subjectCode: 'ENG', name: 'English', category: 'LANGUAGE', languageCode: 'en' },
+  { subjectCode: 'HIN', name: 'Hindi', category: 'LANGUAGE', languageCode: 'hi' },
+  { subjectCode: 'MATH', name: 'Mathematics', category: 'MATHEMATICS' },
+  { subjectCode: 'SCI', name: 'Science', category: 'SCIENCE', hasPractical: true },
+] as const;
+
+/** Creates English, Hindi, Mathematics and Science through the API; returns `{ ENG: subjectId, … }`. */
+export async function createStarterSubjects(agent: Agent): Promise<Record<string, string>> {
+  const ids: Record<string, string> = {};
+  for (const subject of STARTER) {
+    const res = await agent.post(`${API}/subjects`).send(subject).expect(201);
+    ids[subject.subjectCode] = res.body.data.subjectId;
+  }
+  return ids;
+}
+
+export async function addGrades(agent: Agent, academicSessionId: string, locationId: string, gradeIds: string[], extra: Record<string, unknown> = {}) {
+  const res = await agent.post(`${API}/academic-sessions/${academicSessionId}/grade-offerings`).send({ locationId, gradeIds, ...extra });
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return res.body.data as { gradeOfferingId: string; gradeId: string; displayName: string }[];
+}
+
+export async function auditForSession(agent: Agent, academicSessionId: string) {
+  const res = await agent.get(`${API}/audit`).query({ academicSessionId, limit: 100 }).expect(200);
   return res.body.data.items as AuditEventDTO[];
 }

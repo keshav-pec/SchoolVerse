@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { isProd } from './config/env';
 import { ok } from './core/http';
+import { academicRouter } from './modules/academic/academic.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 import { devRouter } from './modules/dependencies/dev.routes';
 import { locationRouter } from './modules/locations/location.routes';
@@ -30,5 +31,6 @@ apiRouter.use('/schools', schoolRouter);
 apiRouter.use('/locations', locationRouter);
 apiRouter.use('/audit', auditRouter);
 apiRouter.use('/master', masterRouter);
+apiRouter.use(academicRouter);
 // Simulated downstream references for QA (scenario 23). Never mounted in production.
 if (!isProd) apiRouter.use('/dev', devRouter);

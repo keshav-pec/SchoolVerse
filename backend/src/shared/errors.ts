@@ -56,6 +56,33 @@ export const ERROR_CODES = {
     status: 409,
     message: 'Only draft locations that were never used can be deleted. Archive this location instead.',
   },
+
+  // Academic structure (Module 2)
+  BOARD_CODE_TAKEN: { status: 409, message: 'This board code is already in use.' },
+  BOARD_READ_ONLY: { status: 403, message: 'Built-in boards and rule versions cannot be changed. Create your own board instead.' },
+  RULE_VERSION_INVALID: { status: 400, message: 'Choose a published rule version that belongs to the selected board.' },
+  SESSION_CODE_TAKEN: { status: 409, message: 'This session code is already in use.' },
+  SESSION_DATES_INVALID: { status: 400, message: 'The session start date must be before its end date.' },
+  SESSION_READ_ONLY: { status: 409, message: 'Closed and archived sessions are read-only. Plan the change in the next session instead.' },
+  SESSION_NOT_DRAFT: { status: 409, message: 'Only a draft session can be deleted.' },
+  LOCATION_NOT_IN_SESSION: { status: 409, message: 'Add this location to the academic session first.' },
+  GRADE_OFFERING_EXISTS: { status: 409, message: 'One or more of these grades are already set up for this location in this session.' },
+  SECTION_CODE_TAKEN: { status: 409, message: 'A section with this code already exists for this grade.' },
+  SUBJECT_CODE_TAKEN: { status: 409, message: 'This subject code is already in use.' },
+  SUBJECT_ALREADY_OFFERED: { status: 409, message: 'One or more of these subjects are already offered for this grade.' },
+  SUBJECT_INACTIVE: { status: 409, message: 'Inactive subjects cannot be offered.' },
+  BOARD_MAPPING_INVALID: { status: 400, message: "This board subject mapping does not belong to the session location's board rule version." },
+  TERM_CODE_TAKEN: { status: 409, message: 'A term with this code already exists in this scope.' },
+  TERM_OUTSIDE_SESSION: { status: 400, message: 'Term dates must sit inside the academic session.' },
+  TERM_OVERLAP: { status: 409, message: 'This term overlaps another term in the same scope.' },
+  ACADEMIC_HAS_DEPENDENCIES: {
+    status: 409,
+    message: 'This change cannot be made because other records already depend on it. Make the change in the next session instead.',
+  },
+  USE_DEACTIVATE_INSTEAD: {
+    status: 409,
+    message: 'Records can only be deleted while the session is a draft. Deactivate this one instead.',
+  },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

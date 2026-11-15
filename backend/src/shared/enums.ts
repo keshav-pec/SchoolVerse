@@ -108,6 +108,104 @@ export type LocationValidationPurpose = (typeof LOCATION_VALIDATION_PURPOSES)[nu
 export const LOCATION_INVALID_REASONS = ['NOT_FOUND', 'NOT_ACTIVE', 'ARCHIVED'] as const;
 export type LocationInvalidReason = (typeof LOCATION_INVALID_REASONS)[number];
 
+// ───────────────────────────────────────────────────────────── Academic structure (Module 2)
+
+export const BOARD_TYPES = ['CENTRAL', 'STATE', 'OTHER'] as const;
+export type BoardType = (typeof BOARD_TYPES)[number];
+
+export const BOARD_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type BoardStatus = (typeof BOARD_STATUSES)[number];
+
+export const RULE_VERSION_STATUSES = ['DRAFT', 'PUBLISHED', 'RETIRED'] as const;
+export type RuleVersionStatus = (typeof RULE_VERSION_STATUSES)[number];
+
+export const EDUCATION_STAGES = ['FOUNDATIONAL', 'PREPARATORY', 'MIDDLE', 'SECONDARY'] as const;
+export type EducationStage = (typeof EDUCATION_STAGES)[number];
+
+export const EDUCATION_STAGE_LABELS: Record<EducationStage, string> = {
+  FOUNDATIONAL: 'Foundational',
+  PREPARATORY: 'Preparatory',
+  MIDDLE: 'Middle',
+  SECONDARY: 'Secondary',
+};
+
+export const SUBJECT_CATEGORIES = [
+  'LANGUAGE',
+  'MATHEMATICS',
+  'SCIENCE',
+  'SOCIAL_SCIENCE',
+  'COMMERCE',
+  'HUMANITIES',
+  'TECHNOLOGY',
+  'ARTS',
+  'PHYSICAL_EDUCATION',
+  'SKILL',
+  'OTHER',
+] as const;
+export type SubjectCategory = (typeof SUBJECT_CATEGORIES)[number];
+
+export const SUBJECT_CATEGORY_LABELS: Record<SubjectCategory, string> = {
+  LANGUAGE: 'Language',
+  MATHEMATICS: 'Mathematics',
+  SCIENCE: 'Science',
+  SOCIAL_SCIENCE: 'Social Science',
+  COMMERCE: 'Commerce',
+  HUMANITIES: 'Humanities',
+  TECHNOLOGY: 'Technology',
+  ARTS: 'Arts',
+  PHYSICAL_EDUCATION: 'Physical Education',
+  SKILL: 'Skill / Vocational',
+  OTHER: 'Other',
+};
+
+export const SUBJECT_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type SubjectStatus = (typeof SUBJECT_STATUSES)[number];
+
+/** `DRAFT → PUBLISHED → ACTIVE → CLOSED → ARCHIVED`. "Validated" is a stored result, not a status. */
+export const SESSION_STATUSES = ['DRAFT', 'PUBLISHED', 'ACTIVE', 'CLOSED', 'ARCHIVED'] as const;
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
+
+export const SESSION_STATUS_LABELS: Record<SessionStatus, string> = {
+  DRAFT: 'Draft',
+  PUBLISHED: 'Published',
+  ACTIVE: 'Active',
+  CLOSED: 'Closed',
+  ARCHIVED: 'Archived',
+};
+
+/** Statuses Faculty / Staff may read (no `academic:view_config`): never drafts. */
+export const SESSION_STATUSES_FOR_LIMITED_VIEW: readonly SessionStatus[] = ['PUBLISHED', 'ACTIVE', 'CLOSED'];
+
+export const OFFERING_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type OfferingStatus = (typeof OFFERING_STATUSES)[number];
+
+export const SUBJECT_OFFERING_TYPES = ['MANDATORY', 'ELECTIVE', 'OPTIONAL_ADDITIONAL', 'LANGUAGE', 'SKILL', 'INTERNAL'] as const;
+export type SubjectOfferingType = (typeof SUBJECT_OFFERING_TYPES)[number];
+
+export const SUBJECT_OFFERING_TYPE_LABELS: Record<SubjectOfferingType, string> = {
+  MANDATORY: 'Mandatory',
+  ELECTIVE: 'Elective',
+  OPTIONAL_ADDITIONAL: 'Optional / additional',
+  LANGUAGE: 'Language',
+  SKILL: 'Skill',
+  INTERNAL: 'Internal',
+};
+
+export const TERM_TYPES = ['TERM', 'SEMESTER', 'QUARTER', 'ANNUAL', 'CUSTOM'] as const;
+export type TermType = (typeof TERM_TYPES)[number];
+
+export const TERM_TYPE_LABELS: Record<TermType, string> = {
+  TERM: 'Term',
+  SEMESTER: 'Semester',
+  QUARTER: 'Quarter',
+  ANNUAL: 'Annual',
+  CUSTOM: 'Custom',
+};
+
+/** Computed from today's date; there is no manual term closing. */
+export const TERM_STATUSES = ['planned', 'current', 'closed'] as const;
+export type TermStatus = (typeof TERM_STATUSES)[number];
+
 // ───────────────────────────────────────────────────────────── Audit (PRD §18)
 
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -129,4 +227,27 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'location.primary_set': 'Set as Primary Location',
   'location.primary_unset': 'No longer the Primary Location',
   'location.deleted': 'Draft location discarded',
+  'board.created': 'Board added',
+  'rule_version.created': 'Board rule version added',
+  'rule_version.published': 'Board rule version published',
+  'subject.created': 'Subject added',
+  'subject.updated': 'Subject updated',
+  'subject.board_code_set': 'Board subject code mapped',
+  'subject.board_code_removed': 'Board subject code removed',
+  'academic_session.created': 'Academic session created',
+  'academic_session.updated': 'Academic session updated',
+  'academic_session.deleted': 'Draft academic session discarded',
+  'grade_offering.created': 'Grade added to session',
+  'grade_offering.updated': 'Grade updated',
+  'grade_offering.deleted': 'Grade removed from draft session',
+  'section.created': 'Section added',
+  'section.updated': 'Section updated',
+  'section.deleted': 'Section removed from draft session',
+  'subject_offering.created': 'Subject offered',
+  'subject_offering.updated': 'Subject offering updated',
+  'subject_offering.deleted': 'Subject offering removed from draft session',
+  'academic_term.created': 'Term added',
+  'academic_term.updated': 'Term updated',
+  'academic_term.deleted': 'Term removed',
 };
+

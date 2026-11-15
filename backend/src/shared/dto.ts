@@ -1,5 +1,16 @@
 import type {
+  BoardStatus,
+  BoardType,
+  EducationStage,
   IdentifierStatus,
+  OfferingStatus,
+  RuleVersionStatus,
+  SessionStatus,
+  SubjectCategory,
+  SubjectOfferingType,
+  SubjectStatus,
+  TermStatus,
+  TermType,
   LocationInvalidReason,
   LocationValidationPurpose,
   SetupItemStatus,
@@ -278,4 +289,174 @@ export interface LocationValidationDTO {
   purpose: LocationValidationPurpose;
   allValid: boolean;
   results: LocationValidationResultDTO[];
+}
+
+// ───────────────────────────────────────────────────────────── Academic structure (Module 2)
+//
+// Other modules store offering UUIDs (`gradeOfferingId`, `sectionOfferingId`, `subjectOfferingId`),
+// never display labels such as "Class VIII-A".
+
+export interface BoardDTO {
+  boardId: string;
+  boardCode: string;
+  boardName: string;
+  boardType: BoardType;
+  stateCode: string | null;
+  status: BoardStatus;
+  /** Built-in boards are shared by every school and cannot be edited. */
+  isSystem: boolean;
+}
+
+export interface BoardRuleVersionDTO {
+  ruleVersionId: string;
+  boardId: string;
+  name: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  sourceReference: string | null;
+  status: RuleVersionStatus;
+  isSystem: boolean;
+}
+
+export interface GradeMasterDTO {
+  gradeId: string;
+  canonicalCode: string;
+  canonicalName: string;
+  /** Short label used as the default display code, e.g. `8` or `KG`. */
+  shortCode: string;
+  sequenceNumber: number;
+  educationStage: EducationStage;
+  isPrePrimary: boolean;
+  isBoardGrade: boolean;
+}
+
+export interface BoardSubjectCodeDTO {
+  definitionId: string;
+  boardRuleVersionId: string;
+  boardId: string;
+  boardCode: string | null;
+  ruleVersionName: string | null;
+  boardSubjectCode: string;
+  boardSubjectName: string | null;
+}
+
+export interface SubjectDTO {
+  subjectId: string;
+  subjectCode: string;
+  name: string;
+  shortName: string | null;
+  category: SubjectCategory;
+  languageCode: string | null;
+  hasTheory: boolean;
+  hasPractical: boolean;
+  hasProject: boolean;
+  hasInternalAssessment: boolean;
+  status: SubjectStatus;
+  boardCodes: BoardSubjectCodeDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionLocationDTO {
+  locationId: string;
+  locationCode: string | null;
+  locationName: string | null;
+  boardId: string;
+  boardCode: string | null;
+  boardName: string | null;
+  boardRuleVersionId: string;
+  ruleVersionName: string | null;
+  affiliationNumber: string | null;
+}
+
+export interface SessionWarningDTO {
+  code: 'SESSION_DATES_OVERLAP';
+  message: string;
+  academicSessionId: string;
+}
+
+export interface ValidationSummaryDTO {
+  at: string;
+  errors: number;
+  warnings: number;
+}
+
+export interface AcademicSessionDTO {
+  academicSessionId: string;
+  schoolId: string;
+  name: string;
+  code: string;
+  startDate: string;
+  endDate: string;
+  status: SessionStatus;
+  /** True for the single ACTIVE session of the school. */
+  isCurrent: boolean;
+  locations: SessionLocationDTO[];
+  previousSessionId: string | null;
+  warnings: SessionWarningDTO[];
+  /** Hard delete is only possible while the session is a DRAFT. */
+  deletable: boolean;
+  /** Only for users with `academic:view_config`. */
+  lastValidation?: ValidationSummaryDTO | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GradeOfferingDTO {
+  gradeOfferingId: string;
+  academicSessionId: string;
+  locationId: string;
+  gradeId: string;
+  canonicalCode: string;
+  displayName: string;
+  displayCode: string;
+  medium: string | null;
+  capacity: number | null;
+  sequenceOrder: number;
+  status: OfferingStatus;
+  sectionCount: number;
+  subjectCount: number;
+}
+
+export interface SectionOfferingDTO {
+  sectionOfferingId: string;
+  gradeOfferingId: string;
+  academicSessionId: string;
+  locationId: string;
+  sectionCode: string;
+  displayName: string;
+  capacity: number | null;
+  sequenceOrder: number;
+  status: OfferingStatus;
+}
+
+export interface SubjectOfferingDTO {
+  subjectOfferingId: string;
+  gradeOfferingId: string;
+  academicSessionId: string;
+  locationId: string;
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  category: SubjectCategory;
+  offeringType: SubjectOfferingType;
+  boardSubjectDefinitionId: string | null;
+  boardSubjectCode: string | null;
+  boardSubjectName: string | null;
+  status: OfferingStatus;
+}
+
+export interface AcademicTermDTO {
+  termId: string;
+  academicSessionId: string;
+  /** `null` = applies to every location in the session. */
+  locationId: string | null;
+  name: string;
+  code: string;
+  type: TermType;
+  sequence: number;
+  startDate: string;
+  endDate: string;
+  /** Computed from today's date in the school's time zone. */
+  status: TermStatus;
 }
