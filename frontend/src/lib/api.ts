@@ -43,11 +43,13 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 async function request<T>(method: Method, path: string, body?: unknown, allowRefresh = true): Promise<T> {
   let res: Response;
   try {
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       credentials: 'include',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // The browser sets the multipart boundary itself for FormData.
+      headers: body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : undefined,
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, 'NETWORK_ERROR', "We can't reach SchoolVerse right now. Check your connection and try again.");
@@ -73,4 +75,6 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
+  /** multipart/form-data upload (logo). */
+  upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
 };

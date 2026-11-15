@@ -6,8 +6,8 @@ The friendly School ERP. **Module 1: School & School Locations Setup.** See [Mod
 |---|---|---|
 | 1 | Platform foundation: auth, tenant isolation, RBAC, audit infra, app shell | ✅ Done |
 | 2 | School & Location master domain (API) | ✅ Done |
-| 3 | School Profile & Locations UI | ⏳ Next |
-| 4 | Setup wizard, overview, master APIs, QA | — |
+| 3 | School Profile & Locations UI | ✅ Done |
+| 4 | Setup wizard, overview, master APIs, QA | ⏳ Next |
 
 ## Layout
 
@@ -73,6 +73,7 @@ Riverside Academy has one active campus that reuses the code `MOH`, because code
 | backend | `npm run seed` | Reset and reload demo data |
 | backend | `npm run build` / `npm start` | Bundle to `dist/` and run it |
 | frontend | `npm run dev` | Web app with hot reload |
+| frontend | `npm test` | Component tests (Vitest + React Testing Library, no backend needed) |
 | frontend | `npm run build` | Typecheck + production build to `dist/` |
 | frontend | `npm run sync-shared` | Refresh `src/shared` from the backend |
 | both | `npm run typecheck` / `npm run lint` | TypeScript / ESLint |

@@ -1,7 +1,7 @@
 import { useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
-import { Building2, ChevronDown, House, LifeBuoy, LogOut, Menu, UserRound } from 'lucide-react';
+import { Building2, ChevronDown, House, LogOut, MapPinned, Menu, Rocket, School, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -28,7 +28,28 @@ interface NavSection {
  * Navigation registry. Sections that are not built yet are simply not listed
  * (PRD §13: hide unavailable sections rather than exposing broken placeholders).
  */
-const NAV: NavSection[] = [{ items: [{ to: '/', label: 'Home', Icon: House, end: true }] }];
+const NAV: NavSection[] = [
+  { items: [{ to: '/', label: 'Home', Icon: House, end: true }] },
+  {
+    label: 'School Setup',
+    items: [
+      { to: '/school-setup/profile', label: 'School Profile', Icon: School, permission: 'school:view' },
+      { to: '/school-setup/locations', label: 'Locations', Icon: MapPinned, permission: 'location:view' },
+    ],
+  },
+];
+
+/** Breadcrumb labels, longest match first. */
+const CRUMBS: [string, string[]][] = [
+  ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
+  ['/school-setup/locations', ['School Setup', 'Locations']],
+  ['/school-setup/profile', ['School Setup', 'School Profile']],
+];
+
+function crumbsFor(pathname: string): string[] {
+  if (pathname === '/') return ['Home'];
+  return CRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? ['Page'];
+}
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { can } = useAuth();
@@ -86,9 +107,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <div className="mx-1 mb-3 rounded-[10px] border border-[#2d4160] p-3.5 text-[13px]">
-        <LifeBuoy className="mb-2 size-[18px] text-[#85a7e5]" />
-        <p className="font-semibold text-[#e3eafb]">School Setup is on the way</p>
-        <p className="mt-1 leading-relaxed text-navy-muted">School profile, campuses and the setup wizard arrive in the next release.</p>
+        <Rocket className="mb-2 size-[18px] text-[#85a7e5]" />
+        <p className="font-semibold text-[#e3eafb]">Coming next</p>
+        <p className="mt-1 leading-relaxed text-navy-muted">Guided setup, the school overview and academic structure.</p>
       </div>
 
       <div className="flex items-center justify-between border-t border-[#2a3d5b] px-2 pt-3">
@@ -179,7 +200,18 @@ export function AppShell() {
           <span className="mx-2 hidden sm:inline" aria-hidden="true">
             /
           </span>
-          <span className="font-semibold text-ink">{location.pathname === '/' ? 'Home' : 'Page'}</span>
+          {crumbsFor(location.pathname).map((crumb, i, all) => (
+            <span key={crumb}>
+              {i > 0 && (
+                <span className="mx-2" aria-hidden="true">
+                  /
+                </span>
+              )}
+              <span className={i === all.length - 1 ? 'font-semibold text-ink' : undefined} aria-current={i === all.length - 1 ? 'page' : undefined}>
+                {crumb}
+              </span>
+            </span>
+          ))}
         </nav>
         <div className="ml-auto">
           <UserMenu />

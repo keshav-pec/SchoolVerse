@@ -38,3 +38,13 @@ export function RequirePermission({ permission, children }: { permission: Permis
   const { can } = useAuth();
   return can(permission) ? <>{children}</> : <ForbiddenPage />;
 }
+
+/**
+ * School Setup is for administrators, plus a limited read-only view for Faculty and Staff.
+ * Anyone without `school:view` (Parents) lands on the friendly restricted page.
+ */
+export function RequireSetupAccess() {
+  const { can } = useAuth();
+  if (!can('school:view')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}

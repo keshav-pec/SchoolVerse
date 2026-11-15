@@ -260,6 +260,30 @@ SchoolVerse/
 
 > **Commit:** `feat(web): build School Profile and Locations management UI with lifecycle actions, primary switching, audit timeline and role-aware controls`
 
+### Part 3: as built (2026-11-15)
+
+✅ Done. 20 RTL tests pass (backend suite unchanged at 122); frontend typecheck, lint and build are clean. Decisions made during implementation:
+
+| Topic | What was built | Why |
+|---|---|---|
+| Routes | `/school-setup/profile`, `/school-setup/locations`, `/school-setup/locations/:locationId`. `/school-setup` redirects to the profile until Part 4 adds the Overview. Sidebar group "School Setup" lists only these two pages. The old "on the way" card is now a "Coming next" card. | PRD §13: unbuilt sections are hidden, with one "Coming next" reference. |
+| No school yet | A freshly signed-up workspace has no School Master (the wizard that creates it is Part 4). The School Profile page shows the same form in **create** mode (`POST /schools`), and Locations points there first. | Part 3 is usable on its own. Part 4's wizard replaces this entry point. |
+| Parents | `RequireSetupAccess` redirects anyone without `school:view` to `/restricted`, which shows "This area is for school administrators". | Matches the spec; the server still returns 403. |
+| Status filter | Pills (All · Draft · Active · Inactive · Archived) with counts from `facets`, stored as `?status=`. "All" means every status except Archived, as the API defines it. Hidden for Faculty/Staff, who only ever receive ACTIVE locations. | One click per state, and the URL is shareable. |
+| Table and cards | Both are rendered and CSS toggles them at 768px, with no JS media-query flash. | No layout flicker on load. |
+| Add Location | 5-step drawer (Basics → Address → Contact → Defaults → Review). The code is auto-suggested from the name until the person types their own. Per-step validation uses the shared `createLocationSchema`. **Activate Location** stays disabled on Review until `missingActivationFields()` is empty, and lists what's missing. Server field errors jump back to the step that owns the field. Closing with unsaved input asks for confirmation. | Reuses the one contract. The Activate button never leads to a surprise `LOCATION_INCOMPLETE`. |
+| Detail edits | Each card (Basic details, Operational defaults, Address, Contact) edits in place and PATCHes **only the changed fields** (`address` goes as a whole object, as the API expects). ACTIVE/INACTIVE locations can't clear required fields, with the error shown inline. Archived locations are fully read-only. | Small audit diffs; the same rules as the server. |
+| Lifecycle | `availableActions()` mirrors the server state machine. The Primary shows a disabled **Deactivate** with the reason plus **Choose new primary** (radio list of other active locations). The archive-blocked dialog stays open and lists each dependency with its count. Discard draft is offered for DRAFTs only. | The Part 2 rules, explained instead of just refused. |
+| Optimistic updates | Activate, Deactivate, Archive and Set Primary patch every cached list page and detail first, roll back on error, and refetch on success. | Spec item 7. |
+| Activity tab | Cursor-paged audit timeline with field diffs ("Phone: +91 98765 43210 → +91 99887 76655"). Primary events show the other location involved. Needs `audit:view`, so only admins see the tab. | SCH-LOC-10 on the UI side. |
+| Faculty/Staff | Read-only profile and list, with no edit/create/action controls, no identifiers, no activity and no status filter. Notes are never shown. | PRD §7 "Limited". |
+| Logo | Picked file is checked for type and size, previewed immediately, uploaded at once and removable. The server re-checks the bytes. | Matches the Part 2 upload rules. |
+| Test tooling | Vitest + jsdom + RTL + user-event. `src/test/utils.tsx` swaps `fetch` for a per-route mock, so tests run the real API client, hooks and auth provider. | Tests cover real wiring, not stubbed hooks. |
+
+**Bugs the tests caught while building:** a clickable *and* a disabled Deactivate both showed on the Primary Location, and Faculty saw a disabled Deactivate button on it. Both are fixed in `availableActions()`.
+
+**Not in Part 3 (by design):** the Overview page, wizard and master APIs (Part 4); Playwright e2e (Part 4); a visual pass in a real browser. The UI has been type-checked, linted, built and tested in jsdom, and its API calls were smoke-tested against the running backend, but nobody has yet looked at it on screen at desktop and mobile widths.
+
 ---
 
 ## Part 4: Setup wizard, overview, downstream master APIs and QA hardening

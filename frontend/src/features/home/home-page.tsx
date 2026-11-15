@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { ROLE_DESCRIPTIONS } from '@shared';
 import { Bus, Check, Copy, Flag, Fingerprint, History, MapPinned, School, ShieldCheck, Sparkles, Building } from 'lucide-react';
 import { motion } from 'motion/react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { CampusScene } from '@/components/illustrations/campus-scene';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RoleBadge } from '@/components/sv/role-badge';
 import { useSession } from '@/lib/auth';
@@ -164,10 +166,19 @@ export function HomePage() {
           <div>
             <CardTitle>Your setup journey</CardTitle>
             <CardDescription>
-              {isAdmin ? 'Here’s the route to a fully configured school. The guided setup unlocks in the next release.' : 'Here’s what your School Admin will configure.'}
+              {isAdmin ? 'Here’s the route to a fully configured school. Start with your school profile, then add your campuses.' : 'Here’s what your School Admin configures. You can browse the school profile and active campuses.'}
             </CardDescription>
           </div>
-          <Badge tone="lavender">Coming next</Badge>
+          {session.permissions.includes('school:view') && (
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm">
+                <Link to="/school-setup/profile">School Profile</Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link to="/school-setup/locations">Locations</Link>
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <ol className="relative grid gap-4 sm:grid-cols-4 sm:gap-2">
           <div className="absolute top-6 right-[12%] left-[12%] hidden h-1 rounded-full bg-[repeating-linear-gradient(90deg,var(--color-line)_0_12px,transparent_12px_20px)] sm:block" aria-hidden="true" />

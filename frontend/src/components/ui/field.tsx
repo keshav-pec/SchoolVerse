@@ -1,7 +1,10 @@
 import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 import { CircleAlert, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Combobox, type ComboboxOption } from './combobox';
 import { Input } from './input';
+import { Select } from './select';
+import { Textarea } from './textarea';
 
 interface FieldShellProps {
   id: string;
@@ -95,6 +98,77 @@ export function PasswordField(props: Omit<TextFieldProps, 'type'>) {
           {visible ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
         </button>
       </div>
+    </FieldShell>
+  );
+}
+
+type FieldBase = { label: string; hint?: ReactNode; error?: string; labelAside?: ReactNode; containerClassName?: string };
+
+function describedBy(id: string, error?: string, hint?: ReactNode) {
+  return error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+}
+
+export function SelectField({ label, hint, error, labelAside, id, required, containerClassName, children, ...props }: FieldBase & ComponentProps<'select'>) {
+  const generated = useId();
+  const fieldId = id ?? generated;
+  return (
+    <FieldShell id={fieldId} label={label} required={required} hint={hint} error={error} labelAside={labelAside} className={containerClassName}>
+      <Select id={fieldId} aria-required={required || undefined} aria-invalid={!!error || undefined} aria-describedby={describedBy(fieldId, error, hint)} {...props}>
+        {children}
+      </Select>
+    </FieldShell>
+  );
+}
+
+export function TextareaField({ label, hint, error, labelAside, id, required, containerClassName, ...props }: FieldBase & ComponentProps<'textarea'>) {
+  const generated = useId();
+  const fieldId = id ?? generated;
+  return (
+    <FieldShell id={fieldId} label={label} required={required} hint={hint} error={error} labelAside={labelAside} className={containerClassName}>
+      <Textarea id={fieldId} aria-required={required || undefined} aria-invalid={!!error || undefined} aria-describedby={describedBy(fieldId, error, hint)} {...props} />
+    </FieldShell>
+  );
+}
+
+export function ComboboxField({
+  label,
+  hint,
+  error,
+  labelAside,
+  id,
+  required,
+  containerClassName,
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+  disabled,
+}: FieldBase & {
+  id?: string;
+  required?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly ComboboxOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  disabled?: boolean;
+}) {
+  const generated = useId();
+  const fieldId = id ?? generated;
+  return (
+    <FieldShell id={fieldId} label={label} required={required} hint={hint} error={error} labelAside={labelAside} className={containerClassName}>
+      <Combobox
+        id={fieldId}
+        value={value}
+        onChange={onChange}
+        options={options}
+        placeholder={placeholder}
+        searchPlaceholder={searchPlaceholder}
+        disabled={disabled}
+        invalid={!!error}
+        describedBy={describedBy(fieldId, error, hint)}
+      />
     </FieldShell>
   );
 }
