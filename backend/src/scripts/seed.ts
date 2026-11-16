@@ -14,6 +14,12 @@ import { connectDatabase, disconnectDatabase } from '../db/connection';
 import { AuditEvent } from '../modules/audit/audit.model';
 import { seedAcademicDemo } from '../modules/academic/academic.seed';
 import { seedReferenceData, seedStarterSubjects } from '../modules/academic/reference.seed';
+import { AcademicAssignment, LocationAssignment, Responsibility } from '../modules/staff/assignment.models';
+import { Employee } from '../modules/staff/employee.model';
+import { Department, Designation } from '../modules/staff/master.model';
+import { Person } from '../modules/staff/person.model';
+import { seedStaffDemo } from '../modules/staff/staff.seed';
+import { SecurityEvent } from '../platform/identity/security-event.model';
 import { LocationReference } from '../modules/dependencies/simulated-references';
 import { GradeOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '../modules/academic/rules.model';
@@ -156,6 +162,15 @@ async function wipeTenant(tenantId: string) {
     BoardSubjectDefinition.deleteMany({ tenantId }),
     EducationBoard.deleteMany({ tenantId }),
     BoardRuleVersion.deleteMany({ tenantId }),
+    // Faculty & Staff (Module 3)
+    Person.deleteMany({ tenantId }),
+    Employee.deleteMany({ tenantId }),
+    Department.deleteMany({ tenantId }),
+    Designation.deleteMany({ tenantId }),
+    LocationAssignment.deleteMany({ tenantId }),
+    AcademicAssignment.deleteMany({ tenantId }),
+    Responsibility.deleteMany({ tenantId }),
+    SecurityEvent.deleteMany({ tenantId }),
   ]);
   await Tenant.deleteOne({ _id: tenantId });
 }
@@ -173,8 +188,10 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
     const tenantId = randomUUID();
     const adminId = randomUUID();
     await Tenant.create({ _id: tenantId, name: def.name, slug: def.slug, createdBy: adminId });
+    const userIdsByEmail: Record<string, string> = {};
     for (const u of def.users) {
       const id = u.role === 'SCHOOL_ADMIN' ? adminId : randomUUID();
+      userIdsByEmail[u.email] = id;
       await User.create({ _id: id, tenantId, ...u, passwordHash, createdBy: adminId, updatedBy: adminId });
     }
 
@@ -197,6 +214,8 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
       if (def.slug === 'greenfield-public-school') {
         await seedAcademicDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
         log('    📚 Academic session 2026-27 (active) and 2027-28 (draft, cloned)');
+        const staff = await seedStaffDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail });
+        log(`    🧑‍🏫 ${staff.employees} employees across Mohali and Chandigarh (faculty and staff demo logins are linked to people)`);
       }
     }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);

@@ -292,5 +292,123 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'programme.created': 'Programme added',
   'programme.updated': 'Programme updated',
   'programme.deleted': 'Programme removed',
+  // Faculty & Staff (Module 3)
+  'employee.created': 'Employee onboarded',
+  'employee.updated': 'Employee details updated',
+  'employee.deleted': 'Onboarding record discarded',
+  'employee.status_changed': 'Employment status changed',
+  'employee.exit_initiated': 'Exit initiated',
+  'employee.exit_cancelled': 'Exit cancelled',
+  'employee.exited': 'Employee exited',
+  'person.created': 'Person record created',
+  'person.updated': 'Personal details updated',
+  'department.created': 'Department added',
+  'department.updated': 'Department updated',
+  'designation.created': 'Designation added',
+  'designation.updated': 'Designation updated',
+  'location_assignment.created': 'Location assigned',
+  'location_assignment.updated': 'Placement start date corrected',
+  'location_assignment.ended': 'Location assignment ended',
+  'location_assignment.cancelled': 'Location assignment cancelled',
+  'location_assignment.transferred': 'Transferred to another location',
+  'academic_assignment.created': 'Class or subject assigned',
+  'academic_assignment.ended': 'Class or subject assignment ended',
+  'academic_assignment.cancelled': 'Class or subject assignment cancelled',
+  'responsibility.created': 'Responsibility assigned',
+  'responsibility.ended': 'Responsibility ended',
+  'responsibility.cancelled': 'Responsibility cancelled',
 };
 
+
+// ───────────────────────────────────────────────────────────── Faculty & Staff (Module 3)
+
+export const EMPLOYEE_CATEGORIES = ['FACULTY', 'NON_TEACHING_STAFF'] as const;
+export type EmployeeCategory = (typeof EMPLOYEE_CATEGORIES)[number];
+
+export const EMPLOYEE_CATEGORY_LABELS: Record<EmployeeCategory, string> = {
+  FACULTY: 'Faculty',
+  NON_TEACHING_STAFF: 'Non-teaching staff',
+};
+
+export const EMPLOYEE_STATUSES = ['ONBOARDING', 'ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'NOTICE_PERIOD', 'EXITED'] as const;
+export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
+
+export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
+  ONBOARDING: 'Onboarding',
+  ACTIVE: 'Active',
+  ON_LEAVE: 'On leave',
+  SUSPENDED: 'Suspended',
+  NOTICE_PERIOD: 'Notice period',
+  EXITED: 'Exited',
+};
+
+/** Lifecycle actions an admin can take (PRD §25). `complete_exit` is system-only (the hourly job). */
+export const EMPLOYEE_ACTIONS = ['activate', 'leave', 'suspend', 'exit', 'cancel_exit', 'complete_exit'] as const;
+export type EmployeeAction = (typeof EMPLOYEE_ACTIONS)[number];
+
+/** Targets accepted by `POST /employees/:id/status`. Exit has its own endpoints. */
+export const EMPLOYEE_STATUS_TARGETS = ['ACTIVE', 'ON_LEAVE', 'SUSPENDED'] as const;
+export type EmployeeStatusTarget = (typeof EMPLOYEE_STATUS_TARGETS)[number];
+
+export const PERSON_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type PersonStatus = (typeof PERSON_STATUSES)[number];
+
+export const MASTER_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
+export type MasterStatus = (typeof MASTER_STATUSES)[number];
+
+export const EXIT_REASON_CATEGORIES = ['RESIGNATION', 'RETIREMENT', 'END_OF_CONTRACT', 'TERMINATION', 'TRANSFER_OUT', 'DECEASED', 'OTHER'] as const;
+export type ExitReasonCategory = (typeof EXIT_REASON_CATEGORIES)[number];
+
+export const EXIT_REASON_LABELS: Record<ExitReasonCategory, string> = {
+  RESIGNATION: 'Resignation',
+  RETIREMENT: 'Retirement',
+  END_OF_CONTRACT: 'End of contract',
+  TERMINATION: 'Termination',
+  TRANSFER_OUT: 'Transferred out',
+  DECEASED: 'Deceased',
+  OTHER: 'Other',
+};
+
+/** Effective-dated rows never store a status: it is computed from the dates (see `assignmentStatus`). */
+export const ASSIGNMENT_STATUSES = ['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED'] as const;
+export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
+
+export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
+  PLANNED: 'Planned',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
+export const LOCATION_END_REASONS = ['TRANSFER', 'EXIT', 'ENDED'] as const;
+export type LocationEndReason = (typeof LOCATION_END_REASONS)[number];
+
+export const ASSIGNMENT_END_REASONS = ['EXIT', 'ENDED'] as const;
+export type AssignmentEndReason = (typeof ASSIGNMENT_END_REASONS)[number];
+
+export const ACADEMIC_ASSIGNMENT_TYPES = ['SUBJECT_FACULTY', 'CLASS_TEACHER', 'CO_CLASS_TEACHER', 'COORDINATOR', 'HOD'] as const;
+export type AcademicAssignmentType = (typeof ACADEMIC_ASSIGNMENT_TYPES)[number];
+
+export const ACADEMIC_ASSIGNMENT_TYPE_LABELS: Record<AcademicAssignmentType, string> = {
+  SUBJECT_FACULTY: 'Subject faculty',
+  CLASS_TEACHER: 'Class teacher',
+  CO_CLASS_TEACHER: 'Co-class teacher',
+  COORDINATOR: 'Coordinator',
+  HOD: 'Head of department',
+};
+
+export const EMPLOYMENT_TYPE_SUGGESTIONS = ['Permanent', 'Probation', 'Contract', 'Part-time', 'Visiting', 'Intern'] as const;
+
+export const RESPONSIBILITY_SUGGESTIONS = ['Transport In-charge', 'Library', 'Lab', 'Admissions', 'Accounts', 'IT Support', 'Exam Cell', 'Reception'] as const;
+
+/** PRD §7 starter lists, offered by `POST /departments/suggested` and `POST /designations/suggested`. */
+export const SUGGESTED_DEPARTMENTS = ['Academics', 'Administration', 'Accounts', 'Library', 'Laboratory', 'Transport', 'IT', 'Admissions', 'HR'] as const;
+export const SUGGESTED_DESIGNATIONS = ['PGT', 'TGT', 'PRT', 'Principal', 'Vice Principal', 'Accountant', 'Librarian', 'Lab Assistant', 'Driver', 'Clerk'] as const;
+
+/** Why a record was refused as a colleague. Written to `security_events`; never shown to the caller (they get 404). */
+export const SECURITY_EVENT_TYPES = ['CROSS_LOCATION_DENIED'] as const;
+export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
+
+/** What an employee record is being used for (same idea as `AcademicPurpose`). */
+export const EMPLOYEE_PURPOSES = ['NEW_ASSIGNMENT', 'HISTORICAL_READ'] as const;
+export type EmployeePurpose = (typeof EMPLOYEE_PURPOSES)[number];

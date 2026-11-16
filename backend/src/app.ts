@@ -11,6 +11,7 @@ import { PUBLIC_UPLOAD_PREFIX, storage } from './core/storage/storage';
 import { createDocsRouter } from './docs/swagger';
 import { registerAcademicLocationDependency } from './modules/academic/register';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
+import { registerStaffDependencies } from './modules/staff/register';
 import { apiRouter } from './routes';
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   if (!isProd) registerSimulatedDependencies();
 
   registerAcademicLocationDependency();
+  registerStaffDependencies();
 
   app.disable('x-powered-by');
   if (isProd) app.set('trust proxy', 1);

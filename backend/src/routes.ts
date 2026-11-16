@@ -8,6 +8,7 @@ import { devRouter } from './modules/dependencies/dev.routes';
 import { locationRouter } from './modules/locations/location.routes';
 import { masterRouter } from './modules/master/master.routes';
 import { schoolRouter } from './modules/school/school.routes';
+import { staffRouter } from './modules/staff/staff.routes';
 import { setupRouter } from './modules/setup/setup.routes';
 import { authRouter } from './platform/auth/auth.routes';
 import { userRouter } from './platform/users/user.routes';
@@ -32,5 +33,6 @@ apiRouter.use('/locations', locationRouter);
 apiRouter.use('/audit', auditRouter);
 apiRouter.use('/master', masterRouter);
 apiRouter.use(academicRouter);
+apiRouter.use(staffRouter);
 // Simulated downstream references for QA (scenario 23). Never mounted in production.
 if (!isProd) apiRouter.use('/dev', devRouter);

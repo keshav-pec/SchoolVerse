@@ -1,5 +1,14 @@
 import type {
+  AcademicAssignmentType,
   AcademicPurpose,
+  AssignmentEndReason,
+  AssignmentStatus,
+  EmployeeAction,
+  EmployeeCategory,
+  EmployeeStatus,
+  ExitReasonCategory,
+  LocationEndReason,
+  MasterStatus,
   ChoiceRuleType,
   ConstraintType,
   ProgrammeKind,
@@ -577,4 +586,196 @@ export interface AcademicUsabilityDTO {
   gradeOffering: { gradeOfferingId: string; gradeId: string; displayName: string };
   section?: { sectionOfferingId: string; sectionCode: string; displayName: string };
   subjectOffering?: { subjectOfferingId: string; subjectId: string; subjectName: string; offeringType: SubjectOfferingType };
+}
+
+// ───────────────────────────────────────────────────────────── Faculty & Staff (Module 3)
+//
+// Five rules (PRD §16): no route returns a Mongoose document, every DTO is built by an explicit mapper,
+// and a field's class (`data-classification.ts`) decides which DTOs may carry it. Date-only values are `YYYY-MM-DD`.
+
+export interface DepartmentDTO {
+  departmentId: string;
+  code: string;
+  name: string;
+  status: MasterStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DesignationDTO {
+  designationId: string;
+  code: string;
+  name: string;
+  status: MasterStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SuggestedMastersDTO<T> {
+  created: T[];
+  /** Suggestions that were left alone because the code already exists. */
+  skipped: number;
+}
+
+export interface EmployeeLocationRefDTO {
+  locationId: string;
+  locationCode: string;
+  displayName: string;
+  isPrimary: boolean;
+  status: AssignmentStatus;
+}
+
+/** INTERNAL fields only: safe for the colleague directory. */
+export interface EmployeeDirectoryDTO {
+  employeeId: string;
+  employeeCode: string;
+  /** Legal name, first + middle + last. */
+  fullName: string;
+  /** Preferred name when set, otherwise first + last. */
+  displayName: string;
+  preferredName: string | null;
+  employeeCategory: EmployeeCategory;
+  employmentType: string | null;
+  department: { departmentId: string; code: string; name: string };
+  designation: { designationId: string; code: string; name: string };
+  status: EmployeeStatus;
+  /** The primary placement that applies today (or the next planned one). */
+  primaryLocation: EmployeeLocationRefDTO | null;
+  /** Primary and secondary placements that are active or planned. */
+  locations: EmployeeLocationRefDTO[];
+  officialEmail: string | null;
+  officialPhone: string | null;
+}
+
+/** PERSONAL contact. Only returned to callers with `employee:view_personal`. */
+export interface EmployeePersonalDTO {
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  personalEmail: string | null;
+  personalPhone: string | null;
+  address: {
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    country: string | null;
+  } | null;
+  emergencyContact: { name: string; relation: string; phone: string } | null;
+}
+
+/** Never includes date of birth, government IDs or bank details: those are restricted data. */
+export interface EmployeeProfileDTO extends EmployeeDirectoryDTO {
+  personId: string;
+  schoolId: string;
+  legalFirstName: string;
+  legalMiddleName: string | null;
+  legalLastName: string;
+  joiningDate: string;
+  confirmationDate: string | null;
+  reportingManager: { employeeId: string; employeeCode: string; fullName: string } | null;
+  exit: { exitDate: string; exitReasonCategory: ExitReasonCategory; note?: string | null } | null;
+  /** Present only with `employee:view_personal`. */
+  personal?: EmployeePersonalDTO;
+  /** Lifecycle buttons that make sense from the current status. */
+  lifecycleActions: EmployeeAction[];
+  /** True while a hard delete is still allowed (onboarding, nothing recorded yet). */
+  deletable: boolean;
+  /** Exited employees are history only. */
+  readOnly: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocationAssignmentDTO {
+  locationAssignmentId: string;
+  employeeId: string;
+  locationId: string;
+  locationCode: string;
+  locationName: string;
+  isPrimary: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  cancelledAt: string | null;
+  endReason: LocationEndReason | null;
+  /** Computed from the dates and `cancelledAt`, in the school's time zone. */
+  status: AssignmentStatus;
+}
+
+export interface TransferResultDTO {
+  ended: LocationAssignmentDTO;
+  started: LocationAssignmentDTO;
+  /** The old location kept as a secondary placement when `keepOldAsSecondary` was set. */
+  secondary: LocationAssignmentDTO | null;
+}
+
+export interface FacultyAssignmentDTO {
+  academicAssignmentId: string;
+  employeeId: string;
+  academicSessionId: string;
+  sessionCode: string;
+  sessionName: string;
+  locationId: string;
+  locationCode: string;
+  locationName: string;
+  gradeOfferingId: string;
+  gradeName: string;
+  sectionId: string | null;
+  sectionCode: string | null;
+  sectionName: string | null;
+  subjectOfferingId: string | null;
+  subjectId: string | null;
+  subjectName: string | null;
+  assignmentType: AcademicAssignmentType;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  cancelledAt: string | null;
+  endReason: AssignmentEndReason | null;
+  status: AssignmentStatus;
+}
+
+export interface ResponsibilityDTO {
+  responsibilityId: string;
+  employeeId: string;
+  locationId: string;
+  locationCode: string;
+  locationName: string;
+  responsibilityType: string;
+  description: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  cancelledAt: string | null;
+  endReason: AssignmentEndReason | null;
+  status: AssignmentStatus;
+}
+
+export interface EmployeeHistoryDTO {
+  locationAssignments: LocationAssignmentDTO[];
+  academicAssignments: FacultyAssignmentDTO[];
+  responsibilities: ResponsibilityDTO[];
+  /** Audit timeline for this employee, newest first. */
+  events: AuditEventDTO[];
+}
+
+/** What other modules get from `employeeService.getEmployeeSummary()`. */
+export interface EmployeeSummaryDTO {
+  employeeId: string;
+  personId: string;
+  employeeCode: string;
+  fullName: string;
+  displayName: string;
+  employeeCategory: EmployeeCategory;
+  status: EmployeeStatus;
+  departmentName: string;
+  designationName: string;
+  primaryLocationId: string | null;
+}
+
+export interface SectionFacultyDTO {
+  employeeId: string;
+  fullName: string;
+  assignmentType: AcademicAssignmentType;
+  subjectOfferingId: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
 }

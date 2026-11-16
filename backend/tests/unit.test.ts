@@ -15,9 +15,29 @@ import {
   type Permission,
 } from '@shared';
 import { describe, expect, it } from 'vitest';
+import {
+  DATA_CLASSIFICATION,
+  DTO_ALLOWED_CLASSES,
+  EMPLOYEE_ACTIONS,
+  EMPLOYEE_STATUSES,
+  SYSTEM_FIELDS,
+  classOf,
+  type DataClass,
+  type EmployeeAction,
+  type EmployeeStatus,
+} from '@shared';
 import { AppError } from '../src/core/errors';
 import { diffFields } from '../src/modules/audit/diff';
 import { assertTransition, availableActions, canTransition } from '../src/modules/locations/lifecycle';
+import type { EmployeeDoc } from '../src/modules/staff/employee.model';
+import { Employee } from '../src/modules/staff/employee.model';
+import { assertEmployeeTransition, availableActions as employeeActions, canTransition as canEmployeeTransition, exitTarget } from '../src/modules/staff/lifecycle';
+import type { Hydration } from '../src/modules/staff/mappers';
+import { toDirectoryDTO, toProfileDTO } from '../src/modules/staff/mappers';
+import type { PersonDoc } from '../src/modules/staff/person.model';
+import { Person } from '../src/modules/staff/person.model';
+import type { StaffMasterDoc } from '../src/modules/staff/master.model';
+import { addDays, assignmentStatus, overlapping } from '../src/modules/staff/status';
 
 describe('location lifecycle state machine (SCH-LOC-06)', () => {
   const legal: Record<LocationStatus, Partial<Record<LocationAction, LocationStatus>>> = {
@@ -201,5 +221,144 @@ describe('RBAC matrix (PRD §7)', () => {
     }
     expect(hasPermission('PARENT', 'school:view')).toBe(false);
     expect(hasPermission('PARENT', 'location:view')).toBe(false);
+  });
+});
+
+
+describe('employee lifecycle state machine (FSM-01)', () => {
+  const legal: Record<EmployeeStatus, Partial<Record<EmployeeAction, EmployeeStatus>>> = {
+    ONBOARDING: { activate: 'ACTIVE', exit: 'NOTICE_PERIOD' },
+    ACTIVE: { leave: 'ON_LEAVE', suspend: 'SUSPENDED', exit: 'NOTICE_PERIOD' },
+    ON_LEAVE: { activate: 'ACTIVE', suspend: 'SUSPENDED', exit: 'NOTICE_PERIOD' },
+    SUSPENDED: { activate: 'ACTIVE', exit: 'NOTICE_PERIOD' },
+    NOTICE_PERIOD: { cancel_exit: 'ACTIVE', complete_exit: 'EXITED' },
+    EXITED: {},
+  };
+
+  for (const from of EMPLOYEE_STATUSES) {
+    for (const action of EMPLOYEE_ACTIONS) {
+      const to = legal[from][action];
+      if (to) {
+        it(`${from} --${action}--> ${to}`, () => {
+          expect(canEmployeeTransition(from, action)).toBe(true);
+          expect(assertEmployeeTransition(from, action)).toBe(to);
+        });
+      } else {
+        it(`${from} --${action}--> rejected with INVALID_STATUS_TRANSITION`, () => {
+          expect(canEmployeeTransition(from, action)).toBe(false);
+          expect(() => assertEmployeeTransition(from, action)).toThrow(AppError);
+          try {
+            assertEmployeeTransition(from, action);
+          } catch (err) {
+            expect((err as AppError).code).toBe('INVALID_STATUS_TRANSITION');
+          }
+        });
+      }
+    }
+  }
+
+  it('offers EXITED employees no actions, and never lists the system-only completion', () => {
+    expect(employeeActions('EXITED')).toEqual([]);
+    expect(employeeActions('NOTICE_PERIOD')).toEqual(['cancel_exit']);
+    for (const status of EMPLOYEE_STATUSES) expect(employeeActions(status)).not.toContain('complete_exit');
+  });
+
+  it('an exit dated today or earlier is immediate; a later one is a notice period', () => {
+    expect(exitTarget('2026-11-14', '2026-11-15')).toBe('EXITED');
+    expect(exitTarget('2026-11-15', '2026-11-15')).toBe('EXITED');
+    expect(exitTarget('2026-11-16', '2026-11-15')).toBe('NOTICE_PERIOD');
+  });
+});
+
+describe('effective-dated assignment status (Module 3 "Effective dating")', () => {
+  const today = '2026-11-15';
+  it('is computed from the dates and cancelledAt, with the last day inclusive', () => {
+    expect(assignmentStatus({ effectiveFrom: '2026-11-16' }, today)).toBe('PLANNED');
+    expect(assignmentStatus({ effectiveFrom: '2026-11-15' }, today)).toBe('ACTIVE');
+    expect(assignmentStatus({ effectiveFrom: '2026-04-01', effectiveTo: null }, today)).toBe('ACTIVE');
+    expect(assignmentStatus({ effectiveFrom: '2026-04-01', effectiveTo: '2026-11-15' }, today)).toBe('ACTIVE');
+    expect(assignmentStatus({ effectiveFrom: '2026-04-01', effectiveTo: '2026-11-14' }, today)).toBe('COMPLETED');
+    expect(assignmentStatus({ effectiveFrom: '2026-04-01', effectiveTo: '2026-11-14', cancelledAt: new Date() }, today)).toBe('CANCELLED');
+    expect(assignmentStatus({ effectiveFrom: '2027-01-01', cancelledAt: new Date() }, today)).toBe('CANCELLED');
+  });
+
+  it('adds days without a time zone shift, across month and year ends', () => {
+    expect(addDays('2026-04-01', -1)).toBe('2026-03-31');
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
+  });
+
+  it('builds an overlap filter for open-ended and closed ranges', () => {
+    expect(overlapping('2026-04-01', null).$and).toHaveLength(1);
+    expect(overlapping('2026-04-01', '2026-09-30').$and).toHaveLength(2);
+  });
+});
+
+describe('data classification (SEC-01, PRD §15 and §37)', () => {
+  const systemFields: readonly string[] = SYSTEM_FIELDS;
+  /** Top-level business paths of a Mongoose schema (nested sub-paths are covered by their parent). */
+  const businessPaths = (schema: { paths: Record<string, unknown> }) => [...new Set(Object.keys(schema.paths).map((p) => p.split('.')[0]!))].filter((p) => !systemFields.includes(p));
+
+  it('classifies every field of people and employees, and nothing stale', () => {
+    expect(businessPaths(Person.schema).sort()).toEqual(Object.keys(DATA_CLASSIFICATION.person).sort());
+    expect(businessPaths(Employee.schema).filter((p) => !['statusChangedAt', 'statusChangedBy'].includes(p)).sort()).toEqual(Object.keys(DATA_CLASSIFICATION.employee).sort());
+  });
+
+  it('puts government IDs, bank details and the date of birth in the restricted class, and never in a DTO', () => {
+    expect(classOf('person', 'dateOfBirth')).toBe('RESTRICTED');
+    expect(classOf('restricted_person_data', 'governmentIds')).toBe('RESTRICTED');
+    expect(classOf('restricted_person_data', 'bank')).toBe('RESTRICTED');
+    expect(DTO_ALLOWED_CLASSES.directory).toEqual(['INTERNAL']);
+    for (const allowed of Object.values(DTO_ALLOWED_CLASSES) as readonly (readonly DataClass[])[]) {
+      expect(allowed).not.toContain('RESTRICTED');
+      expect(allowed).not.toContain('SECRET');
+    }
+  });
+
+  it('DTO mappers leak only the classes they are allowed to carry', () => {
+    // Every non-internal value is a unique canary string; the DTO output is searched for them.
+    const canary = (field: string) => `CANARY_${field}`;
+    const person = {
+      _id: 'p1', tenantId: 't', status: 'ACTIVE', createdAt: new Date(), updatedAt: new Date(),
+      legalFirstName: 'Priya', legalMiddleName: null, legalLastName: 'Sharma', preferredName: null,
+      dateOfBirth: canary('dateOfBirth'),
+      primaryEmail: canary('primaryEmail'), primaryPhone: canary('primaryPhone'),
+      personalEmail: canary('personalEmail'), personalPhone: canary('personalPhone'),
+      address: { line1: canary('address'), line2: null, city: null, state: null, postalCode: null, country: null },
+      emergencyContact: { name: canary('emergencyContact'), relation: 'Spouse', phone: '+910000000000' },
+      profilePhotoKey: canary('profilePhotoKey'),
+    } as unknown as PersonDoc;
+    const employee = {
+      _id: 'e1', tenantId: 't', personId: 'p1', schoolId: 's', employeeCode: 'FAC-1', employeeCategory: 'FACULTY', employmentType: null,
+      joiningDate: '2020-04-01', confirmationDate: null, departmentId: 'd', designationId: 'g', reportingManagerId: null,
+      officialEmail: 'o@x.demo', officialPhone: null, status: 'EXITED', exitDate: '2026-01-01', exitReasonCategory: 'OTHER',
+      exitNote: canary('exitNote'), createdAt: new Date(), updatedAt: new Date(),
+    } as unknown as EmployeeDoc;
+    const master = (id: string) => ({ _id: id, code: id.toUpperCase(), name: id }) as unknown as StaffMasterDoc;
+    const h: Hydration = {
+      today: '2026-11-15',
+      people: new Map([['p1', person]]),
+      departments: new Map([['d', master('d')]]),
+      designations: new Map([['g', master('g')]]),
+      placements: new Map(),
+      managers: new Map(),
+    };
+
+    const directory = JSON.stringify(toDirectoryDTO(employee, h));
+    const profile = JSON.stringify(toProfileDTO(employee, h, { viewPersonal: false, deletable: false }));
+    const personal = JSON.stringify(toProfileDTO(employee, h, { viewPersonal: true, deletable: false }));
+
+    const personalFields = (Object.entries(DATA_CLASSIFICATION.person) as [string, DataClass][]).concat(Object.entries(DATA_CLASSIFICATION.employee) as [string, DataClass][]);
+    for (const [field, cls] of personalFields) {
+      if (cls === 'INTERNAL') continue;
+      if (cls === 'RESTRICTED' || cls === 'SECRET') {
+        for (const dto of [directory, profile, personal]) expect(dto, `${field} must not appear`).not.toContain(canary(field));
+      } else {
+        expect(directory, `${field} must not be in the directory`).not.toContain(canary(field));
+        expect(profile, `${field} needs employee:view_personal`).not.toContain(canary(field));
+      }
+    }
+    for (const field of ['personalEmail', 'personalPhone', 'primaryEmail', 'primaryPhone', 'address', 'emergencyContact', 'exitNote']) expect(personal, field).toContain(canary(field));
+    expect(personal).not.toContain(canary('profilePhotoKey'));
   });
 });

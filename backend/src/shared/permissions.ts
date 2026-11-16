@@ -22,6 +22,11 @@ export const PERMISSIONS = [
   'academic:view_config', // DRAFT sessions, validation results, audit
   'academic:manage', // create / edit / delete configuration
   'academic:publish', // validate, publish, activate, close, clone
+  // Faculty & Staff (Module 3)
+  'employee:directory', // colleague directory fields (Faculty / Staff: only people who share a location)
+  'employee:view', // full profile, assignments, history
+  'employee:view_personal', // personal contact on the profile
+  'employee:manage', // create, edit, assign, lifecycle, departments / designations
   // Setup & governance
   'setup:manage',
   'audit:view',
@@ -32,10 +37,12 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const LIMITED_VIEW: Permission[] = ['school:view', 'location:view', 'academic:view'];
 
+const COLLEAGUE_VIEW: Permission[] = [...LIMITED_VIEW, 'employee:directory'];
+
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SCHOOL_ADMIN: PERMISSIONS,
-  FACULTY: LIMITED_VIEW,
-  STAFF: LIMITED_VIEW,
+  FACULTY: COLLEAGUE_VIEW,
+  STAFF: COLLEAGUE_VIEW,
   PARENT: [],
 };
 

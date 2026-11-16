@@ -10,3 +10,5 @@ export * from './schemas/location';
 export * from './schemas/audit';
 export * from './schemas/setup';
 export * from './schemas/academic';
+export * from './schemas/staff';
+export * from './data-classification';

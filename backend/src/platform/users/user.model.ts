@@ -9,6 +9,8 @@ export interface UserDoc extends BaseDoc, AuditFields {
   passwordHash: string;
   fullName: string;
   role: Role;
+  /** Set when the login belongs to a person record (employee, later student / parent). */
+  personId: string | null;
   status: UserStatus;
   lastLoginAt: Date | null;
   passwordChangedAt: Date | null;
@@ -23,6 +25,7 @@ const userSchema = new Schema<UserDoc>(
     passwordHash: { type: String, required: true, select: false },
     fullName: { type: String, required: true, trim: true, maxlength: 100 },
     role: { type: String, enum: ROLES, required: true },
+    personId: { type: String, default: null },
     status: { type: String, enum: USER_STATUSES, default: 'ACTIVE', required: true },
     lastLoginAt: { type: Date, default: null },
     passwordChangedAt: { type: Date, default: null },
@@ -32,6 +35,7 @@ const userSchema = new Schema<UserDoc>(
 );
 
 userSchema.index({ tenantId: 1, role: 1 });
+userSchema.index({ tenantId: 1, personId: 1 });
 userSchema.plugin(tenantScopePlugin);
 
 export const User = model<UserDoc>('User', userSchema);

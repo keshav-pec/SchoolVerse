@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import { permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
+import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type EmployeeProfileDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
 import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
 import { BoardRuleVersion, EducationBoard, GradeMaster } from '../src/modules/academic/reference.model';
 import { seedReferenceData } from '../src/modules/academic/reference.seed';
 import { AcademicSession } from '../src/modules/academic/session.model';
+import { todayIn } from '../src/modules/academic/term.service';
 import { hashPassword } from '../src/platform/auth/password';
 import { User } from '../src/platform/users/user.model';
 
@@ -295,4 +296,84 @@ export async function makePublishable(t: DraftSession) {
   const offerings = await offer(t.agent, grade!.gradeOfferingId, [t.subjects.MATH!, t.subjects.SCI!]);
   const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
   return { gradeOfferingId: grade!.gradeOfferingId, sectionId: section.sectionOfferingId as string, offerings, termId: term.termId as string };
+}
+
+// ───────────────────────────────────────────────────────────── faculty & staff (Module 3)
+
+/** Today in the default school time zone, the way the services compute it. */
+export function today() {
+  return todayIn(DEFAULT_TIMEZONE);
+}
+
+/**
+ * A school (MOH, CHD active, PKL draft) with an ACTIVE session 2026-27: Grade VIII at Mohali with sections A, B, C and
+ * Mathematics + Science, a department and a designation. Everything the staff tests need to assign classes.
+ */
+export async function staffSchool(workspace?: string) {
+  const s = await academicSchool(workspace);
+  const session = await createSession(s.agent, [s.ref.pin(s.moh.locationId), s.ref.pin(s.chd.locationId, 'PSEB')]);
+  const subjects = await createStarterSubjects(s.agent);
+  const [grade8] = await addGrades(s.agent, session.academicSessionId, s.moh.locationId, [s.ref.gradeId.G08!]);
+  const gradeOfferingId = grade8!.gradeOfferingId;
+  const sectionRows = (await s.agent.post(`${API}/grade-offerings/${gradeOfferingId}/sections`).send({ codes: ['A', 'B', 'C'] }).expect(201)).body.data as { sectionCode: string; sectionOfferingId: string }[];
+  const sections = Object.fromEntries(sectionRows.map((r) => [r.sectionCode, r.sectionOfferingId])) as Record<'A' | 'B' | 'C', string>;
+  const offerings = await offer(s.agent, gradeOfferingId, [subjects.MATH!, subjects.SCI!]);
+  await forceStatus(s.tenantId, session.academicSessionId, 'ACTIVE');
+
+  const dept = (await s.agent.post(`${API}/departments`).send({ code: 'ACAD', name: 'Academics' }).expect(201)).body.data.departmentId as string;
+  const desig = (await s.agent.post(`${API}/designations`).send({ code: 'PGT', name: 'PGT' }).expect(201)).body.data.designationId as string;
+  return {
+    ...s,
+    session,
+    sessionId: session.academicSessionId,
+    gradeOfferingId,
+    sections,
+    offerings: offerings as Record<'MATH' | 'SCI', string>,
+    dept,
+    desig,
+    ctx: serviceContextFor(s.tenantId, s.session.user.userId),
+  };
+}
+export type StaffSchool = Awaited<ReturnType<typeof staffSchool>>;
+
+let employeeSeq = 0;
+/** A valid create body: a faculty member at Mohali, with a fresh name and code each call. */
+export function employeeBody(t: StaffSchool, overrides: Record<string, unknown> = {}) {
+  employeeSeq += 1;
+  return {
+    legalFirstName: `Test${employeeSeq}`,
+    legalLastName: 'Person',
+    employeeCategory: 'FACULTY',
+    employeeCode: `EMP-${String(employeeSeq).padStart(3, '0')}`,
+    joiningDate: '2020-04-01',
+    primaryLocationId: t.moh.locationId,
+    departmentId: t.dept,
+    designationId: t.desig,
+    ...overrides,
+  };
+}
+
+export async function addEmployee(t: StaffSchool, overrides: Record<string, unknown> = {}): Promise<EmployeeProfileDTO> {
+  const res = await t.agent.post(`${API}/employees`).send(employeeBody(t, overrides));
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return res.body.data as EmployeeProfileDTO;
+}
+
+/** Onboards and activates, so assignments and lifecycle moves can be tested from ACTIVE. */
+export async function addActiveEmployee(t: StaffSchool, overrides: Record<string, unknown> = {}): Promise<EmployeeProfileDTO> {
+  const employee = await addEmployee(t, overrides);
+  await t.agent.post(`${API}/employees/${employee.employeeId}/status`).send({ to: 'ACTIVE' }).expect(200);
+  return employee;
+}
+
+/** Links a login to a person, the way account provisioning will in Part 2. */
+export async function linkUser(tenantId: string, userId: string, personId: string) {
+  await User.updateOne({ _id: userId, tenantId }, { $set: { personId } });
+}
+
+/** A Faculty or Staff login linked to the given employee. */
+export async function loginAs(t: StaffSchool, role: 'FACULTY' | 'STAFF', employee: EmployeeProfileDTO) {
+  const login = await createUserAndLogin(t.tenantId, role);
+  await linkUser(t.tenantId, login.userId, employee.personId);
+  return login;
 }

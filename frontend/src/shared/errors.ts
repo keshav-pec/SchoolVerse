@@ -88,6 +88,33 @@ export const ERROR_CODES = {
   CONSTRAINT_EXISTS: { status: 409, message: 'This subject rule already exists.' },
   PROGRAMME_CODE_TAKEN: { status: 409, message: 'A programme with this code already exists for this location in this session.' },
   ACADEMIC_NOT_USABLE: { status: 409, message: 'This academic record cannot be used for new assignments.' },
+
+  // Faculty & Staff (Module 3)
+  EMPLOYEE_CODE_TAKEN: { status: 409, message: 'This employee code is already in use.' },
+  PERSON_HAS_ACTIVE_EMPLOYMENT: { status: 409, message: 'This person already has a current employment record.' },
+  DEPARTMENT_CODE_TAKEN: { status: 409, message: 'This department code is already in use.' },
+  DESIGNATION_CODE_TAKEN: { status: 409, message: 'This designation code is already in use.' },
+  MASTER_INACTIVE: { status: 409, message: 'Inactive departments and designations cannot be used for new employees.' },
+  PRIMARY_LOCATION_OVERLAP: { status: 409, message: 'This employee already has a primary location for those dates.' },
+  EMPLOYEE_PRIMARY_REQUIRED: { status: 409, message: 'An employee always needs a primary location. Use Transfer to move them.' },
+  LOCATION_NOT_ASSIGNED: { status: 409, message: 'This employee is not assigned to that location for those dates.' },
+  LOCATION_ASSIGNMENT_IN_USE: {
+    status: 409,
+    message: 'Class or responsibility assignments at this location run past that date. End them first.',
+  },
+  EMPLOYEE_CATEGORY_MISMATCH: { status: 409, message: 'This assignment does not match the employee’s category.' },
+  ASSIGNMENT_OUTSIDE_SESSION: { status: 400, message: 'Assignment dates must sit inside the academic session.' },
+  ASSIGNMENT_DUPLICATE: { status: 409, message: 'This employee already has the same assignment for those dates.' },
+  CLASS_TEACHER_EXISTS: { status: 409, message: 'This section already has a class teacher for those dates.' },
+  EMPLOYEE_READ_ONLY: { status: 409, message: 'Exited employees are kept for history and cannot be changed.' },
+  EMPLOYEE_NOT_USABLE: { status: 409, message: 'This employee cannot take new assignments right now.' },
+  REPORTING_CYCLE: { status: 409, message: 'That reporting line would make people report to each other in a loop.' },
+  EMPLOYEE_HAS_HISTORY: {
+    status: 409,
+    message: 'This employee already has history and cannot be deleted. Exit the employee instead.',
+  },
+  ASSIGNMENT_NOT_PLANNED: { status: 409, message: 'Only assignments that have not started yet can be cancelled. End this one instead.' },
+  ASSIGNMENT_CLOSED: { status: 409, message: 'This assignment has already ended or been cancelled.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

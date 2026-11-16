@@ -18,6 +18,14 @@ export const AUDIT_ENTITY_TYPES = [
   'subject_choice_group',
   'subject_choice_constraint',
   'academic_programme',
+  // Faculty & Staff (Module 3)
+  'employee',
+  'person',
+  'department',
+  'designation',
+  'location_assignment',
+  'academic_assignment',
+  'responsibility',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

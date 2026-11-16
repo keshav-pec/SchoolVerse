@@ -7,6 +7,10 @@ import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '
 import { AcademicSession, AcademicTerm } from '../src/modules/academic/session.model';
 import { Subject } from '../src/modules/academic/subject.model';
 import { Location } from '../src/modules/locations/location.model';
+import { AcademicAssignment, LocationAssignment, Responsibility } from '../src/modules/staff/assignment.models';
+import { Employee } from '../src/modules/staff/employee.model';
+import { Department, Designation } from '../src/modules/staff/master.model';
+import { Person } from '../src/modules/staff/person.model';
 import { School } from '../src/modules/school/school.model';
 import {
   addGrades,
@@ -15,6 +19,7 @@ import {
   createSession,
   createStarterSubjects,
   createUserAndLogin,
+  forceStatus,
   draftLocationBody,
   expectError,
   loadReference,
@@ -45,8 +50,20 @@ interface AcademicIds {
   ruleVersionId: string;
 }
 
-/** Every School, Location, Setup, Master and Academic route that takes an id, pointed at the given ids. */
-function routes(ids: { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds }): { reads: Call[]; mutations: Call[] } {
+interface StaffIds {
+  employeeId: string;
+  staffId: string;
+  departmentId: string;
+  designationId: string;
+  locationAssignmentId: string;
+  academicAssignmentId: string;
+  responsibilityId: string;
+}
+
+type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds };
+
+/** Every School, Location, Setup, Master, Academic and Staff route that takes an id, pointed at the given ids. */
+function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
   const s = `${API}/schools/${ids.schoolId}`;
   const l = `${API}/locations/${ids.locationId}`;
   const x = ids.academic;
@@ -54,6 +71,8 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
   const grade = `${API}/grade-offerings/${x.gradeOfferingId}`;
   const subject = `${API}/subjects/${x.subjectId}`;
   const board = `${API}/boards/${x.boardId}`;
+  const st = ids.staff;
+  const employee = `${API}/employees/${st.employeeId}`;
   return {
     reads: [
       { name: 'GET school', send: (a) => a.get(s) },
@@ -78,6 +97,12 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'GET programmes', send: (c) => c.get(`${API}/academic-programmes`).query({ academicSessionId: x.sessionId }) },
       { name: 'GET programme', send: (c) => c.get(`${API}/academic-programmes/${x.programmeId}`) },
       { name: 'GET academic context', send: (c) => c.get(`${API}/academic-context`).query({ academicSessionId: x.sessionId, locationId: x.locationId }) },
+      // Faculty & Staff (Module 3)
+      { name: 'GET employee', send: (c) => c.get(employee) },
+      { name: 'GET employee history', send: (c) => c.get(`${employee}/history`) },
+      { name: 'GET location assignments', send: (c) => c.get(`${employee}/location-assignments`) },
+      { name: 'GET academic assignments', send: (c) => c.get(`${employee}/academic-assignments`) },
+      { name: 'GET responsibilities', send: (c) => c.get(`${employee}/responsibilities`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -131,6 +156,24 @@ function routes(ids: { schoolId: string; locationId: string; identifierId: strin
       { name: 'POST programme', send: (c) => c.post(`${API}/academic-programmes`).send({ academicSessionId: x.sessionId, locationId: x.locationId, name: 'P', code: 'P9', kind: 'FLEXIBLE', gradeFromId: randomUUID(), gradeToId: randomUUID() }) },
       { name: 'PATCH programme', send: (c) => c.patch(`${API}/academic-programmes/${x.programmeId}`).send({ name: 'Hijacked' }) },
       { name: 'DELETE programme', send: (c) => c.delete(`${API}/academic-programmes/${x.programmeId}`) },
+      // Faculty & Staff (Module 3)
+      { name: 'PATCH department', send: (c) => c.patch(`${API}/departments/${st.departmentId}`).send({ name: 'Hijacked' }) },
+      { name: 'PATCH designation', send: (c) => c.patch(`${API}/designations/${st.designationId}`).send({ name: 'Hijacked' }) },
+      { name: 'PATCH employee', send: (c) => c.patch(employee).send({ preferredName: 'Hijacked' }) },
+      { name: 'DELETE employee', send: (c) => c.delete(employee) },
+      { name: 'employee status', send: (c) => c.post(`${employee}/status`).send({ to: 'SUSPENDED' }) },
+      { name: 'employee exit', send: (c) => c.post(`${employee}/exit`).send({ exitDate: '2026-06-30', exitReasonCategory: 'OTHER' }) },
+      { name: 'employee cancel exit', send: (c) => c.post(`${employee}/cancel-exit`) },
+      { name: 'POST location assignment', send: (c) => c.post(`${employee}/location-assignments`).send({ locationId: ids.locationId }) },
+      { name: 'transfer', send: (c) => c.post(`${employee}/transfer`).send({ toLocationId: ids.locationId, effectiveFrom: '2026-06-01' }) },
+      { name: 'end location assignment', send: (c) => c.post(`${API}/location-assignments/${st.locationAssignmentId}/end`).send({ effectiveTo: '2026-12-31' }) },
+      { name: 'cancel location assignment', send: (c) => c.post(`${API}/location-assignments/${st.locationAssignmentId}/cancel`) },
+      { name: 'POST academic assignments', send: (c) => c.post(`${employee}/academic-assignments`).send({ items: [{ assignmentType: 'HOD', gradeOfferingId: x.gradeOfferingId }] }) },
+      { name: 'end academic assignment', send: (c) => c.post(`${API}/academic-assignments/${st.academicAssignmentId}/end`).send({ effectiveTo: '2026-12-31' }) },
+      { name: 'cancel academic assignment', send: (c) => c.post(`${API}/academic-assignments/${st.academicAssignmentId}/cancel`) },
+      { name: 'POST responsibility', send: (c) => c.post(`${API}/employees/${st.staffId}/responsibilities`).send({ locationId: ids.locationId, responsibilityType: 'Lab' }) },
+      { name: 'end responsibility', send: (c) => c.post(`${API}/responsibilities/${st.responsibilityId}/end`).send({ effectiveTo: '2026-12-31' }) },
+      { name: 'cancel responsibility', send: (c) => c.post(`${API}/responsibilities/${st.responsibilityId}/cancel`) },
     ],
   };
 }
@@ -161,6 +204,35 @@ async function victim() {
   ).body.data;
   const term = (await b.agent.post(`${API}/academic-sessions/${session.academicSessionId}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
   const board = (await b.agent.post(`${API}/boards`).send({ boardCode: 'VICTIM', boardName: 'Victim Board' }).expect(201)).body.data;
+
+  // Staff: a faculty member teaching section A and a non-teaching employee with a responsibility, both at Mohali.
+  await forceStatus(b.tenantId, session.academicSessionId, 'ACTIVE');
+  const department = (await b.agent.post(`${API}/departments`).send({ code: 'ACAD', name: 'Academics' }).expect(201)).body.data;
+  const designation = (await b.agent.post(`${API}/designations`).send({ code: 'PGT', name: 'PGT' }).expect(201)).body.data;
+  const hire = async (employeeCode: string, employeeCategory: string) => {
+    const created = (
+      await b.agent
+        .post(`${API}/employees`)
+        .send({ legalFirstName: 'Vic', legalLastName: 'Tim', employeeCode, employeeCategory, joiningDate: '2020-04-01', primaryLocationId: b.moh.locationId, departmentId: department.departmentId, designationId: designation.designationId })
+        .expect(201)
+    ).body.data;
+    await b.agent.post(`${API}/employees/${created.employeeId}/status`).send({ to: 'ACTIVE' }).expect(200);
+    return created.employeeId as string;
+  };
+  const employeeId = await hire('VIC-1', 'FACULTY');
+  const staffId = await hire('VIC-2', 'NON_TEACHING_STAFF');
+  const placements = (await b.agent.get(`${API}/employees/${employeeId}/location-assignments`).expect(200)).body.data as { locationAssignmentId: string }[];
+  const taught = (await b.agent.post(`${API}/employees/${employeeId}/academic-assignments`).send({ items: [{ assignmentType: 'SUBJECT_FACULTY', sectionId: section.sectionOfferingId, subjectOfferingId: offering.subjectOfferingId }] }).expect(201)).body.data;
+  const responsibility = (await b.agent.post(`${API}/employees/${staffId}/responsibilities`).send({ locationId: b.moh.locationId, responsibilityType: 'Lab' }).expect(201)).body.data;
+  const staff: StaffIds = {
+    employeeId,
+    staffId,
+    departmentId: department.departmentId,
+    designationId: designation.designationId,
+    locationAssignmentId: placements[0]!.locationAssignmentId,
+    academicAssignmentId: taught[0].academicAssignmentId,
+    responsibilityId: responsibility.responsibilityId,
+  };
   const ruleVersion = (await b.agent.post(`${API}/boards/${board.boardId}/rule-versions`).send({ name: 'v1' }).expect(201)).body.data;
 
   const academic: AcademicIds = {
@@ -178,12 +250,12 @@ async function victim() {
     boardId: board.boardId,
     ruleVersionId: ruleVersion.ruleVersionId,
   };
-  return { ...b, identifierId: ident.body.data.identifierId as string, academic };
+  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff };
 }
 
-/** Everything the academic routes own for a tenant, so tests can prove a refused call changed nothing. */
+/** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
@@ -195,7 +267,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
     const academicBefore = await academicSnapshot(b.tenantId);
 
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
     for (const call of [...reads, ...mutations]) {
       const res = await call.send(attacker.agent);
       expect(res.status, `${call.name} → ${res.status} ${JSON.stringify(res.body)}`).toBe(404);
@@ -243,10 +315,10 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('every protected route rejects an anonymous caller with 401', async () => {
     const b = await victim();
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
-    for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations']) {
+    for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/departments', '/designations']) {
       expectError(await anon.get(`${API}${url}`), 401, 'UNAUTHENTICATED');
     }
   });
@@ -264,7 +336,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
 
   it('Faculty, Staff and Parents are refused every mutation, even calling the API directly', async () => {
     const b = await victim();
-    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic });
+    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
     for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
       const user = await createUserAndLogin(b.tenantId, role);
       for (const call of mutations) {
@@ -281,7 +353,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('Parents cannot read any school or location data', async () => {
     const b = await victim();
     const parent = await createUserAndLogin(b.tenantId, 'PARENT');
-    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic });
+    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
     for (const call of reads) expect((await call.send(parent.agent)).status, call.name).toBe(403);
   });
 

@@ -26,6 +26,8 @@ export interface ServiceContext {
   role: Role;
   permissions: readonly Permission[];
   requestId: string | null;
+  /** Caller's IP, for security events only. Optional so in-process callers need not supply it. */
+  ip?: string | null;
 }
 
 export function contextOf(req: Request): ServiceContext {
@@ -36,6 +38,7 @@ export function contextOf(req: Request): ServiceContext {
     role: req.auth.role,
     permissions: req.auth.permissions,
     requestId: req.requestId ?? null,
+    ip: req.ip ?? null,
   };
 }
 

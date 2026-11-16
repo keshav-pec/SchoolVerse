@@ -40,6 +40,18 @@ async function resolveChain(ctx: ServiceContext, gradeOffering: GradeOfferingDoc
   };
 }
 
+/** Resolves Location → Session → Grade, or throws `NOT_FOUND` / `ACADEMIC_NOT_USABLE`. */
+export async function assertGradeOfferingUsable(
+  ctx: ServiceContext,
+  gradeOfferingId: string,
+  options: { purpose: AcademicPurpose },
+  db?: ClientSession,
+): Promise<AcademicUsabilityDTO> {
+  const gradeOffering = await GradeOffering.findOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }).session(db ?? null).lean<GradeOfferingDoc>();
+  if (!gradeOffering) throw AppError.notFound('Grade not found.');
+  return { purpose: options.purpose, ...(await resolveChain(ctx, gradeOffering, options.purpose, db)) };
+}
+
 /** Resolves Location → Session → Grade → Section, or throws `NOT_FOUND` / `ACADEMIC_NOT_USABLE`. */
 export async function assertSectionUsable(
   ctx: ServiceContext,
@@ -87,6 +99,7 @@ export async function assertSubjectOfferingUsable(
 
 export const academicService = {
   getContext: getAcademicContext,
+  assertGradeOfferingUsable,
   assertSectionUsable,
   assertSubjectOfferingUsable,
   registerAcademicDependency,
