@@ -17,6 +17,9 @@ process.env.JWT_REFRESH_SECRET = 'e2e-refresh-secret-e2e-refresh-secret-01234567
 process.env.WEB_ORIGIN = 'http://localhost:5190';
 process.env.LOG_LEVEL = 'silent';
 process.env.UPLOAD_DIR = path.join(os.tmpdir(), `schoolverse-e2e-uploads-${process.pid}`);
+process.env.PRIVATE_UPLOAD_DIR = path.join(os.tmpdir(), `schoolverse-e2e-private-${process.pid}`);
+process.env.APP_BASE_URL = 'http://localhost:5190';
+process.env.DEV_OUTBOX = 'true';
 process.env.MONGOMS_DOWNLOAD_DIR ??= path.resolve(process.cwd(), 'node_modules/.cache/mongodb-memory-server');
 
 const replSet = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });

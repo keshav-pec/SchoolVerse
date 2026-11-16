@@ -20,6 +20,9 @@ export const ERROR_CODES = {
   INVALID_CREDENTIALS: { status: 401, message: 'That email and password combination is not right.' },
   ACCOUNT_DISABLED: { status: 403, message: 'This account has been disabled. Contact your school admin.' },
   EMAIL_TAKEN: { status: 409, message: 'An account with this email already exists.' },
+  ACCOUNT_SUSPENDED: { status: 403, message: 'This account is suspended. Contact your school admin.' },
+  TOKEN_INVALID: { status: 400, message: 'This link is not valid any more. Ask your school admin for a new one.' },
+  STEP_UP_REQUIRED: { status: 403, message: 'Confirm your password to continue.' },
 
   // Authorization
   FORBIDDEN: { status: 403, message: "You don't have permission to do that." },
@@ -115,6 +118,18 @@ export const ERROR_CODES = {
   },
   ASSIGNMENT_NOT_PLANNED: { status: 409, message: 'Only assignments that have not started yet can be cancelled. End this one instead.' },
   ASSIGNMENT_CLOSED: { status: 409, message: 'This assignment has already ended or been cancelled.' },
+
+  // Identity, restricted data and documents (Module 3, Part 2)
+  ACCOUNT_EXISTS: { status: 409, message: 'This person already has a login.' },
+  LAST_ADMIN: { status: 409, message: 'This is the last active School Admin. Make someone else an admin first.' },
+  CANNOT_ACT_ON_SELF: { status: 409, message: 'You cannot do that to your own account.' },
+  NO_EMPLOYEE_PROFILE: { status: 404, message: 'Your login is not linked to an employee profile.' },
+  CHANGE_REQUEST_PENDING: { status: 409, message: 'You already have a pending request for this detail.' },
+  CHANGE_REQUEST_CLOSED: { status: 409, message: 'This request has already been decided or cancelled.' },
+  CANNOT_DECIDE_OWN_REQUEST: { status: 409, message: 'Another admin has to decide a request about your own details.' },
+  FILE_REJECTED: { status: 422, message: 'This file was rejected. Upload a clean PDF, PNG or JPEG.' },
+  UNSUPPORTED_DOCUMENT_TYPE: { status: 415, message: 'Upload a PDF, PNG or JPEG file.' },
+  DOCUMENT_TOO_LARGE: { status: 413, message: 'This file is too large. The maximum size is 5 MB.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

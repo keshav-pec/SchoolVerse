@@ -6,6 +6,8 @@ export interface AuthContext {
   role: Role;
   permissions: Permission[];
   sessionId: string | null;
+  /** Last step-up on this session, if any. */
+  stepUpAt: Date | null;
 }
 
 declare global {

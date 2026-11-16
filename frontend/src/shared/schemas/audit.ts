@@ -26,6 +26,11 @@ export const AUDIT_ENTITY_TYPES = [
   'location_assignment',
   'academic_assignment',
   'responsibility',
+  // Identity and restricted data (Module 3, Part 2)
+  'restricted_data',
+  'profile_change_request',
+  'employee_document',
+  'export',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

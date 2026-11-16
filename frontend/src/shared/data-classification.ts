@@ -45,11 +45,75 @@ export const DATA_CLASSIFICATION = {
     exitReasonCategory: 'INTERNAL',
     exitNote: 'PERSONAL',
   },
-  /** The collection arrives with Part 2; the classes are fixed now so no DTO can be built around them by accident. */
   restricted_person_data: {
     personId: 'INTERNAL',
     governmentIds: 'RESTRICTED',
     bank: 'RESTRICTED',
+  },
+  /** Logins. Only the password hash is a secret; email is personal contact. */
+  user: {
+    email: 'PERSONAL',
+    fullName: 'INTERNAL',
+    role: 'INTERNAL',
+    personId: 'INTERNAL',
+    status: 'INTERNAL',
+    passwordHash: 'SECRET',
+    lastLoginAt: 'INTERNAL',
+    passwordChangedAt: 'INTERNAL',
+  },
+  /** Activation and reset links: only an HMAC of the token is stored. */
+  account_token: {
+    userId: 'INTERNAL',
+    purpose: 'INTERNAL',
+    tokenHash: 'SECRET',
+    expiresAt: 'INTERNAL',
+    usedAt: 'INTERNAL',
+  },
+  /** Metadata only. The file itself lives in private storage under a random key. */
+  employee_document: {
+    personId: 'INTERNAL',
+    employeeId: 'INTERNAL',
+    documentType: 'INTERNAL',
+    objectKey: 'SECRET',
+    displayName: 'PERSONAL',
+    mime: 'INTERNAL',
+    sizeBytes: 'INTERNAL',
+    sha256: 'INTERNAL',
+    status: 'INTERNAL',
+    deletedAt: 'INTERNAL',
+  },
+  /** The proposed value is encrypted and masked for approvers. */
+  profile_change_request: {
+    employeeId: 'INTERNAL',
+    personId: 'INTERNAL',
+    fieldCategory: 'INTERNAL',
+    proposedValueEnc: 'RESTRICTED',
+    reason: 'PERSONAL',
+    status: 'INTERNAL',
+    decidedBy: 'INTERNAL',
+    decidedAt: 'INTERNAL',
+    decisionNote: 'PERSONAL',
+  },
+  security_event: {
+    type: 'INTERNAL',
+    actorUserId: 'INTERNAL',
+    targetId: 'INTERNAL',
+    ip: 'PERSONAL',
+    outcome: 'INTERNAL',
+    metadata: 'INTERNAL',
+  },
+  export: {
+    requestedBy: 'INTERNAL',
+    purpose: 'INTERNAL',
+    fileName: 'INTERNAL',
+    objectKey: 'SECRET',
+    rowCount: 'INTERNAL',
+    expiresAt: 'INTERNAL',
+  },
+  dev_outbox: {
+    to: 'PERSONAL',
+    template: 'INTERNAL',
+    link: 'SECRET',
   },
 } as const satisfies Record<string, Record<string, DataClass>>;
 
@@ -68,6 +132,16 @@ export const DTO_ALLOWED_CLASSES = {
   profile: ['INTERNAL', 'PERSONAL'],
 } as const satisfies Record<string, readonly DataClass[]>;
 export type ClassifiedDto = keyof typeof DTO_ALLOWED_CLASSES;
+
+/**
+ * DTOs that carry restricted fields, but only masked: the restricted profile, the employee's own profile and change-request
+ * summaries. A real value comes out of one place only: `RevealedValueDTO`, after permission and step-up, and it is audited.
+ */
+export const MASKED_DTO_ALLOWED_CLASSES = {
+  restrictedProfile: ['INTERNAL', 'PERSONAL', 'RESTRICTED'],
+  selfProfile: ['INTERNAL', 'PERSONAL', 'RESTRICTED'],
+  changeRequest: ['INTERNAL', 'PERSONAL', 'RESTRICTED'],
+} as const satisfies Record<string, readonly DataClass[]>;
 
 /** Audit rows and security events keep field names, but only INTERNAL values: everything else is written as this marker. */
 export const REDACTED = '[redacted]';

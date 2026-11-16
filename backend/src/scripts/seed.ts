@@ -19,7 +19,12 @@ import { Employee } from '../modules/staff/employee.model';
 import { Department, Designation } from '../modules/staff/master.model';
 import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
+import { AccountToken } from '../platform/identity/account-token.model';
+import { DevOutbox } from '../platform/identity/notifier';
+import { privateStorage } from '../platform/identity/private-storage';
+import { RestrictedPersonData } from '../platform/identity/restricted-data.model';
 import { SecurityEvent } from '../platform/identity/security-event.model';
+import { EmployeeDocument, ProfileChangeRequest, StaffExport } from '../modules/staff/identity.models';
 import { LocationReference } from '../modules/dependencies/simulated-references';
 import { GradeOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '../modules/academic/rules.model';
@@ -139,6 +144,9 @@ const DEMO_TENANTS: DemoTenant[] = [
 ];
 
 async function wipeTenant(tenantId: string) {
+  // Private files first, while the rows that name them still exist.
+  const [documents, exports] = await Promise.all([EmployeeDocument.find({ tenantId }).select('objectKey').lean(), StaffExport.find({ tenantId }).select('objectKey').lean()]);
+  await Promise.all([...documents, ...exports].map((row) => privateStorage.remove(row.objectKey)));
   // Audit events are append-only through Mongoose, so remove demo rows via the raw collection.
   await AuditEvent.collection.deleteMany({ tenantId });
   await Promise.all([
@@ -171,6 +179,12 @@ async function wipeTenant(tenantId: string) {
     AcademicAssignment.deleteMany({ tenantId }),
     Responsibility.deleteMany({ tenantId }),
     SecurityEvent.deleteMany({ tenantId }),
+    RestrictedPersonData.deleteMany({ tenantId }),
+    EmployeeDocument.deleteMany({ tenantId }),
+    ProfileChangeRequest.deleteMany({ tenantId }),
+    StaffExport.deleteMany({ tenantId }),
+    AccountToken.deleteMany({ tenantId }),
+    DevOutbox.deleteMany({ tenantId }),
   ]);
   await Tenant.deleteOne({ _id: tenantId });
 }

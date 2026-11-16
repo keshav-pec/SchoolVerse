@@ -1,4 +1,5 @@
 import type { ClientSession } from 'mongoose';
+import type { AuditActor } from '../audit/audit.service';
 
 /**
  * Small extension points so later parts add behaviour without editing the staff services.
@@ -10,6 +11,9 @@ export interface EmployeeExitedEvent {
   tenantId: string;
   employeeId: string;
   personId: string;
+  /** Who made the change (`SYSTEM` for the hourly job), for the audit rows hooks write. */
+  actor: AuditActor;
+  requestId: string | null;
 }
 
 export type EmployeeExitedHook = (event: EmployeeExitedEvent, db: ClientSession) => Promise<void>;

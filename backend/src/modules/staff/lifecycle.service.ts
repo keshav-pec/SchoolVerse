@@ -4,7 +4,7 @@ import { AppError } from '../../core/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { AcademicAssignment, LocationAssignment, Responsibility } from './assignment.models';
-import { auditScopeOf, recordStaffAudit } from './audit';
+import { auditScopeOf, recordStaffAudit, type StaffAuditScope } from './audit';
 import { Employee, type EmployeeDoc } from './employee.model';
 import { profileOf } from './employee.service';
 import { assertWritable, loadEmployee } from './guards';
@@ -90,9 +90,9 @@ export async function changeEmployeeStatus(ctx: ServiceContext, employeeId: stri
 }
 
 /** Writes the EXITED change itself. Shared by an exit dated today or earlier and by the hourly job. */
-export async function completeExit(employee: EmployeeDoc, db: ClientSession, actorId: string | null, extra: Record<string, unknown> = {}) {
-  await setStatus(employee, 'EXITED', extra, db, actorId);
-  await emitEmployeeExited({ tenantId: employee.tenantId, employeeId: employee._id, personId: employee.personId }, db);
+export async function completeExit(employee: EmployeeDoc, db: ClientSession, scope: StaffAuditScope, extra: Record<string, unknown> = {}) {
+  await setStatus(employee, 'EXITED', extra, db, scope.actor === 'SYSTEM' ? null : scope.actor.userId);
+  await emitEmployeeExited({ tenantId: employee.tenantId, employeeId: employee._id, personId: employee.personId, actor: scope.actor, requestId: scope.requestId }, db);
 }
 
 /**
@@ -114,7 +114,7 @@ export async function exitEmployee(ctx: ServiceContext, employeeId: string, data
     const exitFields = { exitDate: data.exitDate, exitReasonCategory: data.exitReasonCategory, exitNote: data.note ?? null };
     const closed = await closeAssignmentsForExit(ctx.tenantId, employeeId, data.exitDate, ctx.userId, db);
 
-    if (target === 'EXITED') await completeExit(employee, db, ctx.userId, exitFields);
+    if (target === 'EXITED') await completeExit(employee, db, scope, exitFields);
     else await setStatus(employee, 'NOTICE_PERIOD', exitFields, db, ctx.userId);
 
     await recordStaffAudit(scope, db, {

@@ -27,6 +27,18 @@ import {
   type EmployeeStatus,
 } from '@shared';
 import { AppError } from '../src/core/errors';
+import { MASKED_DTO_ALLOWED_CLASSES } from '@shared';
+import { createFieldCrypto, mask, signFileToken, verifyFileToken } from '../src/platform/identity/crypto';
+import { csvCell, toCsv } from '../src/platform/identity/csv';
+import { safeFileName, scanFile, sniffDocumentType, EICAR_SIGNATURE } from '../src/platform/identity/file-checks';
+import { AccountToken } from '../src/platform/identity/account-token.model';
+import { toRestrictedDTO } from '../src/platform/identity/restricted-data';
+import { RestrictedPersonData, type RestrictedPersonDataDoc } from '../src/platform/identity/restricted-data.model';
+import { SecurityEvent } from '../src/platform/identity/security-event.model';
+import { DevOutbox } from '../src/platform/identity/notifier';
+import { EmployeeDocument, ProfileChangeRequest, StaffExport } from '../src/modules/staff/identity.models';
+import { toUserDTO } from '../src/platform/users/user.mapper';
+import { User, type UserDoc } from '../src/platform/users/user.model';
 import { diffFields } from '../src/modules/audit/diff';
 import { assertTransition, availableActions, canTransition } from '../src/modules/locations/lifecycle';
 import type { EmployeeDoc } from '../src/modules/staff/employee.model';
@@ -360,5 +372,157 @@ describe('data classification (SEC-01, PRD §15 and §37)', () => {
     }
     for (const field of ['personalEmail', 'personalPhone', 'primaryEmail', 'primaryPhone', 'address', 'emergencyContact', 'exitNote']) expect(personal, field).toContain(canary(field));
     expect(personal).not.toContain(canary('profilePhotoKey'));
+  });
+});
+
+
+describe('data classification covers the identity collections too (SEC-01)', () => {
+  const systemFields: readonly string[] = SYSTEM_FIELDS;
+  const businessPaths = (schema: { paths: Record<string, unknown> }) => [...new Set(Object.keys(schema.paths).map((p) => p.split('.')[0]!))].filter((p) => !systemFields.includes(p));
+  const classified = (entity: keyof typeof DATA_CLASSIFICATION) => Object.keys(DATA_CLASSIFICATION[entity]).sort();
+
+  it('every field of every identity collection has a class, and nothing in the map is stale', () => {
+    const cases: [keyof typeof DATA_CLASSIFICATION, { schema: { paths: Record<string, unknown> } }][] = [
+      ['restricted_person_data', RestrictedPersonData],
+      ['user', User],
+      ['account_token', AccountToken],
+      ['employee_document', EmployeeDocument],
+      ['profile_change_request', ProfileChangeRequest],
+      ['security_event', SecurityEvent],
+      ['export', StaffExport],
+      ['dev_outbox', DevOutbox],
+    ];
+    for (const [entity, model] of cases) {
+      // Timestamps the schema adds itself are system fields; `requestedBy` is the only creator column of an export.
+      expect(businessPaths(model.schema).sort(), entity).toEqual(classified(entity));
+    }
+  });
+
+  it('secrets are classed SECRET, and no DTO kind may carry them', () => {
+    expect(classOf('user', 'passwordHash')).toBe('SECRET');
+    expect(classOf('account_token', 'tokenHash')).toBe('SECRET');
+    expect(classOf('employee_document', 'objectKey')).toBe('SECRET');
+    expect(classOf('export', 'objectKey')).toBe('SECRET');
+    expect(classOf('dev_outbox', 'link')).toBe('SECRET');
+    expect(classOf('profile_change_request', 'proposedValueEnc')).toBe('RESTRICTED');
+    for (const allowed of Object.values(MASKED_DTO_ALLOWED_CLASSES) as readonly (readonly DataClass[])[]) expect(allowed).not.toContain('SECRET');
+  });
+
+  it('the restricted DTO and the user DTO leak no ciphertext, hash or secret', () => {
+    const doc = {
+      _id: 'r1', tenantId: 't', personId: 'p1', createdAt: new Date(), updatedAt: new Date(),
+      governmentIds: [{ type: 'PAN', valueEnc: 'CANARY_valueEnc', last4: '1234' }],
+      bank: { accountHolderName: 'A B', accountNumberEnc: 'CANARY_accountNumberEnc', last4: '5678', ifsc: 'TEST0000001', bankName: 'Demo' },
+    } as unknown as RestrictedPersonDataDoc;
+    const dto = JSON.stringify(toRestrictedDTO({ employeeId: 'e1', personId: 'p1' }, doc, '1988-03-14'));
+    expect(dto).not.toMatch(/CANARY|1988-03|"last4"/);
+    expect(dto).toContain('XXXX XXXX 1234');
+
+    const user = { _id: 'u1', tenantId: 't', email: 'a@x.demo', fullName: 'A', role: 'FACULTY', status: 'ACTIVE', personId: 'p1', passwordHash: 'CANARY_hash', createdAt: new Date() } as unknown as UserDoc;
+    expect(JSON.stringify(toUserDTO(user))).not.toContain('CANARY');
+  });
+});
+
+describe('field encryption (SEC-02, PRD §14)', () => {
+  const k1 = Buffer.alloc(32, 1).toString('base64');
+  const k2 = Buffer.alloc(32, 2).toString('base64');
+
+  it('round-trips a value, never repeats a ciphertext, and writes the key id in front', () => {
+    const c = createFieldCrypto(`v1:${k1}`);
+    const a = c.encryptField('TESTP1234X', 'p1:id:PAN');
+    const b = c.encryptField('TESTP1234X', 'p1:id:PAN');
+    expect(a).toMatch(/^v1:[\w-]+:[\w-]+:[\w-]+$/);
+    expect(a).not.toBe(b);
+    expect(a).not.toContain('TESTP1234X');
+    expect(c.decryptField(a, 'p1:id:PAN')).toBe('TESTP1234X');
+    expect(c.decryptField(c.encryptField(''))).toBe('');
+  });
+
+  it('key rotation: a new key encrypts, the old one still decrypts, and removing it makes old values unreadable', () => {
+    const old = createFieldCrypto(`v1:${k1}`).encryptField('secret', 'ctx');
+    const rotated = createFieldCrypto(`v2:${k2},v1:${k1}`);
+    expect(rotated.decryptField(old, 'ctx')).toBe('secret');
+    expect(rotated.encryptField('secret', 'ctx').startsWith('v2:')).toBe(true);
+    expect(() => createFieldCrypto(`v2:${k2}`).decryptField(old, 'ctx')).toThrow();
+  });
+
+  it('a tampered value, a wrong context and a moved ciphertext are all refused', () => {
+    const c = createFieldCrypto(`v1:${k1}`);
+    const stored = c.encryptField('secret', 'p1:bank');
+    const [kid, iv, tag, ct] = stored.split(':');
+    expect(() => c.decryptField(stored, 'p2:bank')).toThrow(); // copied onto another person
+    expect(() => c.decryptField(`${kid}:${iv}:${tag}:${ct!.slice(0, -2)}AA`, 'p1:bank')).toThrow();
+    expect(() => c.decryptField(`${kid}:${iv}:${Buffer.alloc(16).toString('base64url')}:${ct}`, 'p1:bank')).toThrow();
+    expect(() => c.decryptField('garbage', 'p1:bank')).toThrow();
+  });
+
+  it('rejects keys of the wrong size, repeated ids and an empty list', () => {
+    expect(() => createFieldCrypto('v1:abc')).toThrow(/32 bytes/);
+    expect(() => createFieldCrypto(`v1:${k1},v1:${k2}`)).toThrow(/repeats/);
+    expect(() => createFieldCrypto('')).toThrow();
+    expect(() => createFieldCrypto(k1)).toThrow();
+  });
+
+  it('masks show the year, or the last four characters, and nothing else', () => {
+    expect(mask('1988-03-14', 'DATE_OF_BIRTH')).toBe('••/••/1988');
+    expect(mask('123456781234', 'GOVERNMENT_ID')).toBe('XXXX XXXX 1234');
+    expect(mask('1234', 'GOVERNMENT_ID')).toBe('XXXX XXXX 1234');
+    expect(mask('000000005678', 'BANK_ACCOUNT')).toBe('•••• 5678');
+  });
+});
+
+describe('signed file links (SEC-05, PRD §18)', () => {
+  const payload = { k: 'documents/abc', m: 'application/pdf', n: 'a.pdf', t: 'tenant-1' };
+
+  it('verifies a fresh token and returns what was signed', () => {
+    const { token, expiresAt } = signFileToken(payload, 60, 1_000_000);
+    expect(verifyFileToken(token, 1_000_000 + 59_000)).toMatchObject(payload);
+    expect(expiresAt.getTime()).toBe(1_060_000);
+  });
+
+  it('refuses an expired, tampered, truncated or foreign-signed token, all the same way', () => {
+    const { token } = signFileToken(payload, 60, 1_000_000);
+    const [body, signature] = token.split('.');
+    expect(verifyFileToken(token, 1_000_000 + 61_000)).toBeNull();
+    const forged = Buffer.from(JSON.stringify({ ...payload, k: 'documents/other', exp: 9_999_999_999 })).toString('base64url');
+    expect(verifyFileToken(`${forged}.${signature}`)).toBeNull();
+    expect(verifyFileToken(`${body}.${signature!.slice(0, -1)}A`, 1_000_000)).toBeNull();
+    expect(verifyFileToken(`${body}.`)).toBeNull();
+    expect(verifyFileToken(body!)).toBeNull();
+    expect(verifyFileToken(`${token}.extra`)).toBeNull();
+    expect(verifyFileToken('')).toBeNull();
+  });
+});
+
+describe('uploads and CSV (PRD §18, §19)', () => {
+  it('detects PDF, PNG and JPEG from their bytes and nothing else', () => {
+    expect(sniffDocumentType(Buffer.from('%PDF-1.7\n'))).toBe('application/pdf');
+    expect(sniffDocumentType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBe('image/png');
+    expect(sniffDocumentType(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
+    for (const bytes of ['<svg/>', '<html>', 'GIF89a', 'PK\x03\x04', '', 'MZ']) expect(sniffDocumentType(Buffer.from(bytes))).toBeNull();
+  });
+
+  it('the default scanner flags the EICAR test string and passes ordinary files', async () => {
+    expect(await scanFile(Buffer.from(`%PDF-1.4 ${EICAR_SIGNATURE}`))).toEqual({ clean: false, reason: 'EICAR' });
+    expect(await scanFile(Buffer.from('%PDF-1.4 hello'))).toEqual({ clean: true });
+  });
+
+  it('file names are made safe for headers', () => {
+    expect(safeFileName('../../etc/passwd')).toBe('_.._etc_passwd');
+    expect(safeFileName('a"b\r\nc.pdf')).not.toMatch(/["\r\n]/);
+    expect(safeFileName('', 'fallback')).toBe('fallback');
+    expect(safeFileName('résumé.pdf')).toBe('resume.pdf');
+  });
+
+  it('CSV cells that would run as formulas get a leading apostrophe, and standard quoting applies', () => {
+    for (const bad of ['=SUM(A1)', '+1', '-1', '@cmd', '\tx', '\rx']) expect(csvCell(bad), bad).toMatch(/^"?'/);
+    expect(csvCell('=1+1')).toBe("'=1+1");
+    expect(csvCell('plain')).toBe('plain');
+    expect(csvCell('a,b')).toBe('"a,b"');
+    expect(csvCell('say "hi"')).toBe('"say ""hi"""');
+    expect(csvCell('two\nlines')).toBe('"two\nlines"');
+    expect(csvCell(null)).toBe('');
+    expect(csvCell(42)).toBe('42');
+    expect(toCsv(['A', 'B'], [['=x', 'y']])).toBe("A,B\r\n'=x,y\r\n");
   });
 });

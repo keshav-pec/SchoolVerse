@@ -27,11 +27,18 @@ export const PERMISSIONS = [
   'employee:view', // full profile, assignments, history
   'employee:view_personal', // personal contact on the profile
   'employee:manage', // create, edit, assign, lifecycle, departments / designations
+  'employee:view_restricted', // masked date of birth, government IDs and bank details
+  'employee:reveal_restricted', // show one restricted value in full (step-up, audited)
+  'employee:manage_restricted', // enter or replace government IDs and bank details (step-up)
+  'employee:documents', // upload, list, download and delete any employee's documents
+  'employee:approve_changes', // approve or reject profile change requests
+  'employee:export', // download staff exports
   // Setup & governance
   'setup:manage',
   'audit:view',
   // Platform
   'user:view',
+  'user:manage', // create logins, suspend, disable, change role
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

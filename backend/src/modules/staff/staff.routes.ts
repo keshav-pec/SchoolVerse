@@ -25,6 +25,7 @@ import { contextOf } from '../../platform/rbac/tenant-context';
 import * as academic from './academic-assignment.service';
 import * as employees from './employee.service';
 import { getEmployeeHistory } from './history.service';
+import { identityRouter } from './identity.routes';
 import * as lifecycle from './lifecycle.service';
 import * as locations from './location-assignment.service';
 import { departmentService, designationService } from './master.service';
@@ -36,7 +37,12 @@ import * as responsibilities from './responsibility.service';
  */
 export const staffRouter = Router();
 // Mounted at the API root, so authentication is applied per path (it must not catch unrelated routes such as /dev).
-staffRouter.use(['/departments', '/designations', '/employees', '/location-assignments', '/academic-assignments', '/responsibilities'], authenticate);
+staffRouter.use(
+  ['/departments', '/designations', '/employees', '/location-assignments', '/academic-assignments', '/responsibilities', '/me', '/profile-change-requests', '/employee-documents'],
+  authenticate,
+);
+// Restricted data, logins, documents, exports, self-service and change approval (Part 2). The export route must be matched before `/employees/:id`.
+staffRouter.use(identityRouter);
 
 const idParams = z.object({ id: uuidSchema });
 

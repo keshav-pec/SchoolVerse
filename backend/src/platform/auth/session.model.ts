@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 import { baseSchemaOptions, uuidPrimaryKey, type BaseDoc } from '../../db/plugins/base';
 import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
 
-export const SESSION_REVOKE_REASONS = ['ROTATED', 'LOGOUT', 'REUSE_DETECTED'] as const;
+export const SESSION_REVOKE_REASONS = ['ROTATED', 'LOGOUT', 'REUSE_DETECTED', 'ACCOUNT_SUSPENDED', 'ACCOUNT_DISABLED', 'PASSWORD_RESET', 'ROLE_CHANGED'] as const;
 export type SessionRevokeReason = (typeof SESSION_REVOKE_REASONS)[number];
 
 export interface SessionDoc extends BaseDoc {
@@ -17,6 +17,8 @@ export interface SessionDoc extends BaseDoc {
   userAgent: string | null;
   ip: string | null;
   lastUsedAt: Date;
+  /** When the user last re-entered their password for a restricted action (step-up). */
+  stepUpAt: Date | null;
 }
 
 /** One refresh-token session. Tokens are stored only as HMAC hashes. */
@@ -34,6 +36,7 @@ const sessionSchema = new Schema<SessionDoc>(
     userAgent: { type: String, default: null, maxlength: 400 },
     ip: { type: String, default: null },
     lastUsedAt: { type: Date, default: () => new Date() },
+    stepUpAt: { type: Date, default: null },
   },
   baseSchemaOptions('auth_sessions'),
 );

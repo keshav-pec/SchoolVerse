@@ -10,6 +10,7 @@ export function toUserDTO(u: UserDoc): UserDTO {
     fullName: u.fullName,
     role: u.role,
     status: u.status,
+    personId: u.personId ?? null,
     lastLoginAt: u.lastLoginAt ? new Date(u.lastLoginAt).toISOString() : null,
     createdAt: new Date(u.createdAt).toISOString(),
   };

@@ -6,6 +6,7 @@ import { logger } from '../../core/logger';
 import { SKIP_TENANT_SCOPE } from '../../db/plugins/tenant-scope';
 import { withTransaction } from '../../db/transaction';
 import { recordAudit } from '../../modules/audit/audit.service';
+import { recordSecurityEvent } from '../identity/security-events';
 import { Tenant, type TenantDoc } from '../tenants/tenant.model';
 import { toTenantDTO, toUserDTO } from '../users/user.mapper';
 import { User, type UserDoc } from '../users/user.model';
@@ -38,7 +39,7 @@ function slugify(name: string) {
   return `${base || 'school'}-${randomBytes(3).toString('hex')}`;
 }
 
-async function issueSession(user: Pick<UserDoc, '_id' | 'tenantId' | 'role'>, meta: ClientMeta, familyId: string = randomUUID()) {
+async function issueSession(user: Pick<UserDoc, '_id' | 'tenantId' | 'role'>, meta: ClientMeta, familyId: string = randomUUID(), stepUpAt: Date | null = null) {
   const refreshToken = generateOpaqueToken();
   const session = await Session.create({
     tenantId: user.tenantId,
@@ -48,6 +49,7 @@ async function issueSession(user: Pick<UserDoc, '_id' | 'tenantId' | 'role'>, me
     expiresAt: new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000),
     userAgent: meta.userAgent?.slice(0, 400) ?? null,
     ip: meta.ip ?? null,
+    stepUpAt,
   });
   const accessToken = signAccessToken({ sub: user._id, tid: user.tenantId, role: user.role, sid: session._id });
   return { session, tokens: { accessToken, refreshToken } satisfies IssuedTokens };
@@ -124,8 +126,13 @@ export async function login(input: LoginInput, meta: ClientMeta) {
   // System lookup: the tenant is unknown until we find the user by email.
   const user = await User.findOne({ email: input.email }).select('+passwordHash').setOptions(SKIP_TENANT_SCOPE).lean<UserDoc>();
 
+  // A pending account has no password yet; it fails like a wrong password so nothing is revealed.
   const valid = await verifyPassword(input.password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !valid) throw new AppError('INVALID_CREDENTIALS');
+  if (!user || !user.passwordHash || !valid) {
+    if (user) await recordSecurityEvent({ tenantId: user.tenantId, type: 'LOGIN_FAILED', actorUserId: user._id, ip: meta.ip ?? null, outcome: 'FAILED' });
+    throw new AppError('INVALID_CREDENTIALS');
+  }
+  if (user.status === 'SUSPENDED') throw new AppError('ACCOUNT_SUSPENDED');
   if (user.status !== 'ACTIVE') throw new AppError('ACCOUNT_DISABLED');
 
   const tenant = await loadTenantOrThrow(user.tenantId);
@@ -156,6 +163,7 @@ export async function refresh(rawToken: string | undefined, meta: ClientMeta) {
         { $set: { revokedAt: new Date(), revokedReason: 'REUSE_DETECTED' } },
       );
       logger.warn({ tenantId: current.tenantId, userId: current.userId }, 'Refresh token reuse detected');
+      await recordSecurityEvent({ tenantId: current.tenantId, type: 'REFRESH_TOKEN_REUSE', actorUserId: current.userId, ip: meta.ip ?? null, outcome: 'DENIED' });
     }
     throw new AppError('SESSION_EXPIRED');
   }
@@ -165,7 +173,7 @@ export async function refresh(rawToken: string | undefined, meta: ClientMeta) {
   if (!user || user.status !== 'ACTIVE') throw new AppError('UNAUTHENTICATED');
   const tenant = await loadTenantOrThrow(user.tenantId);
 
-  const { session: next, tokens } = await issueSession(user, meta, current.familyId);
+  const { session: next, tokens } = await issueSession(user, meta, current.familyId, current.stepUpAt ?? null);
   const rotated = await Session.updateOne(
     { _id: current._id, tenantId: current.tenantId, revokedAt: null },
     { $set: { revokedAt: new Date(), revokedReason: 'ROTATED', replacedBySessionId: next._id, lastUsedAt: new Date() } },

@@ -28,10 +28,11 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
 
   const [user, session] = await Promise.all([
     User.findOne({ _id: claims.sub, tenantId: claims.tid }).lean<UserDoc>(),
-    Session.findOne({ _id: claims.sid, tenantId: claims.tid }).select('revokedAt').lean<{ revokedAt: Date | null }>(),
+    Session.findOne({ _id: claims.sid, tenantId: claims.tid }).select('revokedAt stepUpAt').lean<{ revokedAt: Date | null; stepUpAt: Date | null }>(),
   ]);
 
   if (!user || !session || session.revokedAt) throw new AppError('SESSION_EXPIRED');
+  if (user.status === 'SUSPENDED') throw new AppError('ACCOUNT_SUSPENDED');
   if (user.status !== 'ACTIVE') throw new AppError('ACCOUNT_DISABLED');
 
   req.auth = {
@@ -40,6 +41,7 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
     role: user.role,
     permissions: permissionsFor(user.role),
     sessionId: claims.sid,
+    stepUpAt: session.stepUpAt ?? null,
   };
   next();
 };

@@ -105,15 +105,13 @@ const emergencyContactSchema = z
   .strict();
 
 /** A birth date must be a real, past date. It is restricted data: never returned by list or profile APIs. */
-const dateOfBirthSchema = z.preprocess(
-  emptyToNull,
-  requiredDateSchema
-    .refine((v) => v >= '1900-01-01', { message: 'Enter a valid date of birth.' })
-    .refine((v) => v <= new Date().toISOString().slice(0, 10), { message: 'The date of birth cannot be in the future.' })
-    .nullable(),
-).optional();
+export const dateOfBirthValueSchema = requiredDateSchema
+  .refine((v) => v >= '1900-01-01', { message: 'Enter a valid date of birth.' })
+  .refine((v) => v <= new Date().toISOString().slice(0, 10), { message: 'The date of birth cannot be in the future.' });
 
-const personShape = {
+const dateOfBirthSchema = z.preprocess(emptyToNull, dateOfBirthValueSchema.nullable()).optional();
+
+export const personShape = {
   legalFirstName: personNameSchema,
   legalMiddleName: optionalText(100),
   legalLastName: personNameSchema,

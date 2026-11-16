@@ -4,7 +4,7 @@ export const SCHOOL_ID = '11111111-1111-4111-8111-111111111111';
 
 export function sessionFor(role: Role): SessionDTO {
   return {
-    user: { userId: 'u1', tenantId: 't1', email: `${role.toLowerCase()}@greenfield.demo`, fullName: 'Test User', role, status: 'ACTIVE', lastLoginAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
+    user: { userId: 'u1', tenantId: 't1', email: `${role.toLowerCase()}@greenfield.demo`, fullName: 'Test User', role, status: 'ACTIVE', personId: null, lastLoginAt: null, createdAt: '2026-01-01T00:00:00.000Z' },
     tenant: { tenantId: 't1', name: 'Greenfield', slug: 'greenfield', status: 'ACTIVE' },
     permissions: permissionsFor(role),
   };

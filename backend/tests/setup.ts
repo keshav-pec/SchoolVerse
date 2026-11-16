@@ -7,3 +7,4 @@ process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-test-refresh-secret-0123
 process.env.WEB_ORIGIN ??= 'http://localhost:5180';
 process.env.LOG_LEVEL = 'silent';
 process.env.UPLOAD_DIR = path.join(os.tmpdir(), `schoolverse-test-uploads-${process.pid}`);
+process.env.PRIVATE_UPLOAD_DIR = path.join(os.tmpdir(), `schoolverse-test-private-${process.pid}`);

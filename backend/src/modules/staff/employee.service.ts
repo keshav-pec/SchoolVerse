@@ -46,7 +46,7 @@ function normalizeAddress(address: Record<string, unknown> | null | undefined) {
   return { line1: text('line1'), line2: text('line2'), city: text('city'), state: text('state'), postalCode: text('postalCode'), country: text('country') };
 }
 
-function normalizePersonPatch(patch: Record<string, unknown>) {
+export function normalizePersonPatch(patch: Record<string, unknown>) {
   const out = { ...patch };
   if ('address' in out) out.address = normalizeAddress(out.address as Record<string, unknown> | null);
   return out;

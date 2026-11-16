@@ -20,7 +20,8 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   PARENT: 'Guardian access — no access to school configuration',
 };
 
-export const USER_STATUSES = ['ACTIVE', 'DISABLED'] as const;
+/** PENDING_ACTIVATION has no password yet. SUSPENDED is reversible. DISABLED is how access ends (an employee exit does it). */
+export const USER_STATUSES = ['PENDING_ACTIVATION', 'ACTIVE', 'SUSPENDED', 'DISABLED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
 export const TENANT_STATUSES = ['ACTIVE', 'SUSPENDED'] as const;
@@ -317,6 +318,28 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'responsibility.created': 'Responsibility assigned',
   'responsibility.ended': 'Responsibility ended',
   'responsibility.cancelled': 'Responsibility cancelled',
+  // Identity and restricted data (Module 3, Part 2)
+  'user.account_created': 'Login created',
+  'user.account_restored': 'Login restored',
+  'user.activation_resent': 'Activation link re-sent',
+  'user.activated': 'Account activated',
+  'user.password_reset': 'Password reset',
+  'user.suspended': 'Account suspended',
+  'user.reactivated': 'Account reactivated',
+  'user.disabled': 'Account disabled',
+  'user.role_changed': 'Role changed',
+  'restricted.updated': 'Restricted details updated',
+  'restricted.revealed': 'Restricted value revealed',
+  'profile.self_updated': 'Profile updated by the employee',
+  'change_request.created': 'Change requested',
+  'change_request.approved': 'Change request approved',
+  'change_request.rejected': 'Change request rejected',
+  'change_request.cancelled': 'Change request cancelled',
+  'document.uploaded': 'Document uploaded',
+  'document.downloaded': 'Document downloaded',
+  'document.download_denied': 'Document download refused',
+  'document.deleted': 'Document deleted',
+  'export.created': 'Staff export created',
 };
 
 
@@ -406,9 +429,88 @@ export const SUGGESTED_DEPARTMENTS = ['Academics', 'Administration', 'Accounts',
 export const SUGGESTED_DESIGNATIONS = ['PGT', 'TGT', 'PRT', 'Principal', 'Vice Principal', 'Accountant', 'Librarian', 'Lab Assistant', 'Driver', 'Clerk'] as const;
 
 /** Why a record was refused as a colleague. Written to `security_events`; never shown to the caller (they get 404). */
-export const SECURITY_EVENT_TYPES = ['CROSS_LOCATION_DENIED'] as const;
+export const SECURITY_EVENT_TYPES = [
+  'CROSS_LOCATION_DENIED',
+  // Identity (Module 3, Part 2)
+  'LOGIN_FAILED',
+  'REFRESH_TOKEN_REUSE',
+  'ROLE_CHANGED',
+  'STEP_UP_FAILED',
+  'DOCUMENT_ACCESS_DENIED',
+  'FILE_REJECTED',
+] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
 /** What an employee record is being used for (same idea as `AcademicPurpose`). */
 export const EMPLOYEE_PURPOSES = ['NEW_ASSIGNMENT', 'HISTORICAL_READ'] as const;
 export type EmployeePurpose = (typeof EMPLOYEE_PURPOSES)[number];
+
+// ───────────────────────────────────────────────────────────── Identity, restricted data and documents (Module 3, Part 2)
+
+/** Roles an admin can give a login. Parents get theirs from the Parent module. */
+export const PROVISIONABLE_ROLES = ['FACULTY', 'STAFF', 'SCHOOL_ADMIN'] as const satisfies readonly Role[];
+export type ProvisionableRole = (typeof PROVISIONABLE_ROLES)[number];
+
+export const GOVERNMENT_ID_TYPES = ['AADHAAR', 'PAN', 'PASSPORT', 'VOTER_ID', 'DRIVING_LICENCE'] as const;
+export type GovernmentIdType = (typeof GOVERNMENT_ID_TYPES)[number];
+
+export const GOVERNMENT_ID_LABELS: Record<GovernmentIdType, string> = {
+  AADHAAR: 'Aadhaar',
+  PAN: 'PAN',
+  PASSPORT: 'Passport',
+  VOTER_ID: 'Voter ID',
+  DRIVING_LICENCE: 'Driving licence',
+};
+
+/** One value that `POST /employees/:id/restricted/reveal` can return. */
+export const RESTRICTED_FIELDS = ['DATE_OF_BIRTH', 'BANK_ACCOUNT_NUMBER', ...GOVERNMENT_ID_TYPES] as const;
+export type RestrictedField = (typeof RESTRICTED_FIELDS)[number];
+
+export const DOCUMENT_TYPES = ['ID_PROOF', 'ADDRESS_PROOF', 'QUALIFICATION', 'EXPERIENCE', 'POLICE_VERIFICATION', 'MEDICAL', 'CONTRACT', 'OTHER'] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  ID_PROOF: 'ID proof',
+  ADDRESS_PROOF: 'Address proof',
+  QUALIFICATION: 'Qualification',
+  EXPERIENCE: 'Experience letter',
+  POLICE_VERIFICATION: 'Police verification',
+  MEDICAL: 'Medical certificate',
+  CONTRACT: 'Contract',
+  OTHER: 'Other',
+};
+
+export const DOCUMENT_STATUSES = ['ACTIVE', 'DELETED'] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+/** Files are PDF, PNG or JPEG, sniffed from the bytes. */
+export const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'] as const;
+export type DocumentMimeType = (typeof DOCUMENT_MIME_TYPES)[number];
+export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+/** Details that an employee cannot change directly: they go through approval. */
+export const CHANGE_FIELD_CATEGORIES = ['LEGAL_NAME', 'DATE_OF_BIRTH', 'GOVERNMENT_ID', 'BANK_DETAILS'] as const;
+export type ChangeFieldCategory = (typeof CHANGE_FIELD_CATEGORIES)[number];
+
+export const CHANGE_FIELD_LABELS: Record<ChangeFieldCategory, string> = {
+  LEGAL_NAME: 'Legal name',
+  DATE_OF_BIRTH: 'Date of birth',
+  GOVERNMENT_ID: 'Government ID',
+  BANK_DETAILS: 'Bank details',
+};
+
+export const CHANGE_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
+export type ChangeRequestStatus = (typeof CHANGE_REQUEST_STATUSES)[number];
+
+export const EXPORT_PURPOSES = ['DIRECTORY', 'EMPLOYMENT'] as const;
+export type ExportPurpose = (typeof EXPORT_PURPOSES)[number];
+
+export const EXPORT_PURPOSE_LABELS: Record<ExportPurpose, string> = {
+  DIRECTORY: 'Directory (names, roles, locations, official contact)',
+  EMPLOYMENT: 'Employment (adds dates, type and reporting manager)',
+};
+
+/** How long a step-up (re-entering the password) keeps restricted actions open. */
+export const STEP_UP_SECONDS = 5 * 60;
+/** How long a signed download link works. */
+export const FILE_LINK_SECONDS = 60;

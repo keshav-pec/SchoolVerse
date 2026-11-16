@@ -11,4 +11,5 @@ export * from './schemas/audit';
 export * from './schemas/setup';
 export * from './schemas/academic';
 export * from './schemas/staff';
+export * from './schemas/identity';
 export * from './data-classification';

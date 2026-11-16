@@ -2,6 +2,7 @@ import type { ClientSession } from 'mongoose';
 import { AppError } from '../../core/errors';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { Employee, type EmployeeDoc } from './employee.model';
+import { Person, type PersonDoc } from './person.model';
 import { ASSIGNABLE_STATUSES } from './lifecycle';
 
 /** Loads an employee of this tenant, or 404. Other tenants' ids look exactly like missing ones. */
@@ -55,4 +56,10 @@ export function assertEmploymentDates(joiningDate: string, confirmationDate: str
   if (confirmationDate && confirmationDate < joiningDate) {
     throw AppError.validation({ confirmationDate: 'The confirmation date cannot be before the joining date.' });
   }
+}
+
+export async function loadPerson(tenantId: string, personId: string, db?: ClientSession): Promise<PersonDoc> {
+  const doc = await Person.findOne({ _id: personId, tenantId }).session(db ?? null).lean<PersonDoc>();
+  if (!doc) throw AppError.notFound('Person not found.');
+  return doc;
 }

@@ -1,11 +1,15 @@
 import {
   createAcademicAssignmentsSchema,
+  createChangeRequestSchema,
   createEmployeeSchema,
+  createUserAccountSchema,
+  updateRestrictedSchema,
   createResponsibilitySchema,
   exitEmployeeSchema,
   transferSchema,
   type EmployeeProfileDTO,
 } from '@shared';
+import { permissionsFor } from '@shared';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { User } from '../../platform/users/user.model';
 import { GradeOffering, SectionOffering, SubjectOffering } from '../academic/offering.model';
@@ -13,6 +17,10 @@ import { GradeMaster } from '../academic/reference.model';
 import { AcademicSession } from '../academic/session.model';
 import { Subject } from '../academic/subject.model';
 import { createAcademicAssignments } from './academic-assignment.service';
+import { createEmployeeAccount } from './account.service';
+import { createChangeRequest } from './change-request.service';
+import { uploadDocument } from './document.service';
+import { updateRestricted } from './restricted.service';
 import { createEmployee } from './employee.service';
 import { exitEmployee, changeEmployeeStatus } from './lifecycle.service';
 import { transferEmployee } from './location-assignment.service';
@@ -27,7 +35,10 @@ import { createResponsibility } from './responsibility.service';
  *  - staff@greenfield.demo is the Transport In-charge;
  *  - a lab assistant who has NO login (employees and accounts are separate);
  *  - one employee who has already exited, with the classes they taught closed;
- *  - the admin user is deliberately not linked to any employee.
+ *  - the admin user is deliberately not linked to any employee;
+ *  - neha.bansal@greenfield.demo has a login that is still waiting to be activated (its link is in the dev outbox);
+ *  - restricted details (IDs and bank accounts, all made up: `TEST` IDs and zero-pattern account numbers), a pending change
+ *    request from Priya, and one PDF document for each faculty member.
  * Everything goes through the real services, so the data follows every rule and has an audit trail.
  */
 export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string; userIdsByEmail: Record<string, string> }) {
@@ -168,5 +179,65 @@ export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: stri
   for (const [email, employee] of [['faculty@greenfield.demo', priya], ['staff@greenfield.demo', rohan]] as const) {
     await User.updateOne({ _id: input.userIdsByEmail[email], tenantId: ctx.tenantId }, { $set: { personId: employee.personId } });
   }
+  await seedIdentityDemo(ctx, { faculty: [priya, harpreet, neha, rajiv], staff: [rohan, gurpreet], pendingLogin: neha, requester: { employee: priya, userId: input.userIdsByEmail['faculty@greenfield.demo']! } });
+
   return { employees: 11, principalId: principal.employeeId, facultyId: priya.employeeId, staffId: rohan.employeeId, transferredId: harpreet.employeeId, noLoginId: kavita.employeeId, exitedId: manoj.employeeId, rajivId: rajiv.employeeId, nehaId: neha.employeeId };
+}
+
+
+/** A tiny but valid-looking PDF (the upload check reads the magic bytes). Contains no real data. */
+function demoPdf(title: string): Buffer {
+  return Buffer.from(
+    `%PDF-1.4\n% Synthetic demo document: ${title}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`,
+  );
+}
+
+/**
+ * Identity and restricted data for the demo (synthetic only, see the module header). Every value is recognisably fake:
+ * IDs start with `TEST` (or are all zeros) and bank accounts follow a `00000000nnnn` pattern. Nothing here could be mistaken for
+ * a real person's data (QA S12).
+ */
+async function seedIdentityDemo(
+  ctx: ServiceContext,
+  input: {
+    faculty: EmployeeProfileDTO[];
+    staff: EmployeeProfileDTO[];
+    pendingLogin: EmployeeProfileDTO;
+    requester: { employee: EmployeeProfileDTO; userId: string };
+  },
+) {
+  const holder = (employee: EmployeeProfileDTO) => `${employee.legalFirstName} ${employee.legalLastName}`;
+  const restrictedFor = async (employee: EmployeeProfileDTO, n: number) =>
+    updateRestricted(
+      ctx,
+      employee.employeeId,
+      updateRestrictedSchema.parse({
+        governmentIds: [
+          { type: 'PAN', value: `TESTP${String(n).padStart(4, '0')}X` },
+          { type: 'AADHAAR', value: '000000000000' },
+        ],
+        bank: { accountHolderName: holder(employee), accountNumber: `00000000${String(5670 + n)}`, ifsc: 'TEST0000001', bankName: 'Demo Bank' },
+      }),
+    );
+  let n = 0;
+  for (const employee of [...input.faculty, ...input.staff]) await restrictedFor(employee, (n += 1));
+
+  // One document per faculty member, uploaded by the admin.
+  for (const employee of input.faculty) {
+    await uploadDocument(ctx, employee.employeeId, { buffer: demoPdf(employee.employeeCode), originalname: `${employee.employeeCode}-qualification.pdf` }, { documentType: 'QUALIFICATION', displayName: 'Highest qualification (demo)' });
+  }
+
+  // A login that is waiting for its owner to activate it.
+  await createEmployeeAccount(ctx, input.pendingLogin.employeeId, createUserAccountSchema.parse({ email: input.pendingLogin.officialEmail, role: 'FACULTY' }));
+
+  // A pending request from Priya, for the approvals inbox.
+  const priyaCtx: ServiceContext = { tenantId: ctx.tenantId, userId: input.requester.userId, role: 'FACULTY', permissions: permissionsFor('FACULTY'), requestId: null };
+  await createChangeRequest(
+    priyaCtx,
+    createChangeRequestSchema.parse({
+      fieldCategory: 'LEGAL_NAME',
+      value: { legalFirstName: 'Priya', legalLastName: 'Sharma-Verma' },
+      reason: 'Name changed after marriage (demo request).',
+    }),
+  );
 }

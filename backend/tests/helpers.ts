@@ -377,3 +377,80 @@ export async function loginAs(t: StaffSchool, role: 'FACULTY' | 'STAFF', employe
   await linkUser(t.tenantId, login.userId, employee.personId);
   return login;
 }
+
+// ───────────────────────────────────────────────────────────── identity, restricted data and documents (Module 3, Part 2)
+
+/** Enough of a PDF for the upload check, which reads the magic bytes. */
+export const PDF = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+export const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+
+/** The `token` query parameter of a link in the dev outbox. */
+export function tokenFromLink(link: string): string {
+  return new URL(link).searchParams.get('token')!;
+}
+
+/** The newest message for an address, read from the dev outbox the way a person would open it. */
+export async function outboxLink(to: string, template: 'ACTIVATION' | 'PASSWORD_RESET'): Promise<string> {
+  const res = await request(app).get(`${API}/dev/outbox`).query({ to }).expect(200);
+  const message = (res.body.data.items as { template: string; link: string }[]).find((m) => m.template === template);
+  expect(message, `no ${template} message for ${to}`).toBeDefined();
+  return message!.link;
+}
+
+/** Admin creates a login for the employee; returns the PENDING user and the activation token from the outbox. */
+export async function provisionLogin(t: StaffSchool, employee: EmployeeProfileDTO, overrides: { email?: string; role?: string } = {}) {
+  const email = overrides.email ?? uniqueEmail('person');
+  const res = await t.agent.post(`${API}/employees/${employee.employeeId}/user-account`).send({ email, role: overrides.role ?? 'FACULTY' });
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return { email, user: res.body.data as { userId: string; status: string }, token: tokenFromLink(await outboxLink(email, 'ACTIVATION')) };
+}
+
+/** The whole path a new person takes: admin creates the login, they follow the link, choose a password, sign in. */
+export async function activatedLogin(t: StaffSchool, employee: EmployeeProfileDTO, overrides: { email?: string; role?: string } = {}) {
+  const { email, user, token } = await provisionLogin(t, employee, overrides);
+  await request(app).post(`${API}/auth/activate`).send({ token, password: PASSWORD }).expect(200);
+  const agent = request.agent(app);
+  await agent.post(`${API}/auth/login`).send({ email, password: PASSWORD }).expect(200);
+  return { agent, email, userId: user.userId };
+}
+
+/** Re-enters the password, the way the step-up dialog does. */
+export async function stepUp(agent: Agent) {
+  const res = await agent.post(`${API}/auth/step-up`).send({ password: PASSWORD });
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+}
+
+export function uploadDocument(agent: Agent, url: string, file: Buffer = PDF, fields: Record<string, string> = {}, filename = 'proof.pdf') {
+  const req = agent.post(url).field('documentType', fields.documentType ?? 'ID_PROOF');
+  if (fields.displayName) req.field('displayName', fields.displayName);
+  return req.attach('file', file, { filename, contentType: 'application/pdf' });
+}
+
+/** Synthetic restricted values used across the tests, easy to search for in logs and audit rows. */
+export const SECRETS = {
+  pan: 'TESTP9999X',
+  aadhaar: '000000001234',
+  account: '000000005678',
+  ifsc: 'TEST0000001',
+};
+
+export const restrictedBody = {
+  governmentIds: [
+    { type: 'PAN', value: SECRETS.pan },
+    { type: 'AADHAAR', value: SECRETS.aadhaar },
+  ],
+  bank: { accountHolderName: 'Test Person', accountNumber: SECRETS.account, ifsc: SECRETS.ifsc, bankName: 'Demo Bank' },
+};
+
+/** GET a signed link the way a browser would (no cookies) and return the raw bytes. */
+export async function download(url: string) {
+  const res = await request(app)
+    .get(url)
+    .buffer(true)
+    .parse((r, cb) => {
+      const chunks: Buffer[] = [];
+      r.on('data', (c: Buffer) => chunks.push(c));
+      r.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+  return { status: res.status, headers: res.headers, body: res.body as Buffer, error: res.status >= 400 ? (JSON.parse((res.body as Buffer).toString()) as { error: { code: string } }).error : null };
+}

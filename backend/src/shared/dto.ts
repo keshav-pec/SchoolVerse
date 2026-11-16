@@ -1,4 +1,11 @@
 import type {
+  ChangeFieldCategory,
+  ChangeRequestStatus,
+  DocumentMimeType,
+  DocumentType,
+  ExportPurpose,
+  GovernmentIdType,
+  RestrictedField,
   AcademicAssignmentType,
   AcademicPurpose,
   AssignmentEndReason,
@@ -55,6 +62,8 @@ export interface UserDTO {
   fullName: string;
   role: Role;
   status: UserStatus;
+  /** The person this login belongs to (an employee today; a student or parent later). */
+  personId: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -778,4 +787,98 @@ export interface SectionFacultyDTO {
   subjectOfferingId: string | null;
   effectiveFrom: string;
   effectiveTo: string | null;
+}
+
+// ───────────────────────────────────────────────────────────── Identity, restricted data and documents (Module 3, Part 2)
+//
+// Nothing here carries a secret: no password hash, token, key, storage key or file checksum. Restricted values are masked
+// unless `RevealedValueDTO` is asked for (permission + step-up, audited).
+
+/** `GET /employees/:id/user-account`: the login behind an employee, if any. */
+export interface EmployeeAccountDTO {
+  account: UserDTO | null;
+  /** The official email, offered as the default for a new login. */
+  defaultEmail: string | null;
+}
+
+/** `GET /auth/activation/:token`: just enough to greet the person. */
+export interface ActivationCheckDTO {
+  firstName: string;
+}
+
+export interface StepUpDTO {
+  stepUpAt: string;
+  validForSeconds: number;
+}
+
+/** Date of birth, government IDs and bank details, always masked. */
+export interface RestrictedEmployeeProfileDTO {
+  employeeId: string;
+  personId: string;
+  /** For example `••/••/1988`. */
+  dateOfBirth: { masked: string } | null;
+  /** For example `XXXX XXXX 1234`. */
+  governmentIds: { type: GovernmentIdType; masked: string }[];
+  bank: { accountHolderName: string; accountNumberMasked: string; ifsc: string; bankName: string } | null;
+  updatedAt: string | null;
+}
+
+export interface RevealedValueDTO {
+  field: RestrictedField;
+  value: string;
+  /** The page should hide the value again after this many seconds. */
+  hideAfterSeconds: number;
+}
+
+/** `GET /me/profile`: the signed-in employee's own record. Government IDs and bank details stay masked. */
+export interface SelfProfileDTO {
+  profile: EmployeeProfileDTO;
+  /** The employee's own date of birth. */
+  dateOfBirth: string | null;
+  restricted: RestrictedEmployeeProfileDTO;
+  locationAssignments: LocationAssignmentDTO[];
+  academicAssignments: FacultyAssignmentDTO[];
+  responsibilities: ResponsibilityDTO[];
+  account: UserDTO;
+  pendingRequests: ProfileChangeRequestDTO[];
+}
+
+export interface ProfileChangeRequestDTO {
+  changeRequestId: string;
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  fieldCategory: ChangeFieldCategory;
+  status: ChangeRequestStatus;
+  /** Legal names are shown in full; everything else is masked. */
+  currentDisplay: string | null;
+  proposedDisplay: string;
+  reason: string | null;
+  requestedAt: string;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  decisionNote: string | null;
+}
+
+export interface EmployeeDocumentDTO {
+  documentId: string;
+  employeeId: string;
+  documentType: DocumentType;
+  displayName: string;
+  mime: DocumentMimeType;
+  sizeBytes: number;
+  uploadedAt: string;
+}
+
+/** A link that works for a minute (documents) or a quarter of an hour (exports). The URL is the only credential. */
+export interface SignedFileLinkDTO {
+  url: string;
+  expiresAt: string;
+}
+
+export interface ExportResultDTO extends SignedFileLinkDTO {
+  exportId: string;
+  purpose: ExportPurpose;
+  fileName: string;
+  rowCount: number;
 }

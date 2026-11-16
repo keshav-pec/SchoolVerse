@@ -17,6 +17,14 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 | 2 | Choice rules, programmes, clone, validation engine, lifecycle, academic context (API) | ✅ Done |
 | 3 | Academic Setup UI, QA and integration hardening | ✅ Done |
 
+**Module 3: Faculty & Staff Management** ([Module3.md](Module3.md))
+
+| Part | Scope | Status |
+|---|---|---|
+| 1 | Person and employee master, departments, designations, effective-dated location and class assignments, responsibilities, lifecycle (API) | ✅ Done |
+| 2 | Logins and activation, step-up, suspension, encrypted restricted data, self-service and change approval, private documents, exports (API) | ✅ Done (MFA is deliberately left out for now) |
+| 3 | Faculty & Staff UI, e2e, security gate | Not started |
+
 ## Layout
 
 ```
@@ -59,6 +67,8 @@ Demo password for every seeded account: `Welcome@123`.
 | parent@greenfield.demo | Parent (no config access) |
 | admin@riverside.demo | School Admin of a second, isolated tenant. Its setup is **left mid-wizard** (step 5), so this login shows the wizard resuming. |
 
+Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open its link at `http://localhost:4000/api/v1/dev/outbox` (see below), choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
+
 The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
 
 | Location | Code | Primary | Status |
@@ -71,6 +81,16 @@ The seed also creates each tenant's School Master and the PRD §19 location data
 
 Greenfield's first-time setup is **completed**, so its admin goes straight to the app. Riverside Academy has one active campus that reuses the code `MOH` (codes only have to be unique within a school) and an unfinished setup. A workspace you create through **Sign up** always starts in the wizard.
 
+**Environment (Module 3).** All optional in development; production refuses to start without the first two.
+
+| Variable | What it does |
+|---|---|
+| `FIELD_ENCRYPTION_KEYS` | `v2:<base64 32 bytes>,v1:<…>`, newest first. The first key encrypts government IDs and bank details; every key can decrypt, so rotate by adding a key in front. Development uses a fixed key that protects nothing. |
+| `FILE_URL_SECRET` | Signs the 60-second document links and the 15-minute export links (32+ characters). |
+| `PRIVATE_UPLOAD_DIR` | Employee documents and exports (default `private-uploads`). Never served statically. |
+| `APP_BASE_URL` | Used in activation and reset links (defaults to `WEB_ORIGIN`). |
+| `DEV_OUTBOX` | Writes emails to a `dev_outbox` collection and shows them, **unauthenticated**, at `GET /api/v1/dev/outbox?to=`. On outside production. Turn it on for a demo deployment so activation and reset links can be opened without an email provider; never on a deployment with real data. |
+
 > Running MongoDB locally? Start it as a replica set: `mongod --replSet rs0`, then `mongosh --eval "rs.initiate()"`.
 > Transactions (primary-location switch, audit writes) don't work on a standalone server.
 
@@ -81,6 +101,7 @@ Greenfield's first-time setup is **completed**, so its admin goes straight to th
 | backend | `npm run dev` | API with hot reload |
 | backend | `npm test` | Test suite incl. the PRD §19 QA scenarios (in-memory MongoDB, no setup needed) |
 | backend | `npm run seed` | Reset and reload demo data |
+| backend | `npm run data-inventory` | Regenerate `backend/docs/DATA_INVENTORY.md` from the field classification |
 | backend | `npm run e2e:server` | Throw-away API on :4100 (in-memory DB + seed) used by the Playwright tests. Never reads `.env`. |
 | backend | `npm run build` / `npm start` | Bundle to `dist/` and run it |
 | frontend | `npm run dev` | Web app with hot reload |
@@ -112,7 +133,16 @@ All routes are under `/api/v1`, require a session cookie, and are scoped to the 
 | Offerings and terms | `…/grade-offerings` · `/grade-offerings/:id` (+ `/sections`, `/subjects`, `/subjects/copy-from/:otherId`) · `/sections/:id` · `/subject-offerings/:id` · `…/terms` · `/terms/:id` |
 | Rules | `/grade-offerings/:id/choice-groups` · `/choice-groups/:id` · `/grade-offerings/:id/constraints` · `/constraints/:id` · `/academic-programmes` |
 | Academic context | `GET /academic-context?academicSessionId=&locationId=&gradeId=` |
-| Dev only | `POST`/`DELETE /dev/location-references` simulates downstream references (archive blocked, code locked). Not mounted in production. |
+| Departments, designations | `GET`/`POST /departments` · `/designations` · `PATCH …/:id` · `POST …/suggested` |
+| Employees | `GET`/`POST /employees` · `GET`/`PATCH`/`DELETE /employees/:id` · `GET …/history` · `POST …/status` · `…/exit` · `…/cancel-exit` · `…/transfer` |
+| Assignments | `…/employees/:id/location-assignments` · `/academic-assignments` (bulk) · `/responsibilities`, and `POST /location-assignments\|academic-assignments\|responsibilities/:id/end\|cancel` |
+| Logins | `GET`/`POST /employees/:id/user-account` · `POST /users/:id/resend-activation` · `/suspend` · `/reactivate` · `/disable` · `PATCH /users/:id/role` |
+| Sign-in extras | `GET /auth/activation/:token` · `POST /auth/activate` · `/forgot-password` · `/reset-password` · `/step-up` |
+| Restricted data | `GET`/`PUT /employees/:id/restricted` (masked; PUT needs step-up) · `POST …/restricted/reveal` (step-up, audited) |
+| Self-service | `GET`/`PATCH /me/profile` · `GET`/`POST /me/profile-change-requests` · `POST …/:id/cancel` · `GET`/`POST /me/documents` |
+| Change approval | `GET /profile-change-requests` · `POST …/:id/approve` · `…/:id/reject` |
+| Documents, exports | `GET`/`POST /employees/:id/documents` · `POST /employee-documents/:id/download` (returns a 60 s link) · `DELETE /employee-documents/:id` · `POST /employees/exports` · `GET /files/:signedToken` |
+| Dev only | `POST`/`DELETE /dev/location-references` simulates downstream references (archive blocked, code locked). Not mounted in production. `GET /dev/outbox` shows the emails the app would have sent (only while `DEV_OUTBOX` is on). |
 
 Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, default `backend/uploads`).
 
@@ -128,7 +158,7 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 
 | Suite | Where | Run |
 |---|---|---|
-| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
 | E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only, visual pass at 1280px and 390px → `e2e/screenshots/`) | `npm run e2e` |
 

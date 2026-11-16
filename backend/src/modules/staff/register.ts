@@ -2,6 +2,7 @@ import { academicService } from '../academic/academic.service';
 import { registerLocationDependency } from '../dependencies/registry';
 import { AcademicAssignment, LocationAssignment, Responsibility } from './assignment.models';
 import { Employee } from './employee.model';
+import { registerStaffIdentityHooks } from './identity-hooks';
 import { todayForTenant } from './status';
 
 let registered = false;
@@ -14,6 +15,7 @@ let registered = false;
 export function registerStaffDependencies() {
   if (registered) return;
   registered = true;
+  registerStaffIdentityHooks();
 
   registerLocationDependency({
     key: 'staff.assignments',

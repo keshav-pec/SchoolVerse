@@ -4,6 +4,7 @@ import { withTransaction } from '../../db/transaction';
 import { recordStaffAudit, systemScope } from './audit';
 import { Employee, type EmployeeDoc } from './employee.model';
 import { completeExit } from './lifecycle.service';
+import { cleanupExpiredExports } from './export.service';
 import { timezonesByTenant } from './status';
 import { DEFAULT_TIMEZONE } from '@shared';
 import { todayIn } from '../academic/term.service';
@@ -27,7 +28,7 @@ export async function processDueExits(now = new Date()): Promise<number> {
       try {
         await withTransaction(async (db) => {
           const scope = systemScope(tenantId);
-          await completeExit(employee, db, null);
+          await completeExit(employee, db, scope);
           await recordStaffAudit(scope, db, {
             entityType: 'employee',
             entityId: employee._id,
@@ -48,12 +49,13 @@ export async function processDueExits(now = new Date()): Promise<number> {
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Runs `processDueExits` now and then every hour. Returns a function that stops it. */
+/** Runs the hourly jobs now and then every hour: scheduled exits, and removing the files of expired exports. Returns a function that stops them. */
 export function startStaffJobs(): () => void {
   const run = () =>
-    processDueExits()
-      .then((n) => n > 0 && logger.info({ exited: n }, 'completed scheduled exits'))
-      .catch((err) => logger.error({ err }, 'scheduled exit job failed'));
+    Promise.all([
+      processDueExits().then((n) => n > 0 && logger.info({ exited: n }, 'completed scheduled exits')),
+      cleanupExpiredExports().then((n) => n > 0 && logger.info({ removed: n }, 'removed expired exports')),
+    ]).catch((err) => logger.error({ err }, 'scheduled staff job failed'));
   void run();
   const timer = setInterval(run, HOUR_MS);
   timer.unref();

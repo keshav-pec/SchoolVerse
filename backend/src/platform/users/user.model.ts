@@ -6,7 +6,8 @@ import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
 export interface UserDoc extends BaseDoc, AuditFields {
   tenantId: string;
   email: string;
-  passwordHash: string;
+  /** Null until the person activates the account. Never leaves the service layer. */
+  passwordHash: string | null;
   fullName: string;
   role: Role;
   /** Set when the login belongs to a person record (employee, later student / parent). */
@@ -22,7 +23,7 @@ const userSchema = new Schema<UserDoc>(
     tenantId: { type: String, required: true, immutable: true },
     // Globally unique so people can sign in with just email + password.
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true, select: false },
+    passwordHash: { type: String, default: null, select: false },
     fullName: { type: String, required: true, trim: true, maxlength: 100 },
     role: { type: String, enum: ROLES, required: true },
     personId: { type: String, default: null },

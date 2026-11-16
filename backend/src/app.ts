@@ -2,10 +2,11 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import { stdSerializers } from 'pino';
 import { pinoHttp } from 'pino-http';
 import { env, isProd } from './config/env';
 import { errorHandler, notFoundHandler } from './core/error-handler';
-import { logger } from './core/logger';
+import { logger, redactUrl } from './core/logger';
 import { requestId } from './core/request-id';
 import { PUBLIC_UPLOAD_PREFIX, storage } from './core/storage/storage';
 import { createDocsRouter } from './docs/swagger';
@@ -31,6 +32,8 @@ export function createApp() {
     pinoHttp({
       logger,
       genReqId: (req) => (req as express.Request).requestId,
+      // Signed file links and activation links carry their credential in the path; it never reaches a log line.
+      serializers: { req: (req) => ({ ...stdSerializers.req(req), url: redactUrl(req.url ?? '') }) },
       autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
       customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'),
     }),

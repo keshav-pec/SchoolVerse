@@ -10,15 +10,16 @@ import { listResponsibilities } from './responsibility.service';
 
 /**
  * `GET /employees/:id/history` — assignment history (every row ever, with its computed status) merged with the audit
- * timeline for the employee. Every staff audit row carries `metadata.employeeId`, so one query finds them all.
+ * timeline for the employee. Every staff audit row carries `metadata.employeeId`, so one query finds them all; changes to the
+ * person's login carry `metadata.subjectPersonId` instead, because a login belongs to the person and outlives one employment.
  */
 export async function getEmployeeHistory(ctx: ServiceContext, employeeId: string, limit: number): Promise<EmployeeHistoryDTO> {
-  await loadEmployee(ctx, employeeId);
+  const employee = await loadEmployee(ctx, employeeId);
   const [locationAssignments, academicAssignments, responsibilities, rows] = await Promise.all([
     listLocationAssignments(ctx, employeeId),
     listAcademicAssignments(ctx, employeeId),
     listResponsibilities(ctx, employeeId),
-    AuditEvent.find({ tenantId: ctx.tenantId, 'metadata.employeeId': employeeId }).sort({ occurredAt: -1, _id: -1 }).limit(limit).lean<AuditEventDoc[]>(),
+    AuditEvent.find({ tenantId: ctx.tenantId, $or: [{ 'metadata.employeeId': employeeId }, { 'metadata.subjectPersonId': employee.personId }] }).sort({ occurredAt: -1, _id: -1 }).limit(limit).lean<AuditEventDoc[]>(),
   ]);
 
   const actorIds = [...new Set(rows.map((r) => r.actorId).filter((id): id is string => Boolean(id)))];

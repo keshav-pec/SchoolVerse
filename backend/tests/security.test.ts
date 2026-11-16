@@ -10,7 +10,10 @@ import { Location } from '../src/modules/locations/location.model';
 import { AcademicAssignment, LocationAssignment, Responsibility } from '../src/modules/staff/assignment.models';
 import { Employee } from '../src/modules/staff/employee.model';
 import { Department, Designation } from '../src/modules/staff/master.model';
+import { EmployeeDocument, ProfileChangeRequest } from '../src/modules/staff/identity.models';
 import { Person } from '../src/modules/staff/person.model';
+import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
+import { User } from '../src/platform/users/user.model';
 import { School } from '../src/modules/school/school.model';
 import {
   addGrades,
@@ -22,9 +25,13 @@ import {
   forceStatus,
   draftLocationBody,
   expectError,
+  linkUser,
   loadReference,
+  restrictedBody,
   seededSchool,
   setupSchool,
+  stepUp,
+  uploadDocument,
   useTestDatabase,
   validSchool,
   type Agent,
@@ -58,6 +65,10 @@ interface StaffIds {
   locationAssignmentId: string;
   academicAssignmentId: string;
   responsibilityId: string;
+  // Identity and restricted data (Part 2)
+  documentId: string;
+  changeRequestId: string;
+  userId: string;
 }
 
 type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds };
@@ -103,6 +114,10 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET location assignments', send: (c) => c.get(`${employee}/location-assignments`) },
       { name: 'GET academic assignments', send: (c) => c.get(`${employee}/academic-assignments`) },
       { name: 'GET responsibilities', send: (c) => c.get(`${employee}/responsibilities`) },
+      // Restricted data, logins and documents (Module 3, Part 2)
+      { name: 'GET restricted profile', send: (c) => c.get(`${employee}/restricted`) },
+      { name: 'GET user account', send: (c) => c.get(`${employee}/user-account`) },
+      { name: 'GET documents', send: (c) => c.get(`${employee}/documents`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -174,6 +189,19 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'POST responsibility', send: (c) => c.post(`${API}/employees/${st.staffId}/responsibilities`).send({ locationId: ids.locationId, responsibilityType: 'Lab' }) },
       { name: 'end responsibility', send: (c) => c.post(`${API}/responsibilities/${st.responsibilityId}/end`).send({ effectiveTo: '2026-12-31' }) },
       { name: 'cancel responsibility', send: (c) => c.post(`${API}/responsibilities/${st.responsibilityId}/cancel`) },
+      // Restricted data, logins, documents and change approval (Module 3, Part 2)
+      { name: 'PUT restricted', send: (c) => c.put(`${employee}/restricted`).send(restrictedBody) },
+      { name: 'reveal restricted', send: (c) => c.post(`${employee}/restricted/reveal`).send({ field: 'PAN' }) },
+      { name: 'POST user account', send: (c) => c.post(`${employee}/user-account`).send({ role: 'FACULTY', email: 'matrix@greenfield.demo' }) },
+      { name: 'POST document', send: (c) => uploadDocument(c, `${employee}/documents`) },
+      { name: 'DELETE document', send: (c) => c.delete(`${API}/employee-documents/${st.documentId}`) },
+      { name: 'approve change request', send: (c) => c.post(`${API}/profile-change-requests/${st.changeRequestId}/approve`).send({}) },
+      { name: 'reject change request', send: (c) => c.post(`${API}/profile-change-requests/${st.changeRequestId}/reject`).send({ note: 'No' }) },
+      { name: 'resend activation', send: (c) => c.post(`${API}/users/${st.userId}/resend-activation`) },
+      { name: 'suspend user', send: (c) => c.post(`${API}/users/${st.userId}/suspend`).send({ reason: 'Matrix' }) },
+      { name: 'reactivate user', send: (c) => c.post(`${API}/users/${st.userId}/reactivate`) },
+      { name: 'disable user', send: (c) => c.post(`${API}/users/${st.userId}/disable`) },
+      { name: 'change user role', send: (c) => c.patch(`${API}/users/${st.userId}/role`).send({ role: 'STAFF' }) },
     ],
   };
 }
@@ -224,7 +252,16 @@ async function victim() {
   const placements = (await b.agent.get(`${API}/employees/${employeeId}/location-assignments`).expect(200)).body.data as { locationAssignmentId: string }[];
   const taught = (await b.agent.post(`${API}/employees/${employeeId}/academic-assignments`).send({ items: [{ assignmentType: 'SUBJECT_FACULTY', sectionId: section.sectionOfferingId, subjectOfferingId: offering.subjectOfferingId }] }).expect(201)).body.data;
   const responsibility = (await b.agent.post(`${API}/employees/${staffId}/responsibilities`).send({ locationId: b.moh.locationId, responsibilityType: 'Lab' }).expect(201)).body.data;
+  // A login linked to the faculty member, a document, and a pending request from them (for the Part 2 routes).
+  const profile = (await b.agent.get(`${API}/employees/${employeeId}`).expect(200)).body.data as { personId: string };
+  const login = await createUserAndLogin(b.tenantId, 'FACULTY');
+  await linkUser(b.tenantId, login.userId, profile.personId);
+  const document = (await uploadDocument(b.agent, `${API}/employees/${employeeId}/documents`).expect(201)).body.data;
+  const changeRequest = (await login.agent.post(`${API}/me/profile-change-requests`).send({ fieldCategory: 'DATE_OF_BIRTH', value: { dateOfBirth: '1990-01-01' } }).expect(201)).body.data;
   const staff: StaffIds = {
+    documentId: document.documentId,
+    changeRequestId: changeRequest.changeRequestId,
+    userId: login.userId,
     employeeId,
     staffId,
     departmentId: department.departmentId,
@@ -255,7 +292,7 @@ async function victim() {
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, GradeOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
@@ -263,6 +300,8 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
   it('every school/location route returns 404 for another tenant’s ids and changes nothing', async () => {
     const attacker = await setupSchool({ workspace: 'Attacker School' });
     const b = await victim();
+    // Restricted routes ask for a recent password first; a foreign id must still answer 404, not leak that it exists.
+    await stepUp(attacker.agent);
     const before = await Location.find({ tenantId: b.tenantId }).sort({ _id: 1 }).lean();
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
     const academicBefore = await academicSnapshot(b.tenantId);
