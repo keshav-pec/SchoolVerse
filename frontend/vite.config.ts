@@ -10,9 +10,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@shared': path.resolve(import.meta.dirname, 'src/shared/index.ts'),
+      // Single source of truth: the backend's shared contract (Vercel clones the whole repo).
+      '@shared': path.resolve(import.meta.dirname, '../backend/src/shared/index.ts'),
       '@': path.resolve(import.meta.dirname, 'src'),
     },
+    // Resolve the contract's packages from frontend/node_modules; backend/ isn't installed on Vercel.
+    dedupe: ['zod', 'libphonenumber-js'],
   },
   build: {
     rolldownOptions: {

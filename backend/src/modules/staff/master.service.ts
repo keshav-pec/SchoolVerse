@@ -16,7 +16,7 @@ import { pickDefined } from '../../core/objects';
 import { duplicateKeyFields } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { auditScopeOf, recordStaffAudit } from './audit';
 import { toDepartmentDTO, toDesignationDTO } from './mappers';
 import { Department, Designation, type StaffMasterDoc } from './master.model';
@@ -88,9 +88,7 @@ function makeService<T>(kind: MasterKind<T>) {
       const merged = { ...before, ...pickDefined(patch) } as StaffMasterDoc;
       const changes = diffFields(before, merged, MASTER_EDITABLE_FIELDS);
       if (changes.length > 0) {
-        const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-        for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-        await kind.model.updateOne({ _id: id, tenantId: ctx.tenantId }, { $set }, { session: db });
+        await kind.model.updateOne({ _id: id, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
         await recordStaffAudit(auditScopeOf(ctx), db, { entityType: kind.entityType, entityId: id, action: `${kind.entityType}.updated`, changes, employeeId: null });
       }
       return kind.toDTO(merged);

@@ -35,7 +35,7 @@ SchoolVerse/
 
 The two projects are independent, each with its own `package.json`, `node_modules` and configs. Nothing is installed in the root.
 
-**Shared contract.** Schemas, roles, permissions, error codes and DTOs live in `backend/src/shared`, which is the source of truth. The frontend keeps a copy in `frontend/src/shared`. Both projects import it as `@shared`. After changing the backend copy, run `npm run sync-shared` in `frontend/`.
+**Shared contract.** Schemas, roles, permissions, error codes and DTOs live in `backend/src/shared`, and both projects import that one folder as `@shared` (the frontend via a path alias in `vite.config.ts` and `tsconfig.json`). There is no copy to keep in sync.
 
 ## Getting started
 
@@ -108,7 +108,6 @@ Greenfield's first-time setup is **completed**, so its admin goes straight to th
 | frontend | `npm test` | Component tests (Vitest + React Testing Library, no backend needed) |
 | frontend | `npm run e2e` | Browser tests (Playwright). Starts its own API and web server. First time: `npx playwright install chromium`. |
 | frontend | `npm run build` | Typecheck + production build to `dist/` |
-| frontend | `npm run sync-shared` | Refresh `src/shared` from the backend |
 | both | `npm run typecheck` / `npm run lint` | TypeScript / ESLint |
 
 ## API

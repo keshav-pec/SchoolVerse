@@ -4,8 +4,6 @@ import { Dialog as Primitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 
 export const Sheet = Primitive.Root;
-export const SheetTrigger = Primitive.Trigger;
-export const SheetClose = Primitive.Close;
 
 /** Off-canvas panel (used for the mobile sidebar). */
 export function SheetContent({

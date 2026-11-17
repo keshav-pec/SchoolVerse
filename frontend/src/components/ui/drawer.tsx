@@ -4,8 +4,6 @@ import { Dialog as Primitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 
 export const Drawer = Primitive.Root;
-export const DrawerTrigger = Primitive.Trigger;
-export const DrawerClose = Primitive.Close;
 
 /** Right-hand panel for multi-step flows and edit forms. Full width on phones. */
 export function DrawerContent({

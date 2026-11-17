@@ -12,7 +12,7 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { toIso } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import { decryptField, encryptField, mask } from '../../platform/identity/crypto';
 import { saveRestricted } from '../../platform/identity/restricted-data';
@@ -113,39 +113,34 @@ async function toDTOs(ctx: ServiceContext, docs: ProfileChangeRequestDoc[]): Pro
 
 export async function createChangeRequest(ctx: ServiceContext, data: CreateChangeRequestData): Promise<ProfileChangeRequestDTO> {
   const id = randomUUID();
-  try {
-    await withTransaction(async (db) => {
-      const { employee } = await requireCaller(ctx, db);
-      assertWritable(employee);
-      await ProfileChangeRequest.create(
-        [
-          {
-            _id: id,
-            tenantId: ctx.tenantId,
-            employeeId: employee._id,
-            personId: employee.personId,
-            fieldCategory: data.fieldCategory,
-            proposedValueEnc: encryptField(JSON.stringify(data.value), context(id)),
-            reason: data.reason ?? null,
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
-          },
-        ],
-        { session: db },
-      );
-      await recordStaffAudit(auditScopeOf(ctx), db, {
-        entityType: 'profile_change_request',
-        entityId: id,
-        action: 'change_request.created',
-        employeeId: employee._id,
-        // The category only: the value is the thing being protected.
-        metadata: { fieldCategory: data.fieldCategory },
-      });
+  await withTransaction(async (db) => {
+    const { employee } = await requireCaller(ctx, db);
+    assertWritable(employee);
+    await ProfileChangeRequest.create(
+      [
+        {
+          _id: id,
+          tenantId: ctx.tenantId,
+          employeeId: employee._id,
+          personId: employee.personId,
+          fieldCategory: data.fieldCategory,
+          proposedValueEnc: encryptField(JSON.stringify(data.value), context(id)),
+          reason: data.reason ?? null,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      ],
+      { session: db },
+    );
+    await recordStaffAudit(auditScopeOf(ctx), db, {
+      entityType: 'profile_change_request',
+      entityId: id,
+      action: 'change_request.created',
+      employeeId: employee._id,
+      // The category only: the value is the thing being protected.
+      metadata: { fieldCategory: data.fieldCategory },
     });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('fieldCategory')) throw new AppError('CHANGE_REQUEST_PENDING');
-    throw err;
-  }
+  }).catch(onDuplicate('fieldCategory', () => new AppError('CHANGE_REQUEST_PENDING')));
   return (await toDTOs(ctx, [(await ProfileChangeRequest.findOne({ _id: id, tenantId: ctx.tenantId }).lean<ProfileChangeRequestDoc>())!]))[0]!;
 }
 

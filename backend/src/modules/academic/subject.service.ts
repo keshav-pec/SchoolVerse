@@ -12,11 +12,11 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { escapeRegex, pickDefined, toIso } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import { actorFrom, can, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { GradeOffering, SubjectOffering } from './offering.model';
 import { BoardRuleVersion, EducationBoard, visibleToTenant, type BoardRuleVersionDoc, type EducationBoardDoc } from './reference.model';
 import { AcademicSession } from './session.model';
@@ -166,62 +166,50 @@ function normalise<T extends { languageCode?: string | null }>(data: T): T {
 }
 
 export async function createSubject(ctx: ServiceContext, data: CreateSubjectData): Promise<SubjectDTO> {
-  try {
-    return await withTransaction(async (session) => {
-      const [created] = await Subject.create(
-        [{ ...pickDefined(normalise(data)), tenantId: ctx.tenantId, status: 'ACTIVE', createdBy: ctx.userId, updatedBy: ctx.userId }],
-        { session },
-      );
-      const subject = created!.toObject() as SubjectDoc;
+  return withTransaction(async (session) => {
+    const [created] = await Subject.create(
+      [{ ...pickDefined(normalise(data)), tenantId: ctx.tenantId, status: 'ACTIVE', createdBy: ctx.userId, updatedBy: ctx.userId }],
+      { session },
+    );
+    const subject = created!.toObject() as SubjectDoc;
+    await recordAudit(
+      {
+        tenantId: ctx.tenantId,
+        entityType: 'subject',
+        entityId: subject._id,
+        action: 'subject.created',
+        actor: actorFrom(ctx),
+        changes: diffFields({}, subject, SUBJECT_EDITABLE_FIELDS),
+        requestId: ctx.requestId,
+      },
+      session,
+    );
+    return toSubjectDTO(subject);
+  }).catch(onDuplicate('subjectCode', subjectCodeTaken));
+}
+
+export async function updateSubject(ctx: ServiceContext, subjectId: string, patch: UpdateSubjectData): Promise<SubjectDTO> {
+  return withTransaction(async (session) => {
+    const before = await getSubjectOrThrow(ctx, subjectId, session);
+    const merged = { ...before, ...pickDefined(normalise(patch)) } as SubjectDoc;
+    const changes = diffFields(before, merged, SUBJECT_EDITABLE_FIELDS);
+    if (changes.length > 0) {
+      await Subject.updateOne({ _id: subjectId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session });
       await recordAudit(
         {
           tenantId: ctx.tenantId,
           entityType: 'subject',
-          entityId: subject._id,
-          action: 'subject.created',
+          entityId: subjectId,
+          action: 'subject.updated',
           actor: actorFrom(ctx),
-          changes: diffFields({}, subject, SUBJECT_EDITABLE_FIELDS),
+          changes,
           requestId: ctx.requestId,
         },
         session,
       );
-      return toSubjectDTO(subject);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('subjectCode')) throw subjectCodeTaken();
-    throw err;
-  }
-}
-
-export async function updateSubject(ctx: ServiceContext, subjectId: string, patch: UpdateSubjectData): Promise<SubjectDTO> {
-  try {
-    return await withTransaction(async (session) => {
-      const before = await getSubjectOrThrow(ctx, subjectId, session);
-      const merged = { ...before, ...pickDefined(normalise(patch)) } as SubjectDoc;
-      const changes = diffFields(before, merged, SUBJECT_EDITABLE_FIELDS);
-      if (changes.length > 0) {
-        const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-        for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-        await Subject.updateOne({ _id: subjectId, tenantId: ctx.tenantId }, { $set }, { session });
-        await recordAudit(
-          {
-            tenantId: ctx.tenantId,
-            entityType: 'subject',
-            entityId: subjectId,
-            action: 'subject.updated',
-            actor: actorFrom(ctx),
-            changes,
-            requestId: ctx.requestId,
-          },
-          session,
-        );
-      }
-      return getSubjectDTO(ctx, subjectId, session);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('subjectCode')) throw subjectCodeTaken();
-    throw err;
-  }
+    }
+    return getSubjectDTO(ctx, subjectId, session);
+  }).catch(onDuplicate('subjectCode', subjectCodeTaken));
 }
 
 // ───────────────────────────────────────────────────────────── board codes (AS-06)

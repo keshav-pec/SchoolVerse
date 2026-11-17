@@ -10,10 +10,10 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { pickDefined } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
 import { assertDeletable, assertEditable } from './guard';
 import { SubjectOffering, type SubjectOfferingDoc } from './offering.model';
@@ -204,9 +204,7 @@ export async function updateChoiceGroup(ctx: ServiceContext, choiceGroupId: stri
 
     const changes = diffFields(before, merged, CHOICE_GROUP_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-      await SubjectChoiceGroup.updateOne({ _id: choiceGroupId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await SubjectChoiceGroup.updateOne({ _id: choiceGroupId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
         entityType: 'subject_choice_group',
         entityId: choiceGroupId,
@@ -271,53 +269,48 @@ export async function createConstraint(ctx: ServiceContext, gradeOfferingId: str
   if (data.subjectOfferingId === data.otherSubjectOfferingId) {
     throw AppError.validation({ otherSubjectOfferingId: 'Choose two different subjects.' });
   }
-  try {
-    return await withTransaction(async (db) => {
-      const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
-      await assertEditable(session, {}, db);
+  return withTransaction(async (db) => {
+    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    await assertEditable(session, {}, db);
 
-      const found = await SubjectOffering.countDocuments({
-        tenantId: ctx.tenantId,
-        gradeOfferingId,
-        _id: { $in: [data.subjectOfferingId, data.otherSubjectOfferingId] },
-      }).session(db);
-      if (found !== 2) throw AppError.validation({ subjectOfferingId: 'Both subjects must be offered for this grade.' });
+    const found = await SubjectOffering.countDocuments({
+      tenantId: ctx.tenantId,
+      gradeOfferingId,
+      _id: { $in: [data.subjectOfferingId, data.otherSubjectOfferingId] },
+    }).session(db);
+    if (found !== 2) throw AppError.validation({ subjectOfferingId: 'Both subjects must be offered for this grade.' });
 
-      // "A excludes B" and "B excludes A" are the same rule.
-      const same = await SubjectChoiceConstraint.exists({
-        tenantId: ctx.tenantId,
-        gradeOfferingId,
-        type: data.type,
-        $or: [
-          { subjectOfferingId: data.subjectOfferingId, otherSubjectOfferingId: data.otherSubjectOfferingId },
-          ...(data.type === 'EXCLUDES' ? [{ subjectOfferingId: data.otherSubjectOfferingId, otherSubjectOfferingId: data.subjectOfferingId }] : []),
-        ],
-      }).session(db);
-      if (same) throw new AppError('CONSTRAINT_EXISTS');
+    // "A excludes B" and "B excludes A" are the same rule.
+    const same = await SubjectChoiceConstraint.exists({
+      tenantId: ctx.tenantId,
+      gradeOfferingId,
+      type: data.type,
+      $or: [
+        { subjectOfferingId: data.subjectOfferingId, otherSubjectOfferingId: data.otherSubjectOfferingId },
+        ...(data.type === 'EXCLUDES' ? [{ subjectOfferingId: data.otherSubjectOfferingId, otherSubjectOfferingId: data.subjectOfferingId }] : []),
+      ],
+    }).session(db);
+    if (same) throw new AppError('CONSTRAINT_EXISTS');
 
-      const [created] = await SubjectChoiceConstraint.create(
-        [{ ...data, tenantId: ctx.tenantId, gradeOfferingId, sessionId: offering.sessionId, locationId: offering.locationId, createdBy: ctx.userId, updatedBy: ctx.userId }],
-        { session: db },
-      );
-      const constraint = created!.toObject() as SubjectChoiceConstraintDoc;
-      const dto = (await toConstraintDTOs(ctx, [constraint], db))[0]!;
-      await recordAcademicAudit(ctx, db, {
-        entityType: 'subject_choice_constraint',
-        entityId: constraint._id,
-        action: 'constraint.created',
-        changes: [
-          { field: 'type', from: null, to: constraint.type },
-          { field: 'rule', from: null, to: dto.summary },
-        ],
-        academicSessionId: offering.sessionId,
-        metadata: { gradeOfferingId },
-      });
-      return dto;
+    const [created] = await SubjectChoiceConstraint.create(
+      [{ ...data, tenantId: ctx.tenantId, gradeOfferingId, sessionId: offering.sessionId, locationId: offering.locationId, createdBy: ctx.userId, updatedBy: ctx.userId }],
+      { session: db },
+    );
+    const constraint = created!.toObject() as SubjectChoiceConstraintDoc;
+    const dto = (await toConstraintDTOs(ctx, [constraint], db))[0]!;
+    await recordAcademicAudit(ctx, db, {
+      entityType: 'subject_choice_constraint',
+      entityId: constraint._id,
+      action: 'constraint.created',
+      changes: [
+        { field: 'type', from: null, to: constraint.type },
+        { field: 'rule', from: null, to: dto.summary },
+      ],
+      academicSessionId: offering.sessionId,
+      metadata: { gradeOfferingId },
     });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('type')) throw new AppError('CONSTRAINT_EXISTS');
-    throw err;
-  }
+    return dto;
+  }).catch(onDuplicate('type', () => new AppError('CONSTRAINT_EXISTS')));
 }
 
 export async function deleteConstraint(ctx: ServiceContext, constraintId: string): Promise<void> {

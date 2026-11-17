@@ -82,7 +82,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 **Stories:** FSM-01, FSM-02, FSM-03, FSM-04, FSM-05, SEC-01, SEC-03 (tenant + location)
 
 **Shared contract and permissions**
-1. Enums, Zod schemas (`.strict()`, so unknown keys such as `status` or `role` in a PATCH are rejected), DTOs and error codes in `backend/src/shared`, then `npm run sync-shared`.
+1. Enums, Zod schemas (`.strict()`, so unknown keys such as `status` or `role` in a PATCH are rejected), DTOs and error codes in `backend/src/shared`.
 2. New permissions. School Admin has all; Faculty/Staff get only `employee:directory`; Parents get none. Self-service routes in Part 2 need only a signed-in user linked to an employee.
    - `employee:directory`: directory fields (location-scoped for Faculty/Staff)
    - `employee:view`: profile, assignments, history
@@ -130,7 +130,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 21. In-process `employeeService` for later modules: `getEmployeeSummary()`, `assertEmployeeUsable(purpose)`, `listFacultyForSection()`.
 22. Seed (Greenfield, synthetic data only): starter departments/designations, about 10 employees across Mohali and Chandigarh. Includes `faculty@greenfield.demo` (Maths for VIII-A/B/C + class teacher VIII-A in 2026-27), a faculty member transferred from Chandigarh to Mohali (history visible), `staff@greenfield.demo` (Transport In-charge), a lab assistant with **no login**, and one EXITED employee. The admin user is not linked to an employee, to show the separation.
 
-**Tests (one new area file `tests/employees.test.ts`; extend `security.test.ts`'s route matrix):** QA F1 Faculty and Staff created with minimum fields, as separate person + employee rows · QA F2 duplicate code blocked (any case) · QA F3 one faculty member, many grades/sections/subjects, one profile · QA F4 multiple locations + transfer keeps history · QA F8 (part) exit closes and cancels assignments, `processDueExits` flips a future exit · class-teacher uniqueness · category mismatch · assignment refused on a CLOSED session (`NEW_ASSIGNMENT`) · location with active staff can't be archived · section with active faculty blocks the unsafe change on an ACTIVE session · QA S1 (part) and S2 (part) Faculty can't read a non-colleague by UUID; cross-tenant 404 · QA S11 (part) PATCH with `status`/`role`/unknown keys rejected · audit rows for each mutation · unit: lifecycle transitions, computed assignment status, data classification coverage.
+**Tests (one new area file `tests/staff.test.ts`; extend `security.test.ts`'s route matrix):** QA F1 Faculty and Staff created with minimum fields, as separate person + employee rows · QA F2 duplicate code blocked (any case) · QA F3 one faculty member, many grades/sections/subjects, one profile · QA F4 multiple locations + transfer keeps history · QA F8 (part) exit closes and cancels assignments, `processDueExits` flips a future exit · class-teacher uniqueness · category mismatch · assignment refused on a CLOSED session (`NEW_ASSIGNMENT`) · location with active staff can't be archived · section with active faculty blocks the unsafe change on an ACTIVE session · QA S1 (part) and S2 (part) Faculty can't read a non-colleague by UUID; cross-tenant 404 · QA S11 (part) PATCH with `status`/`role`/unknown keys rejected · audit rows for each mutation · unit: lifecycle transitions, computed assignment status, data classification coverage.
 
 **Done when:** an admin can onboard Faculty and Staff, place them at locations, transfer them, assign classes and responsibilities, and exit them through the API with history intact. Two tenants can't see each other's staff, and `npm test` is green.
 
@@ -187,7 +187,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 27. Extend `openapi.yaml`. Add `docs/STAFF_CONTRACTS.md` (entities, statuses, DTO exposure table per role, effective-dating rule, error catalog, `employeeService`, how Students/Parents reuse `platform/identity`) and `docs/DATA_INVENTORY.md` (generated from `data-classification.ts` by a small script).
 28. Seed: synthetic restricted data for the demo staff (`TEST`-prefixed IDs, `0000`-style account numbers), one pending change request, one PDF document per demo faculty member. Demo logins keep working because `.env.example` and the e2e server set `MFA_REQUIRED_ROLES=` (empty).
 
-**Tests (new area files `tests/identity.test.ts` and `tests/employee-data.test.ts`; extend the route matrix):**
+**Tests (added to `tests/platform.test.ts` and `tests/staff.test.ts`; extend the route matrix):**
 - QA F5 login created independently of the employee; pending user can't log in · QA F6 self profile returns only permitted fields · QA F7 legal name/DOB/bank go through approval and apply on approve · QA F8 (rest) exit at the effective date disables the account and kills sessions
 - QA S1 Faculty can't read another employee's restricted profile by UUID · QA S2 cross-tenant document and restricted IDs return 404 · QA S3 list/profile have no restricted keys; restricted DTO is masked · QA S4 reveal refused without permission or without step-up; a successful reveal is audited without the value · QA S5 no signed URL without authorization; a tampered or expired URL fails · QA S6 default exports have no restricted columns · QA S7 a log stream built with `REDACT_PATHS` and the audit/security collections contain none of the raw values used in the test · QA S8 suspending revokes live sessions (next request fails) · QA S9 activation and reset tokens are single use and expire · QA S10 wrong type, oversize and EICAR uploads rejected · QA S11 self PATCH can't touch role, status or restricted fields · QA S12 seed contains only `.demo` emails and `TEST`/zero-pattern identifiers
 - MFA: enrolment-restricted session, verify with code and recovery code, replayed code rejected, admin reset · last-admin guard · role change revokes sessions
@@ -298,9 +298,9 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 
 | Scenarios | Part |
 |---|---|
-| F1, F2, F3, F4, F8 (assignments + status) | 1 (`employees.test.ts`) |
-| F5, F6, F7, F8 (account) | 2 (`identity.test.ts`, `employee-data.test.ts`) |
-| S1, S2, S11 (employee records) | 1 (`employees.test.ts`, route matrix in `security.test.ts`) |
+| F1, F2, F3, F4, F8 (assignments + status) | 1 (`staff.test.ts`) |
+| F5, F6, F7, F8 (account) | 2 (`platform.test.ts`, `staff.test.ts`) |
+| S1, S2, S11 (employee records) | 1 (`staff.test.ts`, route matrix in `security.test.ts`) |
 | S1–S12 (restricted data, documents, tokens, logs, uploads, seed) | 2 |
 | UI parity and end-to-end flows | 3 (component + e2e) |
 

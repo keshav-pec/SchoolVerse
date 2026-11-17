@@ -27,6 +27,12 @@ function isEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(normalizeAuditValue(a)) === JSON.stringify(normalizeAuditValue(b));
 }
 
+/** Mongo `$set` for the fields in `changes` (values read from `next`), stamped with `updatedBy`. */
+export function changedValues(next: object, changes: readonly AuditChangeDTO[], updatedBy: string): Record<string, unknown> {
+  const values = next as Record<string, unknown>;
+  return { updatedBy, ...Object.fromEntries(changes.map((c) => [c.field, values[c.field]])) };
+}
+
 /**
  * Field-level diff for the audit trail. Only the listed fields are compared,
  * so secrets and noisy system fields never leak into audit rows.

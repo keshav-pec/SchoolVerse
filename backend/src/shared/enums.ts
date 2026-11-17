@@ -123,13 +123,6 @@ export type RuleVersionStatus = (typeof RULE_VERSION_STATUSES)[number];
 export const EDUCATION_STAGES = ['FOUNDATIONAL', 'PREPARATORY', 'MIDDLE', 'SECONDARY'] as const;
 export type EducationStage = (typeof EDUCATION_STAGES)[number];
 
-export const EDUCATION_STAGE_LABELS: Record<EducationStage, string> = {
-  FOUNDATIONAL: 'Foundational',
-  PREPARATORY: 'Preparatory',
-  MIDDLE: 'Middle',
-  SECONDARY: 'Secondary',
-};
-
 export const SUBJECT_CATEGORIES = [
   'LANGUAGE',
   'MATHEMATICS',

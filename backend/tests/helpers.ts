@@ -40,6 +40,13 @@ export function useTestDatabase() {
   });
 }
 
+// ───────────────────────────────────────────────────────────── responses
+
+export const data = <T>(res: { body: { data: T } }) => res.body.data;
+
+/** GET `${API}${path}` with the caller's agent; must return 200. Returns `data`. */
+export const get = async <T>(t: { agent: Agent }, path: string) => (await t.agent.get(`${API}${path}`).expect(200)).body.data as T;
+
 // ───────────────────────────────────────────────────────────── users
 
 let counter = 0;

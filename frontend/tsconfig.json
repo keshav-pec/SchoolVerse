@@ -27,7 +27,13 @@
         "./src/*"
       ],
       "@shared": [
-        "./src/shared/index.ts"
+        "../backend/src/shared/index.ts"
+      ],
+      "zod": [
+        "./node_modules/zod"
+      ],
+      "libphonenumber-js": [
+        "./node_modules/libphonenumber-js"
       ]
     }
   },

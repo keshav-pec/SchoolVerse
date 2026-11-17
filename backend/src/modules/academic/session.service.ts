@@ -13,11 +13,11 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { pickDefined, toIso } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import { actorFrom, can, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { Location } from '../locations/location.model';
 import { assertOperationalLocation } from '../master/master.service';
 import { getCurrentSchool } from '../school/school.service';
@@ -198,51 +198,46 @@ const AUDIT_FIELDS = [...SESSION_EDITABLE_FIELDS, 'status'] as const;
 
 export async function createSession(ctx: ServiceContext, data: CreateSessionData): Promise<AcademicSessionDTO> {
   assertDates(data.startDate, data.endDate);
-  try {
-    return await withTransaction(async (db) => {
-      const school = await getCurrentSchool(ctx);
-      if (!school) throw AppError.notFound('Set up your school before planning an academic session.');
-      const locations = await normaliseLocations(ctx, data.locations, [], db);
+  return withTransaction(async (db) => {
+    const school = await getCurrentSchool(ctx);
+    if (!school) throw AppError.notFound('Set up your school before planning an academic session.');
+    const locations = await normaliseLocations(ctx, data.locations, [], db);
 
-      const [created] = await AcademicSession.create(
-        [
-          {
-            tenantId: ctx.tenantId,
-            schoolId: school._id,
-            name: data.name,
-            code: data.code,
-            startDate: data.startDate,
-            endDate: data.endDate,
-            status: 'DRAFT',
-            locations,
-            statusChangedAt: new Date(),
-            statusChangedBy: ctx.userId,
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
-          },
-        ],
-        { session: db },
-      );
-      const doc = created!.toObject() as AcademicSessionDoc;
-      await recordAudit(
+    const [created] = await AcademicSession.create(
+      [
         {
           tenantId: ctx.tenantId,
-          entityType: 'academic_session',
-          entityId: doc._id,
-          action: 'academic_session.created',
-          actor: actorFrom(ctx),
-          changes: diffFields({}, doc, [...AUDIT_FIELDS, 'code']),
-          metadata: { academicSessionId: doc._id, schoolId: school._id },
-          requestId: ctx.requestId,
+          schoolId: school._id,
+          name: data.name,
+          code: data.code,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          status: 'DRAFT',
+          locations,
+          statusChangedAt: new Date(),
+          statusChangedBy: ctx.userId,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
         },
-        db,
-      );
-      return getSessionDTO(ctx, doc._id, db);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('code')) throw sessionCodeTaken();
-    throw err;
-  }
+      ],
+      { session: db },
+    );
+    const doc = created!.toObject() as AcademicSessionDoc;
+    await recordAudit(
+      {
+        tenantId: ctx.tenantId,
+        entityType: 'academic_session',
+        entityId: doc._id,
+        action: 'academic_session.created',
+        actor: actorFrom(ctx),
+        changes: diffFields({}, doc, [...AUDIT_FIELDS, 'code']),
+        metadata: { academicSessionId: doc._id, schoolId: school._id },
+        requestId: ctx.requestId,
+      },
+      db,
+    );
+    return getSessionDTO(ctx, doc._id, db);
+  }).catch(onDuplicate('code', sessionCodeTaken));
 }
 
 // ───────────────────────────────────────────────────────────── update
@@ -279,9 +274,7 @@ export async function updateSession(ctx: ServiceContext, academicSessionId: stri
 
     const changes = diffFields(before, next, SESSION_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (next as unknown as Record<string, unknown>)[c.field];
-      await AcademicSession.updateOne({ _id: academicSessionId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await AcademicSession.updateOne({ _id: academicSessionId, tenantId: ctx.tenantId }, { $set: changedValues(next, changes, ctx.userId) }, { session: db });
       await recordAudit(
         {
           tenantId: ctx.tenantId,

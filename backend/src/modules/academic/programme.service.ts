@@ -7,10 +7,10 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { pickDefined } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
 import { assertDeletable, assertEditable } from './guard';
 import { GradeOffering, SubjectOffering, type GradeOfferingDoc, type SubjectOfferingDoc } from './offering.model';
@@ -163,53 +163,48 @@ export async function getProgrammeDTO(ctx: ServiceContext, programmeId: string):
 }
 
 export async function createProgramme(ctx: ServiceContext, data: CreateProgrammeData): Promise<ProgrammeDTO> {
-  try {
-    return await withTransaction(async (db) => {
-      const session = await getSessionOrThrow(ctx, data.academicSessionId, db);
-      await assertEditable(session, {}, db);
-      const shape: ProgrammeShape = {
-        kind: data.kind,
-        gradeFromId: data.gradeFromId,
-        gradeToId: data.gradeToId,
-        boardId: data.boardId ?? null,
-        subjectRules: data.subjectRules,
-        choiceMin: data.choiceMin ?? null,
-        choiceMax: data.choiceMax ?? null,
-      };
-      const bounds = await checkProgramme(ctx, session, data.locationId, shape, db);
+  return withTransaction(async (db) => {
+    const session = await getSessionOrThrow(ctx, data.academicSessionId, db);
+    await assertEditable(session, {}, db);
+    const shape: ProgrammeShape = {
+      kind: data.kind,
+      gradeFromId: data.gradeFromId,
+      gradeToId: data.gradeToId,
+      boardId: data.boardId ?? null,
+      subjectRules: data.subjectRules,
+      choiceMin: data.choiceMin ?? null,
+      choiceMax: data.choiceMax ?? null,
+    };
+    const bounds = await checkProgramme(ctx, session, data.locationId, shape, db);
 
-      const [created] = await AcademicProgramme.create(
-        [
-          {
-            ...shape,
-            ...bounds,
-            tenantId: ctx.tenantId,
-            sessionId: session._id,
-            locationId: data.locationId,
-            name: data.name,
-            code: data.code,
-            status: 'ACTIVE',
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
-          },
-        ],
-        { session: db },
-      );
-      const programme = created!.toObject() as AcademicProgrammeDoc;
-      await recordAcademicAudit(ctx, db, {
-        entityType: 'academic_programme',
-        entityId: programme._id,
-        action: 'programme.created',
-        changes: [{ field: 'code', from: null, to: programme.code }, ...diffFields({}, programme, PROGRAMME_EDITABLE_FIELDS)],
-        academicSessionId: session._id,
-        metadata: { locationId: data.locationId },
-      });
-      return (await toProgrammeDTOs(ctx, [programme], db))[0]!;
+    const [created] = await AcademicProgramme.create(
+      [
+        {
+          ...shape,
+          ...bounds,
+          tenantId: ctx.tenantId,
+          sessionId: session._id,
+          locationId: data.locationId,
+          name: data.name,
+          code: data.code,
+          status: 'ACTIVE',
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      ],
+      { session: db },
+    );
+    const programme = created!.toObject() as AcademicProgrammeDoc;
+    await recordAcademicAudit(ctx, db, {
+      entityType: 'academic_programme',
+      entityId: programme._id,
+      action: 'programme.created',
+      changes: [{ field: 'code', from: null, to: programme.code }, ...diffFields({}, programme, PROGRAMME_EDITABLE_FIELDS)],
+      academicSessionId: session._id,
+      metadata: { locationId: data.locationId },
     });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('code')) throw codeTaken();
-    throw err;
-  }
+    return (await toProgrammeDTOs(ctx, [programme], db))[0]!;
+  }).catch(onDuplicate('code', codeTaken));
 }
 
 export async function updateProgramme(ctx: ServiceContext, programmeId: string, patch: UpdateProgrammeData): Promise<ProgrammeDTO> {
@@ -234,9 +229,7 @@ export async function updateProgramme(ctx: ServiceContext, programmeId: string, 
 
     const changes = diffFields(before, merged, PROGRAMME_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-      await AcademicProgramme.updateOne({ _id: programmeId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await AcademicProgramme.updateOne({ _id: programmeId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
         entityType: 'academic_programme',
         entityId: programmeId,

@@ -9,10 +9,10 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { pickDefined } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { getCurrentSchool } from '../school/school.service';
 import { recordAcademicAudit } from './audit';
 import { assertEditable } from './guard';
@@ -107,80 +107,68 @@ function termCodeTaken() {
 }
 
 export async function createTerm(ctx: ServiceContext, academicSessionId: string, data: CreateTermData): Promise<AcademicTermDTO> {
-  try {
-    return await withTransaction(async (db) => {
-      const session = await getSessionOrThrow(ctx, academicSessionId, db);
-      await assertEditable(session, {}, db);
-      const locationId = data.locationId ?? null;
-      await assertTermRules(ctx, session, { locationId, startDate: data.startDate, endDate: data.endDate }, null, db);
+  return withTransaction(async (db) => {
+    const session = await getSessionOrThrow(ctx, academicSessionId, db);
+    await assertEditable(session, {}, db);
+    const locationId = data.locationId ?? null;
+    await assertTermRules(ctx, session, { locationId, startDate: data.startDate, endDate: data.endDate }, null, db);
 
-      let sequence = data.sequence;
-      if (sequence === undefined) {
-        const last = await AcademicTerm.findOne({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId }).sort({ sequence: -1 }).select('sequence').session(db).lean<{ sequence: number }>();
-        sequence = (last?.sequence ?? 0) + 1;
-      }
-      const [created] = await AcademicTerm.create(
-        [
-          {
-            tenantId: ctx.tenantId,
-            sessionId: academicSessionId,
-            locationId,
-            name: data.name,
-            code: data.code,
-            type: data.type,
-            sequence,
-            startDate: data.startDate,
-            endDate: data.endDate,
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
-          },
-        ],
-        { session: db },
-      );
-      const term = created!.toObject() as AcademicTermDoc;
-      await recordAcademicAudit(ctx, db, {
-        entityType: 'academic_term',
-        entityId: term._id,
-        action: 'academic_term.created',
-        changes: diffFields({}, term, TERM_EDITABLE_FIELDS),
-        academicSessionId,
-      });
-      return toTermDTO(term, await todayForSchool(ctx));
+    let sequence = data.sequence;
+    if (sequence === undefined) {
+      const last = await AcademicTerm.findOne({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId }).sort({ sequence: -1 }).select('sequence').session(db).lean<{ sequence: number }>();
+      sequence = (last?.sequence ?? 0) + 1;
+    }
+    const [created] = await AcademicTerm.create(
+      [
+        {
+          tenantId: ctx.tenantId,
+          sessionId: academicSessionId,
+          locationId,
+          name: data.name,
+          code: data.code,
+          type: data.type,
+          sequence,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      ],
+      { session: db },
+    );
+    const term = created!.toObject() as AcademicTermDoc;
+    await recordAcademicAudit(ctx, db, {
+      entityType: 'academic_term',
+      entityId: term._id,
+      action: 'academic_term.created',
+      changes: diffFields({}, term, TERM_EDITABLE_FIELDS),
+      academicSessionId,
     });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('code')) throw termCodeTaken();
-    throw err;
-  }
+    return toTermDTO(term, await todayForSchool(ctx));
+  }).catch(onDuplicate('code', termCodeTaken));
 }
 
 export async function updateTerm(ctx: ServiceContext, termId: string, patch: UpdateTermData): Promise<AcademicTermDTO> {
-  try {
-    return await withTransaction(async (db) => {
-      const { term: before, session } = await getTermOrThrow(ctx, termId, db);
-      await assertEditable(session, {}, db);
+  return withTransaction(async (db) => {
+    const { term: before, session } = await getTermOrThrow(ctx, termId, db);
+    await assertEditable(session, {}, db);
 
-      const merged = { ...before, ...pickDefined(patch) } as AcademicTermDoc;
-      const changes = diffFields(before, merged, TERM_EDITABLE_FIELDS);
-      if (changes.length > 0) {
-        await assertTermRules(ctx, session, merged, termId, db);
-        const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-        for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-        await AcademicTerm.updateOne({ _id: termId, tenantId: ctx.tenantId }, { $set }, { session: db });
-        await recordAcademicAudit(ctx, db, {
-          entityType: 'academic_term',
-          entityId: termId,
-          action: 'academic_term.updated',
-          changes,
-          academicSessionId: before.sessionId,
-          metadata: { status: session.status },
-        });
-      }
-      return toTermDTO(merged, await todayForSchool(ctx));
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('code')) throw termCodeTaken();
-    throw err;
-  }
+    const merged = { ...before, ...pickDefined(patch) } as AcademicTermDoc;
+    const changes = diffFields(before, merged, TERM_EDITABLE_FIELDS);
+    if (changes.length > 0) {
+      await assertTermRules(ctx, session, merged, termId, db);
+      await AcademicTerm.updateOne({ _id: termId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
+      await recordAcademicAudit(ctx, db, {
+        entityType: 'academic_term',
+        entityId: termId,
+        action: 'academic_term.updated',
+        changes,
+        academicSessionId: before.sessionId,
+        metadata: { status: session.status },
+      });
+    }
+    return toTermDTO(merged, await todayForSchool(ctx));
+  }).catch(onDuplicate('code', termCodeTaken));
 }
 
 /** Allowed while the session is DRAFT or PUBLISHED; on an ACTIVE session only when nothing depends on the term. */

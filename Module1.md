@@ -10,7 +10,7 @@ Visual reference: `../quill-ui-kit` (palette, sizing, component patterns)
 | Decision | Choice | Why |
 |---|---|---|
 | Repo layout | Two independent projects in one root: `backend/` and `frontend/`, each with its own `package.json` and `node_modules` | Simple to run and deploy separately; nothing lives in the root except docs |
-| Shared contract | Source of truth in `backend/src/shared`; the frontend keeps a copy in `frontend/src/shared` (refresh with `npm run sync-shared`). Both import it as `@shared` | One set of Zod schemas, DTO types, enums and error codes for API and UI, without a workspace setup |
+| Shared contract | Single copy in `backend/src/shared`; both projects import it as `@shared` (the frontend aliases it to `../backend/src/shared`) | One set of Zod schemas, DTO types, enums and error codes for API and UI, without a workspace setup |
 | IDs | UUID v4 strings as Mongo `_id` (`crypto.randomUUID()`), exposed as `schoolId` / `locationId` | PRD §4 requires UUID PKs; downstream modules store stable UUIDs, not ObjectIds or labels |
 | Tenancy | `tenantId` on every document; taken **only** from the authenticated session, never from body/query | PRD §18: tenant ownership checked on every path |
 | Schools per tenant | MVP: exactly one (unique index on `tenantId`); the model and API still use `/schools/:schoolId` | PRD: “one canonical School Master per institution within the tenant” |
@@ -49,9 +49,7 @@ SchoolVerse/
 │   │   └─ scripts/seed.ts
 │   └─ tests/
 └─ frontend/                    # React + Vite app (own package.json, node_modules)
-    ├─ scripts/sync-shared.mjs  # copies backend/src/shared → frontend/src/shared
-    └─ src/
-        ├─ shared/              # COPY of the contract (@shared) — do not edit here
+    └─ src/                     # @shared resolves to backend/src/shared
         ├─ styles/theme.css     # Quill tokens + SchoolVerse “fun” accents
         ├─ components/ui/       # Button, Input, Field, Dialog, Sheet, DropdownMenu, Badge, Skeleton …
         ├─ components/sv/       # Logo, RoleBadge, Can, PageHeader, StatusPill, CampusAvatar, ProgressRing …

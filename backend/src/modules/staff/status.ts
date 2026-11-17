@@ -23,12 +23,6 @@ export function assignmentStatus(row: EffectiveRange, today: string): Assignment
   return 'ACTIVE';
 }
 
-/** True while the row is current or still to come (not ended, not cancelled). */
-export function isOpen(row: EffectiveRange, today: string): boolean {
-  const status = assignmentStatus(row, today);
-  return status === 'ACTIVE' || status === 'PLANNED';
-}
-
 /** `YYYY-MM-DD` plus or minus whole days, with no time zone shift. */
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -46,11 +40,6 @@ export function overlapping(from: string, to: string | null) {
       { $or: [{ effectiveTo: null }, { effectiveTo: { $gte: from } }] },
     ],
   };
-}
-
-/** Mongo fragment: rows that are current or planned on `today` (not ended, not cancelled). */
-export function openOn(today: string) {
-  return { cancelledAt: null, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: today } }] };
 }
 
 /** Today in the school's time zone. */

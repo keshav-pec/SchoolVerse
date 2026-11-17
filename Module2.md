@@ -67,7 +67,7 @@ All tenant-scoped rows also carry the Module 1 common fields (`createdAt/By`, `u
 **Stories:** AS-01, AS-02 (CRUD), AS-03, AS-04, AS-05, AS-06, AS-07, AS-12, AS-17 (RBAC + audit)
 
 **Shared contract and permissions**
-1. Add enums, Zod schemas, DTOs and error codes to `backend/src/shared` (frontend copy refreshed with `npm run sync-shared`).
+1. Add enums, Zod schemas, DTOs and error codes to `backend/src/shared`.
 2. New permissions (School Admin has all; Faculty/Staff get `academic:view`; Parents none):
    - `academic:view` — PUBLISHED / ACTIVE / CLOSED sessions only, structure fields only
    - `academic:view_config` — DRAFT sessions, validation results, audit
@@ -105,7 +105,7 @@ All tenant-scoped rows also carry the Module 1 common fields (`createdAt/By`, `u
 18. Cross-tenant IDs return 404 on every new route. Faculty/Staff get GETs only, Parents get 403.
 19. Register Module 2 on the **location dependency registry**: a location with grade offerings in a non-closed session returns `LOCATION_HAS_DEPENDENCIES` when archived.
 
-**Tests (one new area file: `tests/academic-setup.test.ts`, QA tags in titles):** QA 1 session with explicit dates · QA 3 one then many locations · QA 4 same grade differently at two locations · QA 5 offerings and sections (bulk) · QA 6 duplicate section blocked (including different case) · QA 7 subject + board-code mapping · QA 8 mandatory/elective offerings · QA 15 terms outside the session and overlapping terms blocked · delete only in DRAFT · location with offerings can't be archived · subject filters · seeded boards/grades are read-only and visible to every tenant, while a school-created board is visible only to its tenant.
+**Tests (one new area file: `tests/academic.test.ts`, QA tags in titles):** QA 1 session with explicit dates · QA 3 one then many locations · QA 4 same grade differently at two locations · QA 5 offerings and sections (bulk) · QA 6 duplicate section blocked (including different case) · QA 7 subject + board-code mapping · QA 8 mandatory/elective offerings · QA 15 terms outside the session and overlapping terms blocked · delete only in DRAFT · location with offerings can't be archived · subject filters · seeded boards/grades are read-only and visible to every tenant, while a school-created board is visible only to its tenant.
 
 **Done when:** an admin can build a full DRAFT session (locations, grades, sections, subjects, terms) through the API; two tenants can't see each other's data; `npm test` is green.
 
@@ -159,7 +159,7 @@ All tenant-scoped rows also carry the Module 1 common fields (`createdAt/By`, `u
 16. Extend `openapi.yaml` and add `docs/ACADEMIC_CONTRACTS.md` (frozen fields, session lifecycle, edit rules per status, context API, error catalog, ownership table from PRD Appendix A, the "reference offering UUIDs, never labels" rule).
 17. Seed the PRD §23 dataset for Greenfield: session 2026-27 (ACTIVE) for Mohali (national board template) and Chandigarh (state board test template), grades Nursery–XII at Mohali and Nursery–VIII at Chandigarh, sections VIII-A/B/C, subjects with a Grade VI language group, Grade XI programmes Science, Commerce, Humanities and Flexible Combination, and two terms. Also a DRAFT 2027-28 created by cloning, so the clone path is demoable.
 
-**Tests (new area files `tests/academic-rules.test.ts` and `tests/academic-lifecycle.test.ts`; extend `security.test.ts`'s route matrix instead of adding a new matrix):**
+**Tests (added to `tests/academic.test.ts`; extend `security.test.ts`'s route matrix instead of adding a new matrix):**
 - QA 9 language choice group · QA 10 CHOOSE_ONE and CHOOSE_N · QA 11 REQUIRES and EXCLUDES · QA 12 impossible rules detected (min > eligible, REQUIRES + EXCLUDES on the same pair) with messages naming the group · QA 13 senior-secondary programme · QA 14 flexible combination
 - QA 2 clone copies structure only and remaps IDs · QA 16 validate then publish, and publish blocked by an error
 - QA 17 unsafe change blocked on an ACTIVE session with a downstream dependency; allowed on a DRAFT · QA 18 close, then everything stays readable and read-only · only one ACTIVE session per school, including two concurrent activations
@@ -273,8 +273,8 @@ All tenant-scoped rows also carry the Module 1 common fields (`createdAt/By`, `u
 
 | Scenarios | Part |
 |---|---|
-| 1, 3, 4, 5, 6, 7, 8, 15 | 1 (`academic-setup.test.ts`) |
-| 2, 9, 10, 11, 12, 13, 14, 16, 17, 18 | 2 (`academic-rules.test.ts`, `academic-lifecycle.test.ts`) |
+| 1, 3, 4, 5, 6, 7, 8, 15 | 1 (`academic.test.ts`) |
+| 2, 9, 10, 11, 12, 13, 14, 16, 17, 18 | 2 (`academic.test.ts`) |
 | 19–24 | 2 (role matrix in `security.test.ts`, tenant isolation, audit rows); UI parity checked in 3 |
 
 ## Assumptions to confirm

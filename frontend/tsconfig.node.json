@@ -12,12 +12,9 @@
     "strict": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "allowJs": true,
-    "checkJs": true
+    "noEmit": true
   },
   "include": [
-    "vite.config.ts",
-    "scripts"
+    "vite.config.ts"
   ]
 }

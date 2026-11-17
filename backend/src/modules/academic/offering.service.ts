@@ -15,10 +15,10 @@ import {
 } from '@shared';
 import { AppError } from '../../core/errors';
 import { pickDefined } from '../../core/objects';
-import { duplicateKeyFields } from '../../db/errors';
+import { onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { diffFields } from '../audit/diff';
+import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
 import { removeRulesForGradeOffering, removeRulesForSubjectOfferings } from './cleanup';
 import { assertDeletable, assertEditable } from './guard';
@@ -124,65 +124,60 @@ function exists(): never {
 
 export async function createGradeOfferings(ctx: ServiceContext, academicSessionId: string, data: CreateGradeOfferingsData): Promise<GradeOfferingDTO[]> {
   const gradeIds = [...new Set(data.gradeIds)];
-  try {
-    return await withTransaction(async (db) => {
-      const session = await getSessionOrThrow(ctx, academicSessionId, db);
-      await assertEditable(session, {}, db);
-      if (!pinnedRuleVersionId(session, data.locationId)) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId: data.locationId });
+  return withTransaction(async (db) => {
+    const session = await getSessionOrThrow(ctx, academicSessionId, db);
+    await assertEditable(session, {}, db);
+    if (!pinnedRuleVersionId(session, data.locationId)) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId: data.locationId });
 
-      const grades = await getGradesByIds(gradeIds, db);
-      if (grades.length !== gradeIds.length) throw AppError.notFound('One or more grades were not found.');
+    const grades = await getGradesByIds(gradeIds, db);
+    if (grades.length !== gradeIds.length) throw AppError.notFound('One or more grades were not found.');
 
-      const already = await GradeOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId: data.locationId, gradeId: { $in: gradeIds } })
-        .select('gradeId')
-        .session(db)
-        .lean<{ gradeId: string }[]>();
-      if (already.length > 0) {
-        const names = grades.filter((g) => already.some((a) => a.gradeId === g._id)).map((g) => g.canonicalName);
-        throw new AppError('GRADE_OFFERING_EXISTS', `Already set up for this location: ${names.join(', ')}.`, {
-          gradeIds: already.map((a) => a.gradeId),
-          fields: { gradeIds: `Already set up: ${names.join(', ')}.` },
-        });
-      }
+    const already = await GradeOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId: data.locationId, gradeId: { $in: gradeIds } })
+      .select('gradeId')
+      .session(db)
+      .lean<{ gradeId: string }[]>();
+    if (already.length > 0) {
+      const names = grades.filter((g) => already.some((a) => a.gradeId === g._id)).map((g) => g.canonicalName);
+      throw new AppError('GRADE_OFFERING_EXISTS', `Already set up for this location: ${names.join(', ')}.`, {
+        gradeIds: already.map((a) => a.gradeId),
+        fields: { gradeIds: `Already set up: ${names.join(', ')}.` },
+      });
+    }
 
-      const ordered = [...grades].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
-      const created: GradeOfferingDoc[] = [];
-      for (const grade of ordered) {
-        const [doc] = await GradeOffering.create(
-          [
-            {
-              tenantId: ctx.tenantId,
-              sessionId: academicSessionId,
-              locationId: data.locationId,
-              gradeId: grade._id,
-              displayName: grade.canonicalName,
-              displayCode: grade.shortCode,
-              medium: data.medium ?? null,
-              sequenceOrder: grade.sequenceNumber,
-              status: 'ACTIVE',
-              createdBy: ctx.userId,
-              updatedBy: ctx.userId,
-            },
-          ],
-          { session: db },
-        );
-        const offering = doc!.toObject() as GradeOfferingDoc;
-        created.push(offering);
-        await recordAcademicAudit(ctx, db, {
-          entityType: 'grade_offering',
-          entityId: offering._id,
-          action: 'grade_offering.created',
-          changes: diffFields({}, offering, GRADE_OFFERING_EDITABLE_FIELDS),
-          academicSessionId,
-          metadata: { locationId: data.locationId, gradeId: grade._id, canonicalCode: grade.canonicalCode },
-        });
-      }
-      return toGradeOfferingDTOs(ctx, created, db);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('gradeId')) exists();
-    throw err;
-  }
+    const ordered = [...grades].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+    const created: GradeOfferingDoc[] = [];
+    for (const grade of ordered) {
+      const [doc] = await GradeOffering.create(
+        [
+          {
+            tenantId: ctx.tenantId,
+            sessionId: academicSessionId,
+            locationId: data.locationId,
+            gradeId: grade._id,
+            displayName: grade.canonicalName,
+            displayCode: grade.shortCode,
+            medium: data.medium ?? null,
+            sequenceOrder: grade.sequenceNumber,
+            status: 'ACTIVE',
+            createdBy: ctx.userId,
+            updatedBy: ctx.userId,
+          },
+        ],
+        { session: db },
+      );
+      const offering = doc!.toObject() as GradeOfferingDoc;
+      created.push(offering);
+      await recordAcademicAudit(ctx, db, {
+        entityType: 'grade_offering',
+        entityId: offering._id,
+        action: 'grade_offering.created',
+        changes: diffFields({}, offering, GRADE_OFFERING_EDITABLE_FIELDS),
+        academicSessionId,
+        metadata: { locationId: data.locationId, gradeId: grade._id, canonicalCode: grade.canonicalCode },
+      });
+    }
+    return toGradeOfferingDTOs(ctx, created, db);
+  }).catch(onDuplicate('gradeId', exists));
 }
 
 export async function updateGradeOffering(ctx: ServiceContext, gradeOfferingId: string, patch: UpdateGradeOfferingData): Promise<GradeOfferingDTO> {
@@ -194,9 +189,7 @@ export async function updateGradeOffering(ctx: ServiceContext, gradeOfferingId: 
     const merged = { ...before, ...pickDefined(patch) } as GradeOfferingDoc;
     const changes = diffFields(before, merged, GRADE_OFFERING_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-      await GradeOffering.updateOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await GradeOffering.updateOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
         entityType: 'grade_offering',
         entityId: gradeOfferingId,
@@ -277,54 +270,49 @@ export async function createSections(ctx: ServiceContext, gradeOfferingId: strin
   const repeated = data.codes.filter((c, i) => data.codes.indexOf(c) !== i);
   if (repeated.length > 0) throw sectionCodeTaken([...new Set(repeated)]);
 
-  try {
-    return await withTransaction(async (db) => {
-      const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
-      await assertEditable(session, {}, db);
+  return withTransaction(async (db) => {
+    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    await assertEditable(session, {}, db);
 
-      const existing = await SectionOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).select('sectionCode sequenceOrder').session(db).lean<SectionOfferingDoc[]>();
-      const taken = data.codes.filter((c) => existing.some((e) => e.sectionCode === c));
-      if (taken.length > 0) throw sectionCodeTaken(taken);
+    const existing = await SectionOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).select('sectionCode sequenceOrder').session(db).lean<SectionOfferingDoc[]>();
+    const taken = data.codes.filter((c) => existing.some((e) => e.sectionCode === c));
+    if (taken.length > 0) throw sectionCodeTaken(taken);
 
-      let order = existing.reduce((max, e) => Math.max(max, e.sequenceOrder), 0);
-      const created: SectionOfferingDoc[] = [];
-      for (const code of data.codes) {
-        order += 1;
-        const [doc] = await SectionOffering.create(
-          [
-            {
-              tenantId: ctx.tenantId,
-              gradeOfferingId,
-              sessionId: offering.sessionId,
-              locationId: offering.locationId,
-              sectionCode: code,
-              displayName: code,
-              capacity: data.capacity ?? null,
-              sequenceOrder: order,
-              status: 'ACTIVE',
-              createdBy: ctx.userId,
-              updatedBy: ctx.userId,
-            },
-          ],
-          { session: db },
-        );
-        const section = doc!.toObject() as SectionOfferingDoc;
-        created.push(section);
-        await recordAcademicAudit(ctx, db, {
-          entityType: 'section_offering',
-          entityId: section._id,
-          action: 'section.created',
-          changes: [{ field: 'sectionCode', from: null, to: section.sectionCode }, ...diffFields({}, section, ['capacity'])],
-          academicSessionId: offering.sessionId,
-          metadata: { gradeOfferingId, locationId: offering.locationId },
-        });
-      }
-      return created.map(toSectionDTO);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('sectionCode')) throw sectionCodeTaken(data.codes);
-    throw err;
-  }
+    let order = existing.reduce((max, e) => Math.max(max, e.sequenceOrder), 0);
+    const created: SectionOfferingDoc[] = [];
+    for (const code of data.codes) {
+      order += 1;
+      const [doc] = await SectionOffering.create(
+        [
+          {
+            tenantId: ctx.tenantId,
+            gradeOfferingId,
+            sessionId: offering.sessionId,
+            locationId: offering.locationId,
+            sectionCode: code,
+            displayName: code,
+            capacity: data.capacity ?? null,
+            sequenceOrder: order,
+            status: 'ACTIVE',
+            createdBy: ctx.userId,
+            updatedBy: ctx.userId,
+          },
+        ],
+        { session: db },
+      );
+      const section = doc!.toObject() as SectionOfferingDoc;
+      created.push(section);
+      await recordAcademicAudit(ctx, db, {
+        entityType: 'section_offering',
+        entityId: section._id,
+        action: 'section.created',
+        changes: [{ field: 'sectionCode', from: null, to: section.sectionCode }, ...diffFields({}, section, ['capacity'])],
+        academicSessionId: offering.sessionId,
+        metadata: { gradeOfferingId, locationId: offering.locationId },
+      });
+    }
+    return created.map(toSectionDTO);
+  }).catch(onDuplicate('sectionCode', () => sectionCodeTaken(data.codes)));
 }
 
 export async function updateSection(ctx: ServiceContext, sectionId: string, patch: UpdateSectionData): Promise<SectionOfferingDTO> {
@@ -336,9 +324,7 @@ export async function updateSection(ctx: ServiceContext, sectionId: string, patc
     const merged = { ...before, ...pickDefined(patch) } as SectionOfferingDoc;
     const changes = diffFields(before, merged, SECTION_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-      await SectionOffering.updateOne({ _id: sectionId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await SectionOffering.updateOne({ _id: sectionId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
         entityType: 'section_offering',
         entityId: sectionId,
@@ -470,29 +456,24 @@ function alreadyOffered(names: string[]) {
 
 export async function createSubjectOfferings(ctx: ServiceContext, gradeOfferingId: string, data: CreateSubjectOfferingsData): Promise<SubjectOfferingDTO[]> {
   const subjectIds = [...new Set(data.subjectIds)];
-  try {
-    return await withTransaction(async (db) => {
-      const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
-      await assertEditable(session, {}, db);
+  return withTransaction(async (db) => {
+    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    await assertEditable(session, {}, db);
 
-      const subjects = await Subject.find({ tenantId: ctx.tenantId, _id: { $in: subjectIds } }).session(db).lean<SubjectDoc[]>();
-      if (subjects.length !== subjectIds.length) throw AppError.notFound('One or more subjects were not found.');
-      const inactive = subjects.filter((s) => s.status !== 'ACTIVE');
-      if (inactive.length > 0) {
-        throw new AppError('SUBJECT_INACTIVE', `Inactive subjects cannot be offered: ${inactive.map((s) => s.name).join(', ')}.`, {
-          fields: { subjectIds: `Inactive: ${inactive.map((s) => s.name).join(', ')}.` },
-        });
-      }
-      const existing = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId, subjectId: { $in: subjectIds } }).select('subjectId').session(db).lean<{ subjectId: string }[]>();
-      if (existing.length > 0) throw alreadyOffered(subjects.filter((s) => existing.some((e) => e.subjectId === s._id)).map((s) => s.name));
+    const subjects = await Subject.find({ tenantId: ctx.tenantId, _id: { $in: subjectIds } }).session(db).lean<SubjectDoc[]>();
+    if (subjects.length !== subjectIds.length) throw AppError.notFound('One or more subjects were not found.');
+    const inactive = subjects.filter((s) => s.status !== 'ACTIVE');
+    if (inactive.length > 0) {
+      throw new AppError('SUBJECT_INACTIVE', `Inactive subjects cannot be offered: ${inactive.map((s) => s.name).join(', ')}.`, {
+        fields: { subjectIds: `Inactive: ${inactive.map((s) => s.name).join(', ')}.` },
+      });
+    }
+    const existing = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId, subjectId: { $in: subjectIds } }).select('subjectId').session(db).lean<{ subjectId: string }[]>();
+    if (existing.length > 0) throw alreadyOffered(subjects.filter((s) => existing.some((e) => e.subjectId === s._id)).map((s) => s.name));
 
-      const created = await insertSubjectOfferings(ctx, db, offering, session, subjectIds.map((subjectId) => ({ subjectId, offeringType: data.offeringType })));
-      return toSubjectOfferingDTOs(ctx, created, db);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('subjectId')) throw alreadyOffered([]);
-    throw err;
-  }
+    const created = await insertSubjectOfferings(ctx, db, offering, session, subjectIds.map((subjectId) => ({ subjectId, offeringType: data.offeringType })));
+    return toSubjectOfferingDTOs(ctx, created, db);
+  }).catch(onDuplicate('subjectId', () => alreadyOffered([])));
 }
 
 /** Copies a subject list from another grade of the SAME session, only when the admin asks for it. */
@@ -540,9 +521,7 @@ export async function updateSubjectOffering(ctx: ServiceContext, subjectOffering
     const merged = { ...before, ...pickDefined(patch) } as SubjectOfferingDoc;
     const changes = diffFields(before, merged, SUBJECT_OFFERING_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      const $set: Record<string, unknown> = { updatedBy: ctx.userId };
-      for (const c of changes) $set[c.field] = (merged as unknown as Record<string, unknown>)[c.field];
-      await SubjectOffering.updateOne({ _id: subjectOfferingId, tenantId: ctx.tenantId }, { $set }, { session: db });
+      await SubjectOffering.updateOne({ _id: subjectOfferingId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
         entityType: 'subject_offering',
         entityId: subjectOfferingId,

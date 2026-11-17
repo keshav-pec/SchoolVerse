@@ -1,7 +1,7 @@
 import type { ClientSession } from 'mongoose';
 import type { BoardDTO, BoardRuleVersionDTO, CreateBoardData, CreateRuleVersionData, GradeMasterDTO, RuleVersionStatus } from '@shared';
 import { AppError } from '../../core/errors';
-import { duplicateKeyFields } from '../../db/errors';
+import { duplicateKeyFields, onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import { actorFrom, can, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
@@ -107,39 +107,34 @@ export async function getUsableRuleVersion(tenantId: string, boardId: string, ru
 // ───────────────────────────────────────────────────────────── school-created boards ("configure from blank")
 
 export async function createBoard(ctx: ServiceContext, data: CreateBoardData): Promise<BoardDTO> {
-  try {
-    return await withTransaction(async (session) => {
-      // A school cannot re-use a built-in code: "CBSE" must always mean the built-in board.
-      const systemClash = await EducationBoard.exists({ tenantId: null, boardCode: data.boardCode }).session(session);
-      if (systemClash) throw boardCodeTaken();
+  return withTransaction(async (session) => {
+    // A school cannot re-use a built-in code: "CBSE" must always mean the built-in board.
+    const systemClash = await EducationBoard.exists({ tenantId: null, boardCode: data.boardCode }).session(session);
+    if (systemClash) throw boardCodeTaken();
 
-      const [created] = await EducationBoard.create(
-        [{ ...data, stateCode: data.stateCode ?? null, tenantId: ctx.tenantId, createdBy: ctx.userId, updatedBy: ctx.userId }],
-        { session },
-      );
-      const board = created!.toObject() as EducationBoardDoc;
-      await recordAudit(
-        {
-          tenantId: ctx.tenantId,
-          entityType: 'education_board',
-          entityId: board._id,
-          action: 'board.created',
-          actor: actorFrom(ctx),
-          changes: [
-            { field: 'boardCode', from: null, to: board.boardCode },
-            { field: 'boardName', from: null, to: board.boardName },
-            { field: 'boardType', from: null, to: board.boardType },
-          ],
-          requestId: ctx.requestId,
-        },
-        session,
-      );
-      return toBoardDTO(board);
-    });
-  } catch (err) {
-    if (duplicateKeyFields(err)?.includes('boardCode')) throw boardCodeTaken();
-    throw err;
-  }
+    const [created] = await EducationBoard.create(
+      [{ ...data, stateCode: data.stateCode ?? null, tenantId: ctx.tenantId, createdBy: ctx.userId, updatedBy: ctx.userId }],
+      { session },
+    );
+    const board = created!.toObject() as EducationBoardDoc;
+    await recordAudit(
+      {
+        tenantId: ctx.tenantId,
+        entityType: 'education_board',
+        entityId: board._id,
+        action: 'board.created',
+        actor: actorFrom(ctx),
+        changes: [
+          { field: 'boardCode', from: null, to: board.boardCode },
+          { field: 'boardName', from: null, to: board.boardName },
+          { field: 'boardType', from: null, to: board.boardType },
+        ],
+        requestId: ctx.requestId,
+      },
+      session,
+    );
+    return toBoardDTO(board);
+  }).catch(onDuplicate('boardCode', boardCodeTaken));
 }
 
 function boardCodeTaken() {
