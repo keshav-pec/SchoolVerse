@@ -7,10 +7,11 @@ import { AppError } from '../../core/errors';
  * every protected route must declare the permissions it needs here.
  */
 export function requirePermission(...required: Permission[]): RequestHandler {
-  return (req, _res, next) => {
+  const handler: RequestHandler = (req, _res, next) => {
     assertPermissions(req, ...required);
     next();
   };
+  return Object.assign(handler, { permissions: required }); // read by the API docs generator
 }
 
 /** Imperative form for permissions that depend on the request body (e.g. "create AND set primary"). */

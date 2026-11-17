@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import { env, isProd } from './config/env';
-import { ok } from './core/http';
+import { mount, ok } from './core/http';
 import { academicRouter } from './modules/academic/academic.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 import { devRouter } from './modules/dependencies/dev.routes';
@@ -27,17 +27,17 @@ apiRouter.get('/health', (_req, res) => {
   });
 });
 
-apiRouter.use('/auth', authRouter);
-apiRouter.use('/users', userRouter);
-apiRouter.use('/schools', setupRouter);
-apiRouter.use('/schools', schoolRouter);
-apiRouter.use('/locations', locationRouter);
-apiRouter.use('/audit', auditRouter);
-apiRouter.use('/master', masterRouter);
-apiRouter.use(academicRouter);
-apiRouter.use(staffRouter);
-apiRouter.use('/files', filesRouter);
+mount(apiRouter, '/auth', authRouter);
+mount(apiRouter, '/users', userRouter);
+mount(apiRouter, '/schools', setupRouter);
+mount(apiRouter, '/schools', schoolRouter);
+mount(apiRouter, '/locations', locationRouter);
+mount(apiRouter, '/audit', auditRouter);
+mount(apiRouter, '/master', masterRouter);
+mount(apiRouter, '', academicRouter);
+mount(apiRouter, '', staffRouter);
+mount(apiRouter, '/files', filesRouter);
 // The dev outbox shows the emails that would have been sent. Only when DEV_OUTBOX is on, and before the (authenticated) dev router.
-if (env.DEV_OUTBOX) apiRouter.use('/dev/outbox', outboxRouter);
+if (env.DEV_OUTBOX) mount(apiRouter, '/dev/outbox', outboxRouter);
 // Simulated downstream references for QA (scenario 23). Never mounted in production.
-if (!isProd) apiRouter.use('/dev', devRouter);
+if (!isProd) mount(apiRouter, '/dev', devRouter);

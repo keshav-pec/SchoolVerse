@@ -3,7 +3,8 @@ import mongoose, { Schema } from 'mongoose';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SKIP_TENANT_SCOPE, tenantScopePlugin } from '../src/db/plugins/tenant-scope';
-import { loadOpenApiDocument } from '../src/docs/swagger';
+import { buildOpenApiDocument, listEndpoints } from '../src/docs/openapi';
+import { apiRouter } from '../src/routes';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import { User } from '../src/platform/users/user.model';
 import {
@@ -205,10 +206,23 @@ describe('tenantScopePlugin (SCH-LOC-15)', () => {
 });
 
 describe('API documentation (SCH-LOC-14)', () => {
-  it('the OpenAPI spec resolves every $ref', () => {
-    const spec = loadOpenApiDocument() as unknown as { components: Record<string, Record<string, unknown>> };
+  it('the OpenAPI spec is generated from every route, with auth, permissions and request schemas', () => {
+    type Operation = { security: unknown; description?: string; parameters: { name: string }[]; requestBody: { content: Record<string, { schema: { properties: object } }> } };
+    const spec = buildOpenApiDocument(apiRouter) as unknown as { paths: Record<string, Record<string, Operation>>; components: Record<string, Record<string, unknown>> };
+    const endpoints = listEndpoints(apiRouter);
+    expect(endpoints.length).toBeGreaterThan(150);
+    for (const e of endpoints) expect(spec.paths[e.path.replace(/:(\w+)/g, '{$1}')]?.[e.method], `${e.method} ${e.path}`).toBeDefined();
+
+    const op = (path: string, method: string) => spec.paths[path]![method]!;
+    expect(op('/health', 'get').security).toEqual([]);
+    const createLocation = op('/schools/{schoolId}/locations', 'post');
+    expect(createLocation.security).toEqual([{ cookieAuth: [] }]);
+    expect(createLocation.description).toContain('location:create');
+    expect(createLocation.requestBody.content['application/json']!.schema.properties).toHaveProperty('locationCode');
+    expect(op('/academic-sessions/{academicSessionId}/publish', 'post').description).toContain('academic:publish');
+    expect(op('/employees', 'get').parameters.map((p) => p.name)).toContain('q');
+
     const refs = [...JSON.stringify(spec).matchAll(/"\$ref":"#\/components\/(\w+)\/(\w+)"/g)];
-    expect(refs.length).toBeGreaterThan(20);
     for (const [, kind, name] of refs) expect(spec.components[kind!]?.[name!], `#/components/${kind}/${name}`).toBeDefined();
   });
 

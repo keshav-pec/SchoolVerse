@@ -113,7 +113,7 @@ Greenfield's first-time setup is **completed**, so its admin goes straight to th
 ## API
 
 Interactive docs: **http://localhost:4000/api/docs** (Swagger UI), raw spec at `/api/docs.json`.
-The spec is [`backend/src/docs/openapi.yaml`](backend/src/docs/openapi.yaml); rules, frozen fields and the downstream pattern are in [`backend/src/docs/CONTRACTS.md`](backend/src/docs/CONTRACTS.md) (school and locations) and [`backend/src/docs/ACADEMIC_CONTRACTS.md`](backend/src/docs/ACADEMIC_CONTRACTS.md) (academic structure).
+The spec is generated at startup from the routes and their Zod schemas ([`backend/src/docs/openapi.ts`](backend/src/docs/openapi.ts)), so new routes appear without extra work; rules, frozen fields and the downstream pattern are in [`backend/src/docs/CONTRACTS.md`](backend/src/docs/CONTRACTS.md) (school and locations) and [`backend/src/docs/ACADEMIC_CONTRACTS.md`](backend/src/docs/ACADEMIC_CONTRACTS.md) (academic structure).
 
 All routes are under `/api/v1`, require a session cookie, and are scoped to the caller's tenant.
 
@@ -176,7 +176,7 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | 9 | Role permissions enforced server-side | `security` (QA 27/29) · `platform` · e2e faculty-read-only |
 | 10 | Configuration changes audit-logged, in the same transaction | `security` (QA 28) · `locations` · `setup` |
 | 11 | Stable `school_id` / `location_id` for downstream modules | `master` · `CONTRACTS.md` |
-| 13 | APIs and contracts documented | `/api/docs` · `openapi.yaml` · `CONTRACTS.md` · `platform` |
+| 13 | APIs and contracts documented | `/api/docs` · `openapi.ts` (generated) · `CONTRACTS.md` · `platform` |
 | 14–15 | Critical invariants and QA scenarios automated | all of the above |
 
 **Acceptance criteria — Academic Structure (PRD §23.2 scenarios, which §24 is checked against)**

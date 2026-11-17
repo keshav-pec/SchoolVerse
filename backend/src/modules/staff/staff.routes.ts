@@ -17,7 +17,7 @@ import {
   uuidSchema,
 } from '@shared';
 import { z } from 'zod';
-import { created, noContent, ok } from '../../core/http';
+import { created, mount, noContent, ok } from '../../core/http';
 import { validate } from '../../core/validate';
 import { authenticate } from '../../platform/auth/authenticate';
 import { requirePermission } from '../../platform/rbac/require-permission';
@@ -42,7 +42,7 @@ staffRouter.use(
   authenticate,
 );
 // Restricted data, logins, documents, exports, self-service and change approval (Part 2). The export route must be matched before `/employees/:id`.
-staffRouter.use(identityRouter);
+mount(staffRouter, '', identityRouter);
 
 const idParams = z.object({ id: uuidSchema });
 
@@ -65,8 +65,8 @@ function mastersRouter(service: typeof departmentService) {
   });
   return router;
 }
-staffRouter.use('/departments', mastersRouter(departmentService));
-staffRouter.use('/designations', mastersRouter(designationService as unknown as typeof departmentService));
+mount(staffRouter, '/departments', mastersRouter(departmentService));
+mount(staffRouter, '/designations', mastersRouter(designationService as unknown as typeof departmentService));
 
 // ───────────────────────────────────────────────────────────── employees (FSM-01)
 

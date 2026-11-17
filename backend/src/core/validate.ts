@@ -23,10 +23,11 @@ export function parseOrThrow<S extends ZodType>(schema: S, value: unknown): z.ou
  * Express 5 makes `req.query` read-only, so parsed query lives on `res.locals.query`.
  */
 export function validate(schemas: { body?: ZodType; params?: ZodType; query?: ZodType }): RequestHandler {
-  return (req, res, next) => {
+  const handler: RequestHandler = (req, res, next) => {
     if (schemas.body) req.body = parseOrThrow(schemas.body, req.body ?? {});
     if (schemas.params) req.params = parseOrThrow(schemas.params, req.params) as typeof req.params;
     if (schemas.query) res.locals.query = parseOrThrow(schemas.query, req.query);
     next();
   };
+  return Object.assign(handler, { schemas }); // read by the API docs generator
 }

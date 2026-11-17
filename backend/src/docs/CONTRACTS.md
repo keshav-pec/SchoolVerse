@@ -5,7 +5,7 @@ Every later module (Academic Structure, Staff, Students, Buildings & Rooms, Time
 Inventory, Transport, Reports) consumes it through the contracts below. Structural changes to anything on
 this page need an architecture review once a downstream module depends on it (PRD §15).
 
-Machine-readable API: [`openapi.yaml`](./openapi.yaml), served with Swagger UI at `/api/docs`.
+Machine-readable API: generated from the routes by [`openapi.ts`](./openapi.ts), served with Swagger UI at `/api/docs`.
 
 Module 2 (Academic Structure: sessions, grades, sections, subjects, rules, programmes, the academic context) has its own contract: [`ACADEMIC_CONTRACTS.md`](./ACADEMIC_CONTRACTS.md).
 

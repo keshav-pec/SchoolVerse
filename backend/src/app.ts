@@ -39,7 +39,7 @@ export function createApp() {
     }),
   );
   // API documentation has its own (relaxed) security headers, so it is mounted before the global helmet.
-  app.use('/api', createDocsRouter());
+  app.use('/api', createDocsRouter(apiRouter));
   app.use(helmet());
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   app.use(express.json({ limit: '100kb' }));
