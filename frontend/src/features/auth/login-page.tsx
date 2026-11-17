@@ -33,7 +33,10 @@ export function LoginPage() {
     setError,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } });
+  } = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -53,15 +56,38 @@ export function LoginPage() {
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-5">
         {formError && <Alert tone="danger">{formError}</Alert>}
-        <TextField label="Email" type="email" autoComplete="email" autoFocus required placeholder="you@school.edu" error={errors.email?.message} {...register('email')} />
+        <TextField
+          label="Email"
+          type="email"
+          autoComplete="email"
+          autoFocus
+          required
+          placeholder="you@school.edu"
+          error={errors.email?.message}
+          {...register('email')}
+        />
         <PasswordField
           label="Password"
           autoComplete="current-password"
           required
           error={errors.password?.message}
+          labelAside={
+            <Link
+              to="/forgot-password"
+              className="text-[13px] font-semibold text-brand hover:underline"
+            >
+              Forgot password?
+            </Link>
+          }
           {...register('password')}
         />
-        <Button type="submit" size="lg" className="w-full" loading={isSubmitting} loadingText="Signing you in…">
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          loading={isSubmitting}
+          loadingText="Signing you in…"
+        >
           Sign in <ArrowRight />
         </Button>
       </form>
@@ -76,7 +102,8 @@ export function LoginPage() {
       {/* {import.meta.env.DEV && ( */}
       <div className="mt-8 rounded-2xl border border-dashed border-lavender/50 bg-lavender-soft/60 p-4">
         <p className="flex items-center gap-2 text-sm font-semibold text-[#5b4bd1]">
-          <FlaskConical className="size-4" /> Demo accounts <span className="font-normal text-muted">(testing purpose only)</span>
+          <FlaskConical className="size-4" /> Demo accounts{' '}
+          <span className="font-normal text-muted">(testing purpose only)</span>
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {DEMO_ACCOUNTS.map((a) => (

@@ -36,14 +36,18 @@ export function SignupPage() {
       toast.success(`Your workspace is ready, ${firstName(session.user.fullName)}! 🎉`);
       navigate('/', { replace: true });
     } catch (err) {
-      setFormError(applyServerErrors(err, setError, ['workspaceName', 'fullName', 'email', 'password']));
+      setFormError(
+        applyServerErrors(err, setError, ['workspaceName', 'fullName', 'email', 'password']),
+      );
     }
   });
 
   return (
     <div>
       <h1 className="text-[30px] leading-tight font-extrabold">Let’s set up your school ✨</h1>
-      <p className="mt-2 text-[15px] text-muted">Create a workspace for your school. It takes about a minute.</p>
+      <p className="mt-2 text-[15px] text-muted">
+        Create a workspace for your school. It takes about a minute.
+      </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-5">
         {formError && <Alert tone="danger">{formError}</Alert>}
@@ -56,19 +60,46 @@ export function SignupPage() {
           error={errors.workspaceName?.message}
           {...register('workspaceName')}
         />
-        <TextField label="Your full name" autoComplete="name" required error={errors.fullName?.message} {...register('fullName')} />
-        <TextField label="Work email" type="email" autoComplete="email" required placeholder="you@school.edu" error={errors.email?.message} {...register('email')} />
-        <PasswordField label="Password" autoComplete="new-password" required error={errors.password?.message} {...register('password')} />
+        <TextField
+          label="Your full name"
+          autoComplete="name"
+          required
+          error={errors.fullName?.message}
+          {...register('fullName')}
+        />
+        <TextField
+          label="Work email"
+          type="email"
+          autoComplete="email"
+          required
+          placeholder="you@school.edu"
+          error={errors.email?.message}
+          {...register('email')}
+        />
+        <PasswordField
+          label="Password"
+          autoComplete="new-password"
+          required
+          error={errors.password?.message}
+          {...register('password')}
+        />
         <PasswordStrength value={watch('password')} />
 
         <div className="flex items-start gap-2.5 rounded-xl bg-brand-soft px-3.5 py-3 text-[13px] text-ink">
           <Crown className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
           <p>
-            You’ll be the <strong>School Admin</strong>, with full access to school setup. You can invite faculty and staff later.
+            You’ll be the <strong>School Admin</strong>, with full access to school setup. You can
+            invite faculty and staff later.
           </p>
         </div>
 
-        <Button type="submit" size="lg" className="w-full" loading={isSubmitting} loadingText="Creating your workspace…">
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          loading={isSubmitting}
+          loadingText="Creating your workspace…"
+        >
           <Rocket /> Create workspace
         </Button>
       </form>

@@ -3,7 +3,7 @@ import { defaultMessageFor, type ApiErrorBody, type ApiErrorDetails } from '@sha
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
 /** Endpoints that must never trigger an automatic refresh-and-retry. */
-const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/logout'];
+const NO_REFRESH = ['/auth/login', '/auth/signup', '/auth/refresh', '/auth/logout', '/auth/activate', '/auth/forgot-password', '/auth/reset-password', '/auth/step-up'];
 
 export class ApiError extends Error {
   readonly status: number;

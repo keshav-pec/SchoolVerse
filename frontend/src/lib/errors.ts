@@ -16,6 +16,15 @@ const UI_MESSAGES: Record<string, string> = {
   SESSION_READ_ONLY: 'This session is closed, so it can no longer be changed. Make the change in the next session’s plan.',
   USE_DEACTIVATE_INSTEAD: 'Items can only be deleted while the session is a draft. Deactivate this one instead.',
   SESSION_NOT_DRAFT: 'Only a draft session can be deleted.',
+  STEP_UP_REQUIRED: 'Confirm your password to continue.',
+  INVALID_CREDENTIALS: 'That email and password combination is not right.',
+  TOKEN_INVALID: 'This link is not valid any more. Ask your School Admin for a new one.',
+  EMPLOYEE_READ_ONLY: 'This employee has left the school. Their record is kept for history and cannot be changed.',
+  ACCOUNT_EXISTS: 'This person already has a login.',
+  LAST_ADMIN: 'This is the last active School Admin. Make someone else an admin first.',
+  CANNOT_ACT_ON_SELF: 'You cannot do that to your own account.',
+  CHANGE_REQUEST_PENDING: 'There is already a pending request for this detail. Cancel it first to send a new one.',
+  FILE_REJECTED: 'This file was rejected. Upload a clean PDF, PNG or JPEG.',
   ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
 
@@ -25,8 +34,17 @@ function dependencyLines(error: ApiError): string[] {
   return Array.isArray(deps) ? deps.map((d) => d.message).filter((m): m is string => Boolean(m)) : [];
 }
 
+/** A problem the screen found itself (a missing choice, a mismatch). Its message is already written for the person. */
+export class FormProblem extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FormProblem';
+  }
+}
+
 /** Friendly copy for any thrown value. */
 export function messageFor(error: unknown): string {
+  if (error instanceof FormProblem) return error.message;
   if (error instanceof ApiError) {
     if (error.code === 'ACADEMIC_HAS_DEPENDENCIES') return [error.message, ...dependencyLines(error)].join(' ');
     return UI_MESSAGES[error.code] ?? (error.message || defaultMessageFor(error.code));

@@ -1,5 +1,19 @@
 import { AUDIT_ACTION_LABELS, ROLE_LABELS, type AuditEventDTO } from '@shared';
-import { ArrowRight, Archive, CirclePlus, Crown, History, PauseCircle, PencilLine, Play, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Archive,
+  CirclePlus,
+  Crown,
+  FileText,
+  History,
+  KeyRound,
+  LogOut,
+  PauseCircle,
+  PencilLine,
+  Play,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +32,18 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   'location.primary_set': Crown,
   'location.primary_unset': Crown,
   'location.deleted': Trash2,
+  'employee.created': CirclePlus,
+  'employee.exited': LogOut,
+  'employee.exit_initiated': LogOut,
+  'user.account_created': KeyRound,
+  'user.activated': KeyRound,
+  'user.suspended': PauseCircle,
+  'user.disabled': PauseCircle,
+  'document.uploaded': FileText,
+  'document.downloaded': FileText,
+  'document.deleted': Trash2,
+  'restricted.revealed': ShieldCheck,
+  'restricted.updated': ShieldCheck,
 };
 
 function actorLabel(e: AuditEventDTO) {
@@ -28,8 +54,10 @@ function actorLabel(e: AuditEventDTO) {
 /** Extra context from the event metadata ("Replaced Chandigarh Campus as Primary"). */
 function contextLine(e: AuditEventDTO): string | null {
   const m = e.metadata;
-  if (e.action === 'location.primary_set' && typeof m.previousPrimaryName === 'string') return `Replaced ${m.previousPrimaryName}${m.previousPrimaryCode ? ` (${m.previousPrimaryCode})` : ''} as Primary.`;
-  if (e.action === 'location.primary_unset' && typeof m.newPrimaryName === 'string') return `${m.newPrimaryName}${m.newPrimaryCode ? ` (${m.newPrimaryCode})` : ''} is the new Primary Location.`;
+  if (e.action === 'location.primary_set' && typeof m.previousPrimaryName === 'string')
+    return `Replaced ${m.previousPrimaryName}${m.previousPrimaryCode ? ` (${m.previousPrimaryCode})` : ''} as Primary.`;
+  if (e.action === 'location.primary_unset' && typeof m.newPrimaryName === 'string')
+    return `${m.newPrimaryName}${m.newPrimaryCode ? ` (${m.newPrimaryCode})` : ''} is the new Primary Location.`;
   return null;
 }
 
@@ -38,15 +66,70 @@ function Diff({ change }: { change: AuditEventDTO['changes'][number] }) {
   return (
     <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px]">
       <span className="font-semibold text-ink">{fieldLabel(field)}:</span>
-      <span className="rounded bg-danger-soft px-1.5 py-0.5 text-danger line-through decoration-danger/40">{formatAuditValue(field, change.from)}</span>
+      <span className="rounded bg-danger-soft px-1.5 py-0.5 text-danger line-through decoration-danger/40">
+        {formatAuditValue(field, change.from)}
+      </span>
       <ArrowRight className="size-3.5 text-muted" aria-label="changed to" />
-      <span className="rounded bg-success-soft px-1.5 py-0.5 font-medium text-success">{formatAuditValue(field, change.to)}</span>
+      <span className="rounded bg-success-soft px-1.5 py-0.5 font-medium text-success">
+        {formatAuditValue(field, change.to)}
+      </span>
     </li>
   );
 }
 
+/** The timeline itself, for any list of audit events (an entity's trail, a session's, an employee's history). */
+export function ActivityList({ events }: { events: AuditEventDTO[] }) {
+  return (
+    <ol
+      className="relative space-y-6 before:absolute before:top-2 before:bottom-2 before:left-[17px] before:w-px before:bg-line"
+      aria-label="Activity"
+    >
+      {events.map((e) => {
+        const Icon = ICONS[e.action] ?? History;
+        const ctx = contextLine(e);
+        return (
+          <li key={e.auditEventId} className="relative flex gap-3">
+            <span className="relative z-10 grid size-9 shrink-0 place-items-center rounded-full border border-line bg-white text-brand">
+              <Icon className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-sm font-semibold text-ink">
+                {AUDIT_ACTION_LABELS[e.action] ?? e.action}
+              </p>
+              <p className="text-[13px] text-muted">
+                {actorLabel(e)} ·{' '}
+                <time dateTime={e.occurredAt} title={formatDateTime(e.occurredAt)}>
+                  {formatRelative(e.occurredAt)}
+                </time>
+              </p>
+              {ctx && <p className="mt-1 text-[13px] text-muted">{ctx}</p>}
+              {e.changes.length > 0 && e.action !== 'location.created' && (
+                <ul className="mt-2 space-y-1.5" aria-label="Changes">
+                  {e.changes.map((c) => (
+                    <Diff key={c.field} change={c} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** One entity's history, or (with `academicSessionId`) everything that happened inside one academic session. */
-export function ActivityTimeline({ entityType = '', entityId, academicSessionId, enabled }: { entityType?: string; entityId?: string; academicSessionId?: string; enabled: boolean }) {
+export function ActivityTimeline({
+  entityType = '',
+  entityId,
+  academicSessionId,
+  enabled,
+}: {
+  entityType?: string;
+  entityId?: string;
+  academicSessionId?: string;
+  enabled: boolean;
+}) {
   const byEntity = useAuditTrail(entityType, entityId, enabled && !academicSessionId);
   const bySession = useSessionAudit(academicSessionId, enabled && !!academicSessionId);
   const q = academicSessionId ? bySession : byEntity;
@@ -67,41 +150,28 @@ export function ActivityTimeline({ entityType = '', entityId, academicSessionId,
       </div>
     );
   }
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} />;
-  if (events.length === 0) return <EmptyState illustration={<History className="size-12 text-muted" aria-hidden="true" />} title="No activity yet" description="Changes will show up here." />;
+  if (q.isError)
+    return <ErrorState error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} />;
+  if (events.length === 0)
+    return (
+      <EmptyState
+        illustration={<History className="size-12 text-muted" aria-hidden="true" />}
+        title="No activity yet"
+        description="Changes will show up here."
+      />
+    );
 
   return (
     <div>
-      <ol className="relative space-y-6 before:absolute before:top-2 before:bottom-2 before:left-[17px] before:w-px before:bg-line" aria-label="Activity">
-        {events.map((e) => {
-          const Icon = ICONS[e.action] ?? History;
-          const ctx = contextLine(e);
-          return (
-            <li key={e.auditEventId} className="relative flex gap-3">
-              <span className="relative z-10 grid size-9 shrink-0 place-items-center rounded-full border border-line bg-white text-brand">
-                <Icon className="size-4" />
-              </span>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <p className="text-sm font-semibold text-ink">{AUDIT_ACTION_LABELS[e.action] ?? e.action}</p>
-                <p className="text-[13px] text-muted">
-                  {actorLabel(e)} · <time dateTime={e.occurredAt} title={formatDateTime(e.occurredAt)}>{formatRelative(e.occurredAt)}</time>
-                </p>
-                {ctx && <p className="mt-1 text-[13px] text-muted">{ctx}</p>}
-                {e.changes.length > 0 && e.action !== 'location.created' && (
-                  <ul className="mt-2 space-y-1.5" aria-label="Changes">
-                    {e.changes.map((c) => (
-                      <Diff key={c.field} change={c} />
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <ActivityList events={events} />
       {q.hasNextPage && (
         <div className="mt-6 text-center">
-          <Button variant="outline" onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} loadingText="Loading…">
+          <Button
+            variant="outline"
+            onClick={() => void q.fetchNextPage()}
+            loading={q.isFetchingNextPage}
+            loadingText="Loading…"
+          >
             Load older activity
           </Button>
         </div>

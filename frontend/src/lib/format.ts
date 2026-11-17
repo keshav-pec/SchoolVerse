@@ -92,9 +92,38 @@ export const FIELD_LABELS: Record<string, string> = {
   expiryDate: 'Expiry date',
   documentUrl: 'Document',
   logoUrl: 'Logo',
+  // Faculty & Staff (Module 3)
+  employeeCode: 'Employee code',
+  employeeCategory: 'Category',
+  employmentType: 'Employment type',
+  joiningDate: 'Joining date',
+  confirmationDate: 'Confirmation date',
+  departmentId: 'Department',
+  designationId: 'Designation',
+  reportingManagerId: 'Reporting manager',
+  officialEmail: 'Official email',
+  officialPhone: 'Official phone',
+  legalFirstName: 'First name',
+  legalMiddleName: 'Middle name',
+  legalLastName: 'Last name',
+  preferredName: 'Preferred name',
+  dateOfBirth: 'Date of birth',
+  personalEmail: 'Personal email',
+  personalPhone: 'Personal phone',
+  address: 'Address',
+  emergencyContact: 'Emergency contact',
+  exitDate: 'Exit date',
+  exitReasonCategory: 'Exit reason',
+  role: 'Role',
+  bank: 'Bank details',
+  governmentIds: 'Government IDs',
+  locationId: 'Location',
+  effectiveFrom: 'Starts',
+  effectiveTo: 'Ends',
 };
 
 export function fieldLabel(field: string): string {
+  if (field.startsWith('governmentIds.')) return `Government ID (${field.slice('governmentIds.'.length).replace(/_/g, ' ').toLowerCase()})`;
   return FIELD_LABELS[field] ?? field.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 }
 
@@ -103,6 +132,10 @@ const PHONE_FIELDS = new Set(['phone', 'alternatePhone', 'primaryPhone']);
 /** Renders one side of an audit diff ("+91 98… → +91 99…"). */
 export function formatAuditValue(field: string, value: unknown): string {
   if (value === null || value === undefined || value === '') return 'empty';
+  // Personal and restricted values are never written to the audit trail; the trail only says that they changed.
+  if (value === '[redacted]') return 'hidden';
+  // Ids carry no meaning for a reader; a short prefix is enough to tell two apart.
+  if (typeof value === 'string' && /Id$/.test(field)) return value.slice(0, 8);
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'string') {
     if (PHONE_FIELDS.has(field)) return formatPhone(value);

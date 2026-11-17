@@ -6,7 +6,7 @@ export function Card({ className, ...props }: ComponentProps<'section'>) {
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('mb-4 flex items-start justify-between gap-3', className)} {...props} />;
+  return <div className={cn('mb-4 flex flex-wrap items-start justify-between gap-3', className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: ComponentProps<'h2'>) {

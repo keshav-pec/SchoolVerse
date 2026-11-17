@@ -1,5 +1,16 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { ActivatePage } from '@/features/auth/activate-page';
+import { DevOutboxPage } from '@/features/auth/dev-outbox-page';
+import { ForgotPasswordPage } from '@/features/auth/forgot-password-page';
 import { LoginPage } from '@/features/auth/login-page';
+import { ResetPasswordPage } from '@/features/auth/reset-password-page';
+import { MyProfilePage } from '@/features/me/my-profile-page';
+import { ColleaguesPage } from '@/features/people/colleagues-page';
+import { EmployeePage } from '@/features/people/employee-page';
+import { PeoplePage } from '@/features/people/people-page';
+import { RequestsPage } from '@/features/people/requests-page';
+import { PeopleSettingsPage } from '@/features/people/settings-page';
+import { SHOW_DEV_OUTBOX } from '@/lib/dev';
 import { SignupPage } from '@/features/auth/signup-page';
 import { NotFoundPage } from '@/features/errors/not-found-page';
 import { ForbiddenPage } from '@/features/errors/forbidden-page';
@@ -17,7 +28,16 @@ import { AuthLayout } from '@/layouts/auth-layout';
 import { OverviewPage } from '@/features/setup/overview-page';
 import { SetupWizardPage } from '@/features/setup/wizard/setup-wizard-page';
 import { useAuth } from '@/lib/auth';
-import { GuestOnly, RequireAcademicAccess, RequireAcademicConfig, RequireAuth, RequireSetupAccess, RequireSetupComplete } from '@/routes/guards';
+import {
+  GuestOnly,
+  RequireAcademicAccess,
+  RequireAcademicConfig,
+  RequireAuth,
+  RequireDirectoryAccess,
+  RequirePeopleAdmin,
+  RequireSetupAccess,
+  RequireSetupComplete,
+} from '@/routes/guards';
 
 function SetupHome() {
   const { can } = useAuth();
@@ -46,6 +66,16 @@ const router = createBrowserRouter([
           },
         ],
       },
+      // Links from an email work whether or not someone is signed in on this browser.
+      {
+        element: <AuthLayout />,
+        children: [
+          { path: '/activate', element: <ActivatePage /> },
+          { path: '/forgot-password', element: <ForgotPasswordPage /> },
+          { path: '/reset-password', element: <ResetPasswordPage /> },
+        ],
+      },
+      ...(SHOW_DEV_OUTBOX ? [{ path: '/dev/outbox', element: <DevOutboxPage /> }] : []),
       {
         element: <RequireAuth />,
         children: [
@@ -68,6 +98,31 @@ const router = createBrowserRouter([
                       { path: 'profile', element: <SchoolProfilePage /> },
                       { path: 'locations', element: <LocationsPage /> },
                       { path: 'locations/:locationId', element: <LocationDetailPage /> },
+                    ],
+                  },
+                  {
+                    path: '/people',
+                    element: <RequirePeopleAdmin />,
+                    children: [
+                      { index: true, element: <PeoplePage /> },
+                      {
+                        path: 'requests',
+                        element: <RequirePeopleAdmin permission="employee:approve_changes" />,
+                        children: [{ index: true, element: <RequestsPage /> }],
+                      },
+                      {
+                        path: 'settings',
+                        element: <RequirePeopleAdmin permission="employee:manage" />,
+                        children: [{ index: true, element: <PeopleSettingsPage /> }],
+                      },
+                      { path: ':employeeId', element: <EmployeePage /> },
+                    ],
+                  },
+                  {
+                    element: <RequireDirectoryAccess />,
+                    children: [
+                      { path: '/me', element: <MyProfilePage /> },
+                      { path: '/colleagues', element: <ColleaguesPage /> },
                     ],
                   },
                   {

@@ -6,6 +6,7 @@ import { vi } from 'vitest';
 import type { Role } from '@shared';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth';
+import { StepUpProvider } from '@/lib/step-up';
 import { sessionFor } from './fixtures';
 
 export interface MockResponse {
@@ -53,9 +54,11 @@ export function renderWithApp(ui: ReactElement, { route = '/' }: { route?: strin
   return render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <TooltipProvider>
-          <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-        </TooltipProvider>
+        <StepUpProvider>
+          <TooltipProvider>
+            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+          </TooltipProvider>
+        </StepUpProvider>
       </AuthProvider>
     </QueryClientProvider>,
   );

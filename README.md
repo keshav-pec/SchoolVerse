@@ -23,7 +23,7 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 |---|---|---|
 | 1 | Person and employee master, departments, designations, effective-dated location and class assignments, responsibilities, lifecycle (API) | ✅ Done |
 | 2 | Logins and activation, step-up, suspension, encrypted restricted data, self-service and change approval, private documents, exports (API) | ✅ Done (MFA is deliberately left out for now) |
-| 3 | Faculty & Staff UI, e2e, security gate | Not started |
+| 3 | Faculty & Staff UI, e2e, security gate and docs | ✅ Done (MFA screens are left out with MFA) |
 
 ## Layout
 
@@ -67,7 +67,7 @@ Demo password for every seeded account: `Welcome@123`.
 | parent@greenfield.demo | Parent (no config access) |
 | admin@riverside.demo | School Admin of a second, isolated tenant. Its setup is **left mid-wizard** (step 5), so this login shows the wizard resuming. |
 
-Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open its link at `http://localhost:4000/api/v1/dev/outbox` (see below), choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
+Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open the web app's **/dev/outbox** page (on the sign-in page: forgot password → "Open the dev outbox"), follow her link, choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
 
 The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
 
@@ -160,7 +160,7 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 |---|---|---|
 | Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
-| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only, visual pass at 1280px and 390px → `e2e/screenshots/`) | `npm run e2e` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`). The `people-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
 
 Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
 Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).
@@ -201,7 +201,35 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | QA 24 · audit rows for each mutation, with old and new values | `academic-setup` · `academic-lifecycle` (QA 24) |
 | Downstream contract · Location → Session → Grade → Section → Subject | `academic-lifecycle` (stub consumer through `academicService`) · `ACADEMIC_CONTRACTS.md` |
 
+**Acceptance criteria — Faculty & Staff (Module 3; the PRD §36–37 scenarios as captured in `Module3.md`)**
+
+| Criterion | Verified by |
+|---|---|
+| QA F1 · Faculty and Staff created with the minimum fields, as separate person and employee rows | `employees` (QA F1) · `people.test.tsx` (onboarding errors) · e2e people-onboarding |
+| QA F2 · a duplicate employee code is blocked in any case | `employees` (QA F2) |
+| QA F3 · one faculty member, many grades, sections and subjects, one profile | `employees` (QA F3) · e2e people-onboarding (Maths for VIII-A/B in one save) |
+| QA F4 · several locations; a transfer keeps history | `employees` (QA F4) · e2e people-onboarding (transfer → History) |
+| QA F5 · a login is created independently; a pending user cannot sign in | `identity` (QA F5) · `people.test.tsx` (no password field) · e2e people-onboarding |
+| QA F6 · the self profile returns only permitted fields | `employee-data` (QA F6) |
+| QA F7 · legal name, date of birth and bank details change only through approval | `employee-data` (QA F7) · `people.test.tsx` (pending state) · e2e people-sensitive |
+| QA F8 · an exit closes assignments and disables the account on the effective date | `employees` (QA F8) · `identity` (QA F8, both paths) · e2e people-onboarding (signed out) |
+| QA S1–S2 · no reading another employee's data by id, within or across schools | `security` (route matrix) · `employees` · `employee-data` (QA S1, S2) · e2e people-sensitive |
+| QA S3 · lists and profiles carry no restricted keys; the restricted profile is masked | `employee-data` (QA S3) · `unit` (classification, DTO leak test) |
+| QA S4 · reveal needs permission and step-up, and is audited without the value | `employee-data` (QA S4) · `identity` (step-up) · `people.test.tsx` (reveal and re-mask) · e2e people-sensitive |
+| QA S5 · signed links: no URL without authorization; tampered or expired links fail | `employee-data` (QA S5) · `unit` (signed file links) |
+| QA S6 · default exports have no restricted columns; formulas are neutralised | `employee-data` (QA S6) · `unit` (CSV) |
+| QA S7 · logs, audit rows and security events hold no raw values | `employee-data` (QA S7, two tests) |
+| QA S8 · suspending revokes live sessions | `identity` (QA S8) |
+| QA S9 · activation and reset links are single use and expire | `identity` (QA S9, two tests) |
+| QA S10 · wrong type, oversize and EICAR uploads are rejected | `employee-data` (QA S10) · e2e people-sensitive |
+| QA S11 · a self PATCH cannot touch role, status or restricted fields | `employee-data` (QA S11) · `employees` (QA S11) |
+| QA S12 · the seed holds only `.demo` emails and `TEST` or zero-pattern identifiers | `employee-data` (QA S12) |
+| UI states · masked, restricted, empty, loading and error on every people page; tables become cards under 768px | `people.test.tsx` · e2e people-visual (no sideways scrolling at 390px) |
+| Security gate | [`backend/docs/SECURITY_GATE.md`](backend/docs/SECURITY_GATE.md) · [`backend/docs/DATA_INVENTORY.md`](backend/docs/DATA_INVENTORY.md) |
+
 Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px. Academic: partial unique `one_active_session_per_school`, unique `(sessionId, locationId, gradeId)` for grade offerings, `(gradeOfferingId, sectionCode)` for sections.
+
+**Web routes (Module 3).** Admin: `/people` (directory, filters, export, add), `/people/:employeeId` (tabs: Overview, Employment, Academic Assignment or Responsibilities, Contact, Personal Information, Documents, Account & Access, History), `/people/requests`, `/people/settings`. Faculty and Staff: `/me`, `/colleagues`. Anyone: `/activate`, `/forgot-password`, `/reset-password`, and `/dev/outbox` on testing builds. Faculty opening an administrators-only people URL see Not Found; Parents see the restricted page. For a demo deployment set `VITE_DEV_OUTBOX=true` on the web build so the dev outbox link shows (and `DEV_OUTBOX=true` on the API).
 
 ## Architecture rules (carried into every module)
 

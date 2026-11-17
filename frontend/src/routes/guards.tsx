@@ -1,8 +1,10 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { LogoMark } from '@/components/sv/logo';
+import { NotFoundPage } from '@/features/errors/not-found-page';
 import { GettingSetUpPage } from '@/features/setup/getting-set-up-page';
 import { useCurrentSchool } from '@/features/school-profile/api';
 import { ErrorState } from '@/components/sv/error-state';
+import type { Permission } from '@shared';
 import { useAuth } from '@/lib/auth';
 
 export function FullScreenLoader({ label = 'Loading your workspace…' }: { label?: string }) {
@@ -21,7 +23,8 @@ export function RequireAuth() {
   const { session, isLoading } = useAuth();
   const location = useLocation();
   if (isLoading) return <FullScreenLoader />;
-  if (!session) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (!session)
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return <Outlet />;
 }
 
@@ -55,7 +58,14 @@ export function RequireSetupComplete() {
   const school = useCurrentSchool(canSeeSchool);
   if (!canSeeSchool) return <Outlet />;
   if (school.isLoading) return <FullScreenLoader label="Checking your school setup…" />;
-  if (school.isError) return <ErrorState error={school.error} onRetry={() => void school.refetch()} retrying={school.isFetching} />;
+  if (school.isError)
+    return (
+      <ErrorState
+        error={school.error}
+        onRetry={() => void school.refetch()}
+        retrying={school.isFetching}
+      />
+    );
   const finished = school.data?.setupCompleted === true;
   if (finished) return <Outlet />;
   if (can('setup:manage')) return <Navigate to="/setup" replace />;
@@ -73,5 +83,24 @@ export function RequireAcademicAccess() {
 export function RequireAcademicConfig() {
   const { can } = useAuth();
   if (!can('academic:view_config')) return <Navigate to="/academics" replace />;
+  return <Outlet />;
+}
+
+/**
+ * People: anyone who may use the directory can enter. Parents (no `employee:directory`) get the restricted page. Faculty and
+ * Staff, who hold the directory but not the full record, are shown Not Found for an administrators-only URL: the page
+ * does not admit that it exists (the API answers 404 for records they may not see, too).
+ */
+export function RequirePeopleAdmin({ permission = 'employee:view' }: { permission?: Permission }) {
+  const { can } = useAuth();
+  if (!can('employee:directory')) return <Navigate to="/restricted" replace />;
+  if (!can(permission)) return <NotFoundPage />;
+  return <Outlet />;
+}
+
+/** The colleague directory and `/me` need the directory permission; everything about them is also decided by the API. */
+export function RequireDirectoryAccess() {
+  const { can } = useAuth();
+  if (!can('employee:directory')) return <Navigate to="/restricted" replace />;
   return <Outlet />;
 }

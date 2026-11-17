@@ -1,11 +1,36 @@
 import { useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
-import { Building2, ChevronDown, GraduationCap, House, Library, LayoutDashboard, LogOut, MapPinned, Menu, PanelLeftClose, PanelLeftOpen, School } from 'lucide-react';
+import {
+  Building2,
+  ChevronDown,
+  GraduationCap,
+  House,
+  Inbox,
+  LayoutDashboard,
+  Library,
+  ListTree,
+  LogOut,
+  MapPinned,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  School,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { RoleBadge } from '@/components/sv/role-badge';
+import { usePendingRequestCount } from '@/features/people/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +42,10 @@ interface NavItem {
   /** Hidden for users who hold this permission (they get a richer item instead). */
   hideWith?: Permission;
   end?: boolean;
+  /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
+  when?: (user: { role: string; personId: string | null }) => boolean;
+  /** Shows the pending change-request count beside the label. */
+  badge?: 'requests';
 }
 
 interface NavSection {
@@ -33,17 +62,90 @@ const NAV: NavSection[] = [
   {
     label: 'School Setup',
     items: [
-      { to: '/school-setup', label: 'Overview', Icon: LayoutDashboard, permission: 'setup:manage', end: true },
-      { to: '/school-setup/profile', label: 'School Profile', Icon: School, permission: 'school:view' },
-      { to: '/school-setup/locations', label: 'Locations', Icon: MapPinned, permission: 'location:view' },
+      {
+        to: '/school-setup',
+        label: 'Overview',
+        Icon: LayoutDashboard,
+        permission: 'setup:manage',
+        end: true,
+      },
+      {
+        to: '/school-setup/profile',
+        label: 'School Profile',
+        Icon: School,
+        permission: 'school:view',
+      },
+      {
+        to: '/school-setup/locations',
+        label: 'Locations',
+        Icon: MapPinned,
+        permission: 'location:view',
+      },
     ],
   },
   {
     label: 'Academics',
     items: [
-      { to: '/academics', label: 'Academic Setup', Icon: GraduationCap, permission: 'academic:view_config', end: true },
-      { to: '/academics/subjects', label: 'Subject master', Icon: Library, permission: 'academic:view_config' },
-      { to: '/academics', label: 'Academic Structure', Icon: GraduationCap, permission: 'academic:view', hideWith: 'academic:view_config', end: true },
+      {
+        to: '/academics',
+        label: 'Academic Setup',
+        Icon: GraduationCap,
+        permission: 'academic:view_config',
+        end: true,
+      },
+      {
+        to: '/academics/subjects',
+        label: 'Subject master',
+        Icon: Library,
+        permission: 'academic:view_config',
+      },
+      {
+        to: '/academics',
+        label: 'Academic Structure',
+        Icon: GraduationCap,
+        permission: 'academic:view',
+        hideWith: 'academic:view_config',
+        end: true,
+      },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      {
+        to: '/people',
+        label: 'Faculty & Staff',
+        Icon: UsersRound,
+        permission: 'employee:view',
+        end: true,
+      },
+      {
+        to: '/people/requests',
+        label: 'Change requests',
+        Icon: Inbox,
+        permission: 'employee:approve_changes',
+        badge: 'requests',
+      },
+      {
+        to: '/people/settings',
+        label: 'Departments & Designations',
+        Icon: ListTree,
+        permission: 'employee:manage',
+      },
+      {
+        to: '/me',
+        label: 'My Profile',
+        Icon: UserRound,
+        permission: 'employee:directory',
+        when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
+      },
+      {
+        to: '/colleagues',
+        label: 'Colleagues',
+        Icon: UsersRound,
+        permission: 'employee:directory',
+        hideWith: 'employee:view',
+      },
     ],
   },
 ];
@@ -55,6 +157,12 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/people/requests', ['People', 'Change requests']],
+  ['/people/settings', ['People', 'Departments & Designations']],
+  ['/people/', ['People', 'Faculty & Staff', 'Profile']],
+  ['/people', ['People', 'Faculty & Staff']],
+  ['/me', ['People', 'My Profile']],
+  ['/colleagues', ['People', 'Colleagues']],
 ];
 
 function crumbsFor(pathname: string): string[] {
@@ -64,13 +172,31 @@ function crumbsFor(pathname: string): string[] {
   return CRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? ['Page'];
 }
 
-function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+function SidebarContent({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
   const { can } = useAuth();
   const session = useSession();
+  const pending = usePendingRequestCount(can('employee:approve_changes'));
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden bg-navy pt-5 pb-3 text-navy-text', collapsed ? 'px-2' : 'px-3')}>
-      <div title={collapsed ? session.tenant.name : undefined} className={cn('mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3', collapsed && 'justify-center px-0')}>
+    <div
+      className={cn(
+        'flex h-full flex-col overflow-hidden bg-navy pt-5 pb-3 text-navy-text',
+        collapsed ? 'px-2' : 'px-3',
+      )}
+    >
+      <div
+        title={collapsed ? session.tenant.name : undefined}
+        className={cn(
+          'mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3',
+          collapsed && 'justify-center px-0',
+        )}
+      >
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/30 text-brand-300">
           <Building2 className="size-[18px]" />
         </span>
@@ -80,18 +206,30 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
           </p>
           <p className="text-[11px] text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</p>
         </div>
-        <span className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')} title="Workspace active" />
+        <span
+          className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')}
+          title="Workspace active"
+        />
       </div>
 
       <nav className="mt-2 flex-1 overflow-y-auto" aria-label="Main">
         {NAV.map((section, i) => {
-          const items = section.items.filter((item) => (!item.permission || can(item.permission)) && !(item.hideWith && can(item.hideWith)));
+          const items = section.items.filter(
+            (item) =>
+              (!item.permission || can(item.permission)) &&
+              !(item.hideWith && can(item.hideWith)) &&
+              (!item.when || item.when(session.user)),
+          );
           if (items.length === 0) return null;
           return (
             <div key={section.label ?? i}>
-              {section.label && !collapsed && <p className="px-3.5 pt-3 pb-1.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">{section.label}</p>}
+              {section.label && !collapsed && (
+                <p className="px-3.5 pt-3 pb-1.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">
+                  {section.label}
+                </p>
+              )}
               <ul className={cn('space-y-0.5', collapsed ? 'mt-3' : 'mt-1.5')}>
-                {items.map(({ to, label, Icon, end }) => (
+                {items.map(({ to, label, Icon, end, badge }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
@@ -103,12 +241,24 @@ function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => 
                         cn(
                           collapsed && 'justify-center px-0',
                           'relative flex min-h-11 items-center gap-3 rounded-lg px-3.5 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white',
-                          isActive && 'bg-navy-600 text-white before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[#5084ff]',
+                          isActive &&
+                            'bg-navy-600 text-white before:absolute before:inset-y-2.5 before:left-0 before:w-[3px] before:rounded-full before:bg-[#5084ff]',
                         )
                       }
                     >
                       <Icon className="size-[18px] shrink-0" />
                       {!collapsed && label}
+                      {badge === 'requests' && (pending.data ?? 0) > 0 && (
+                        <span
+                          className={cn(
+                            'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
+                            collapsed && 'absolute top-1.5 right-1.5 ml-0',
+                          )}
+                          aria-label={`${pending.data} pending`}
+                        >
+                          {pending.data}
+                        </span>
+                      )}
                     </NavLink>
                   </li>
                 ))}
@@ -151,7 +301,10 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleLogout} className="text-danger data-[highlighted]:bg-danger-soft [&_svg]:text-danger">
+        <DropdownMenuItem
+          onSelect={handleLogout}
+          className="text-danger data-[highlighted]:bg-danger-soft [&_svg]:text-danger"
+        >
           <LogOut /> Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -161,7 +314,9 @@ function UserMenu() {
 
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sv.sidebar.collapsed') === '1');
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('sv.sidebar.collapsed') === '1',
+  );
   const toggleCollapsed = () =>
     setCollapsed((c) => {
       localStorage.setItem('sv.sidebar.collapsed', c ? '0' : '1');
@@ -171,12 +326,25 @@ export function AppShell() {
   const session = useSession();
 
   return (
-    <div className={cn('min-h-dvh transition-[padding] duration-200', collapsed ? 'md:pl-[72px]' : 'md:pl-[248px]')}>
-      <a href="#main" className="sr-only z-50 rounded-lg bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3">
+    <div
+      className={cn(
+        'min-h-dvh transition-[padding] duration-200',
+        collapsed ? 'md:pl-[72px]' : 'md:pl-[248px]',
+      )}
+    >
+      <a
+        href="#main"
+        className="sr-only z-50 rounded-lg bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+      >
         Skip to content
       </a>
 
-      <aside className={cn('fixed inset-y-0 left-0 hidden transition-[width] duration-200 md:block', collapsed ? 'w-[72px]' : 'w-[248px]')}>
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 hidden transition-[width] duration-200 md:block',
+          collapsed ? 'w-[72px]' : 'w-[248px]',
+        )}
+      >
         <SidebarContent collapsed={collapsed} />
       </aside>
 
@@ -216,7 +384,10 @@ export function AppShell() {
                   /
                 </span>
               )}
-              <span className={i === all.length - 1 ? 'font-semibold text-ink' : undefined} aria-current={i === all.length - 1 ? 'page' : undefined}>
+              <span
+                className={i === all.length - 1 ? 'font-semibold text-ink' : undefined}
+                aria-current={i === all.length - 1 ? 'page' : undefined}
+              >
                 {crumb}
               </span>
             </span>

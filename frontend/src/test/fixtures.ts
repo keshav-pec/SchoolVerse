@@ -1,4 +1,4 @@
-import { permissionsFor, type LocationDetailDTO, type LocationListDTO, type Role, type SchoolDTO, type SessionDTO } from '@shared';
+import { permissionsFor, type EmployeeProfileDTO, type RestrictedEmployeeProfileDTO, type SelfProfileDTO, type LocationDetailDTO, type LocationListDTO, type Role, type SchoolDTO, type SessionDTO } from '@shared';
 
 export const SCHOOL_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -106,3 +106,67 @@ export const setupStatus = {
   summary: { schoolName: 'Greenfield Public School', primaryLocation: { locationId: '22222222-2222-4222-8222-222222222222', displayName: 'Mohali Campus', locationCode: 'MOH' }, activeLocations: 2, draftLocations: 1, totalLocations: 3 },
 };
 setupStatus.nextStep = setupStatus.items[2];
+
+// ───────────────────────────────────────────────────────────── Faculty & Staff (Module 3)
+
+export const EMPLOYEE_ID = '77777777-7777-4777-8777-777777777777';
+export const PERSON_ID = '88888888-8888-4888-8888-888888888888';
+
+export function employeeProfile(overrides: Partial<EmployeeProfileDTO> = {}): EmployeeProfileDTO {
+  const loc = { locationId: '22222222-2222-4222-8222-222222222222', locationCode: 'MOH', displayName: 'Mohali Campus', isPrimary: true, status: 'ACTIVE' as const };
+  return {
+    employeeId: EMPLOYEE_ID,
+    employeeCode: 'FAC-001',
+    fullName: 'Priya Sharma',
+    displayName: 'Priya Sharma',
+    preferredName: null,
+    employeeCategory: 'FACULTY',
+    employmentType: 'Permanent',
+    department: { departmentId: 'd1', code: 'ACADEMICS', name: 'Academics' },
+    designation: { designationId: 'g1', code: 'PGT', name: 'PGT' },
+    status: 'ACTIVE',
+    primaryLocation: loc,
+    locations: [loc],
+    officialEmail: 'priya@greenfield.demo',
+    officialPhone: null,
+    personId: PERSON_ID,
+    schoolId: 's1',
+    legalFirstName: 'Priya',
+    legalMiddleName: null,
+    legalLastName: 'Sharma',
+    joiningDate: '2016-04-01',
+    confirmationDate: null,
+    reportingManager: null,
+    exit: null,
+    lifecycleActions: ['leave', 'suspend', 'exit'],
+    deletable: false,
+    readOnly: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export const restrictedProfile: RestrictedEmployeeProfileDTO = {
+  employeeId: EMPLOYEE_ID,
+  personId: PERSON_ID,
+  dateOfBirth: { masked: '••/••/1988' },
+  governmentIds: [{ type: 'PAN', masked: 'XXXX XXXX 000X' }],
+  bank: { accountHolderName: 'Priya Sharma', accountNumberMasked: '•••• 5678', ifsc: 'TEST0000001', bankName: 'Demo Bank' },
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+export function selfProfile(overrides: Partial<SelfProfileDTO> = {}): SelfProfileDTO {
+  const user = sessionFor('FACULTY').user;
+  return {
+    profile: employeeProfile({ personal: { primaryEmail: null, primaryPhone: null, personalEmail: 'priya.home@greenfield.demo', personalPhone: null, address: null, emergencyContact: null } }),
+    dateOfBirth: '1988-03-14',
+    restricted: restrictedProfile,
+    locationAssignments: [],
+    academicAssignments: [],
+    responsibilities: [],
+    account: { ...user, personId: PERSON_ID },
+    pendingRequests: [],
+    ...overrides,
+  };
+}

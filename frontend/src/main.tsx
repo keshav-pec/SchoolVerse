@@ -9,14 +9,17 @@ import './styles/theme.css';
 import { App } from './App';
 import { AuthProvider } from './lib/auth';
 import { queryClient } from './lib/query-client';
+import { StepUpProvider } from './lib/step-up';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <App />
-        </TooltipProvider>
+        <StepUpProvider>
+          <TooltipProvider>
+            <App />
+          </TooltipProvider>
+        </StepUpProvider>
         <Toaster position="bottom-left" richColors closeButton toastOptions={{ style: { fontFamily: 'var(--font-sans)', borderRadius: 12 } }} />
       </AuthProvider>
     </QueryClientProvider>

@@ -24,7 +24,21 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     viewport: { width: 1280, height: 860 },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } } }],
+  projects: [
+    // The people specs use the seeded Mohali campus and the seeded ACTIVE session (Maths for VIII-A/B). The academics and
+    // locations specs later replace that session and deactivate Mohali, so these run first, on purpose.
+    {
+      name: 'people',
+      testMatch: /people-.*\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
+    },
+    {
+      name: 'chromium',
+      testIgnore: /people-.*\.spec\.ts/,
+      dependencies: ['people'],
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
+    },
+  ],
   webServer: [
     {
       command: 'npm --prefix ../backend run e2e:server',
