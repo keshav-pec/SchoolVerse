@@ -44,7 +44,8 @@ authRouter.post('/refresh', async (req, res) => {
     setAuthCookies(res, tokens);
     ok(res, session);
   } catch (err) {
-    clearAuthCookies(res);
+    // Losing a race to another tab is not a sign-out: that tab's fresh cookies must survive.
+    if (!(err instanceof authService.RefreshRaceLost)) clearAuthCookies(res);
     throw err;
   }
 });

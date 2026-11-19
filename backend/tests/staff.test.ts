@@ -13,7 +13,7 @@ import { employeeService } from '../src/modules/staff/employee-contract';
 import { onEmployeeExited } from '../src/modules/staff/hooks';
 import { processDueExits } from '../src/modules/staff/jobs';
 import { Person } from '../src/modules/staff/person.model';
-import { addDays } from '../src/modules/staff/status';
+import { addDays } from '../src/core/dates';
 import { SecurityEvent } from '../src/platform/identity/security-event.model';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import request from 'supertest';

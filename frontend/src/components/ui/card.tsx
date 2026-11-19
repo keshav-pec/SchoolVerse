@@ -2,11 +2,11 @@ import type { ComponentProps } from 'react';
 import { cn } from '@/lib/utils';
 
 export function Card({ className, ...props }: ComponentProps<'section'>) {
-  return <section data-slot="card" className={cn('rounded-card border border-line bg-white p-5 shadow-card sm:p-6', className)} {...props} />;
+  return <section data-slot="card" className={cn('rounded-card border border-line bg-white p-4 shadow-card sm:p-5', className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('mb-4 flex flex-wrap items-start justify-between gap-3', className)} {...props} />;
+  return <div className={cn('mb-3 flex flex-wrap items-start justify-between gap-3', className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: ComponentProps<'h2'>) {

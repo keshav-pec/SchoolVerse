@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ClientSession } from 'mongoose';
 import { SESSION_EDITABLE_FIELDS, type AcademicSessionDTO, type CloneSessionData } from '@shared';
+import { addDays, daysBetween } from '../../core/dates';
 import { AppError } from '../../core/errors';
 import { duplicateKeyFields } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
@@ -13,13 +14,6 @@ import { AcademicSession, AcademicTerm, type AcademicSessionDoc, type AcademicTe
 import { assertDates, getSessionDTO, getSessionOrThrow } from './session.service';
 import { Subject } from './subject.model';
 import { normaliseRule } from './rules.service';
-
-/** Date-only (`YYYY-MM-DD`) arithmetic, immune to time zones. */
-const DAY_MS = 86_400_000;
-const toDay = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / DAY_MS);
-export function shiftDate(date: string, days: number): string {
-  return new Date((toDay(date) + days) * DAY_MS).toISOString().slice(0, 10);
-}
 
 /**
  * AS-13 — clone / roll forward. Copies PLANNING data only: locations + board mapping, classes, sections, subject offerings,
@@ -191,7 +185,7 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
   );
 
   // Terms move with the new start date (a session that starts a year later gets terms a year later).
-  const shift = toDay(data.startDate) - toDay(source.startDate);
+  const shift = daysBetween(source.startDate, data.startDate);
   const terms = await AcademicTerm.find({ tenantId, sessionId: source._id }).session(db).lean<AcademicTermDoc[]>();
   await AcademicTerm.insertMany(
     terms.map((t) => ({
@@ -203,8 +197,8 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
       code: t.code,
       type: t.type,
       sequence: t.sequence,
-      startDate: shiftDate(t.startDate, shift),
-      endDate: shiftDate(t.endDate, shift),
+      startDate: addDays(t.startDate, shift),
+      endDate: addDays(t.endDate, shift),
     })),
     s,
   );

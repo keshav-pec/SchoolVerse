@@ -177,7 +177,7 @@ export function HomePage() {
               <li key={`${to}-${title}`}>
                 <Link
                   to={to}
-                  className="group flex h-full items-start gap-3.5 rounded-card border border-line bg-white p-5 shadow-card outline-none transition hover:-translate-y-0.5 hover:border-brand/40 focus-visible:ring-4 focus-visible:ring-brand/20"
+                  className="group flex h-full items-start gap-3.5 rounded-card border border-line bg-white px-5 py-4 shadow-card outline-none transition hover:-translate-y-0.5 hover:border-brand/40 focus-visible:ring-4 focus-visible:ring-brand/20"
                 >
                   <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${tint}`}>
                     <Icon className="size-5" />

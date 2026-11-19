@@ -12,7 +12,7 @@ const tones = {
 export function Alert({ tone = 'info', title, children, className }: { tone?: keyof typeof tones; title?: string; children?: ReactNode; className?: string }) {
   const { cls, Icon, icon } = tones[tone];
   return (
-    <div role={tone === 'danger' ? 'alert' : 'status'} className={cn('flex gap-3 rounded-xl border px-4 py-3 text-sm', cls, className)}>
+    <div role={tone === 'danger' ? 'alert' : 'status'} className={cn('flex gap-3 rounded-xl border px-4 py-2.5 text-sm', cls, className)}>
       <Icon className={cn('mt-0.5 size-[18px] shrink-0', icon)} aria-hidden="true" />
       <div className="min-w-0">
         {title && <p className="font-semibold">{title}</p>}

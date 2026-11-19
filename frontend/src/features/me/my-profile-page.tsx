@@ -335,10 +335,10 @@ export function MyProfilePage() {
         description="Your own record. You can keep your contact details up to date; other changes are checked by a School Admin first."
       />
 
-      <header className="mb-6 flex flex-col gap-4 rounded-card border border-line bg-white p-5 shadow-card sm:flex-row sm:items-center sm:p-6">
-        <Avatar name={p.fullName} className="size-16 text-xl" />
+      <header className="mb-4 flex flex-col gap-3 rounded-card border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+        <Avatar name={p.fullName} className="size-12 text-lg" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-[24px] leading-tight font-extrabold break-words">{p.fullName}</h2>
+          <h2 className="text-[22px] leading-tight font-extrabold break-words">{p.fullName}</h2>
           <p className="mt-1 text-sm text-muted">
             <span className="font-mono font-semibold text-ink">{p.employeeCode}</span> ·{' '}
             {p.designation.name} · {p.department.name} ·{' '}

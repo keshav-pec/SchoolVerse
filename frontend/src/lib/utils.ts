@@ -22,3 +22,8 @@ export function greetingFor(date = new Date()) {
 export function firstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] ?? fullName;
 }
+
+/** Only the fields that differ from `initial`. Edit forms send just these, so a stale form can never undo someone else's edit. */
+export function changedFields<T extends object>(form: T, initial: T): Partial<T> {
+  return Object.fromEntries((Object.keys(form) as (keyof T)[]).filter((k) => form[k] !== initial[k]).map((k) => [k, form[k]])) as Partial<T>;
+}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { Link } from 'react-router';
 import { LOCATION_STATUSES, LOCATION_STATUS_LABELS, LOCATION_TYPES, LOCATION_TYPE_LABELS, type LocationStatus } from '@shared';
 import { ChevronLeft, ChevronRight, Info, Plus, Search, SearchX, X } from 'lucide-react';
 import { EmptyMap } from '@/components/illustrations/empty-map';
@@ -13,7 +13,7 @@ import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
-import { useDebouncedValue } from '@/hooks/use-debounce';
+import { useListParams } from '@/hooks/use-list-params';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useCurrentSchool } from '../school-profile/api';
@@ -48,7 +48,7 @@ function ListSkeleton() {
 export function LocationsPage() {
   const { can } = useAuth();
   const school = useCurrentSchool();
-  const [params, setParams] = useSearchParams();
+  const { params, setParam, page, search, setSearch, clearAll } = useListParams();
   const [adding, setAdding] = useState(false);
 
   const statusParam = params.get('status');
@@ -58,32 +58,9 @@ export function LocationsPage() {
     type: params.get('type') ?? undefined,
     city: params.get('city') ?? undefined,
     sort: params.get('sort') ?? 'displayName',
-    page: Number(params.get('page')) > 0 ? Number(params.get('page')) : 1,
+    page,
     pageSize: PAGE_SIZE,
   };
-
-  const setParam = (updates: Record<string, string | null>, keepPage = false) => {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [k, v] of Object.entries(updates)) {
-          if (v === null || v === '') next.delete(k);
-          else next.set(k, v);
-        }
-        if (!keepPage) next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
-  };
-
-  // Search box: instant typing, 300 ms debounce into the URL.
-  const [search, setSearch] = useState(filters.q ?? '');
-  const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => {
-    if ((debouncedSearch.trim() || undefined) !== (params.get('q') ?? undefined)) setParam({ q: debouncedSearch.trim() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
 
   const schoolId = school.data?.schoolId;
   const list = useLocations(schoolId, filters);
@@ -150,7 +127,6 @@ export function LocationsPage() {
     ...LOCATION_STATUSES.map((s) => ({ value: s, label: LOCATION_STATUS_LABELS[s], count: facets?.statuses[s] ?? 0 })),
   ];
   const total = list.data?.total ?? 0;
-  const page = filters.page ?? 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const items = list.data?.items ?? [];
   const primaryName = items.find((l) => l.isPrimary)?.displayName;
@@ -247,10 +223,7 @@ export function LocationsPage() {
             action={
               <Button
                 variant="outline"
-                onClick={() => {
-                  setSearch('');
-                  setParams({}, { replace: true });
-                }}
+                onClick={clearAll}
               >
                 <X /> Clear filters
               </Button>

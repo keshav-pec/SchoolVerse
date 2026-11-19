@@ -2,7 +2,7 @@ import type { ClientSession } from 'mongoose';
 import { DEFAULT_TIMEZONE, type AssignmentStatus } from '@shared';
 import { SKIP_TENANT_SCOPE } from '../../db/plugins/tenant-scope';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { todayIn } from '../academic/term.service';
+import { todayIn } from '../../core/dates';
 import { School } from '../school/school.model';
 
 /**
@@ -21,13 +21,6 @@ export function assignmentStatus(row: EffectiveRange, today: string): Assignment
   if (today < row.effectiveFrom) return 'PLANNED';
   if (row.effectiveTo && today > row.effectiveTo) return 'COMPLETED';
   return 'ACTIVE';
-}
-
-/** `YYYY-MM-DD` plus or minus whole days, with no time zone shift. */
-export function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 export const latest = (a: string, b: string) => (a >= b ? a : b);

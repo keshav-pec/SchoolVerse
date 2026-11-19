@@ -28,6 +28,16 @@ export interface IssuedTokens {
 /** A refresh token presented again within this window after rotation is treated as a benign race (multi-tab). */
 const ROTATION_GRACE_MS = 30_000;
 
+/**
+ * Another request (usually another tab) already rotated this refresh token. The browser now holds that request's new
+ * cookies, so the refresh route must not clear them: the caller simply retries with what it has.
+ */
+export class RefreshRaceLost extends AppError {
+  constructor() {
+    super('SESSION_EXPIRED');
+  }
+}
+
 function slugify(name: string) {
   const base = name
     .normalize('NFKD')
@@ -164,8 +174,9 @@ export async function refresh(rawToken: string | undefined, meta: ClientMeta) {
       );
       logger.warn({ tenantId: current.tenantId, userId: current.userId }, 'Refresh token reuse detected');
       await recordSecurityEvent({ tenantId: current.tenantId, type: 'REFRESH_TOKEN_REUSE', actorUserId: current.userId, ip: meta.ip ?? null, outcome: 'DENIED' });
+      throw new AppError('SESSION_EXPIRED');
     }
-    throw new AppError('SESSION_EXPIRED');
+    throw new RefreshRaceLost();
   }
   if (current.expiresAt.getTime() <= Date.now()) throw new AppError('SESSION_EXPIRED');
 
@@ -181,7 +192,7 @@ export async function refresh(rawToken: string | undefined, meta: ClientMeta) {
   if (rotated.modifiedCount === 0) {
     // Lost a race with a concurrent refresh — discard the session we just created.
     await Session.deleteOne({ _id: next._id, tenantId: next.tenantId });
-    throw new AppError('SESSION_EXPIRED');
+    throw new RefreshRaceLost();
   }
 
   return { session: buildSession(user, tenant), tokens };

@@ -7,6 +7,7 @@ import {
   type TermStatus,
   type UpdateTermData,
 } from '@shared';
+import { todayIn } from '../../core/dates';
 import { AppError } from '../../core/errors';
 import { pickDefined } from '../../core/objects';
 import { onDuplicate } from '../../db/errors';
@@ -20,11 +21,6 @@ import { AcademicTerm, type AcademicSessionDoc, type AcademicTermDoc } from './s
 import { getSessionOrThrow } from './session.service';
 
 /** AS-12 — terms. Status (planned / current / closed) is computed from today's date; there is no manual closing. */
-
-/** Today's date (`YYYY-MM-DD`) in an IANA time zone. */
-export function todayIn(timeZone: string, now = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-}
 
 export function termStatus(term: Pick<AcademicTermDoc, 'startDate' | 'endDate'>, today: string): TermStatus {
   if (today < term.startDate) return 'planned';

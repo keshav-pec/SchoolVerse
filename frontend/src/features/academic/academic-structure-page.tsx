@@ -73,10 +73,10 @@ export function AcademicStructurePage() {
   return (
     <>
       {header}
-      <Alert tone="info" className="mb-6">
+      <Alert tone="info" className="mb-4">
         <span className="inline-flex items-center gap-1.5"><Info className="size-4" aria-hidden="true" /> This is a limited, read-only view. Ask your School Admin for changes.</span>
       </Alert>
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <ComboboxField
           label="Session"
           value={current.academicSessionId}

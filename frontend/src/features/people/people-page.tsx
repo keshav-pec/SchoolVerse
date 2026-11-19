@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { Link } from 'react-router';
 import {
   EMPLOYEE_CATEGORIES,
   EMPLOYEE_CATEGORY_LABELS,
@@ -28,7 +28,7 @@ import { EmployeeStatusPill } from '@/components/sv/employee-status';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
-import { useDebouncedValue } from '@/hooks/use-debounce';
+import { useListParams } from '@/hooks/use-list-params';
 import { cn } from '@/lib/utils';
 import { useActiveLocations } from '../academic/api';
 import { AddEmployeeDrawer } from './add-employee-drawer';
@@ -154,7 +154,7 @@ function PeopleTable({ items, dimmed }: { items: EmployeeDirectoryDTO[]; dimmed?
 
 /** `/people`: the directory for School Admins. Filters live in the URL, so a filtered view can be shared or bookmarked. */
 export function PeoplePage() {
-  const [params, setParams] = useSearchParams();
+  const { params, setParam, page, search, setSearch, clearAll: clear } = useListParams();
   const [adding, setAdding] = useState(false);
   const [exporting, setExporting] = useState(false);
   const departments = useDepartments();
@@ -168,32 +168,9 @@ export function PeoplePage() {
     designationId: params.get('designationId') ?? undefined,
     locationId: params.get('locationId') ?? undefined,
     status: params.get('status') ?? undefined,
-    page: Number(params.get('page')) > 0 ? Number(params.get('page')) : 1,
+    page,
     pageSize: PAGE_SIZE,
   };
-
-  const setParam = (updates: Record<string, string | null>, keepPage = false) => {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [k, v] of Object.entries(updates)) {
-          if (v === null || v === '') next.delete(k);
-          else next.set(k, v);
-        }
-        if (!keepPage) next.delete('page');
-        return next;
-      },
-      { replace: true },
-    );
-  };
-
-  const [search, setSearch] = useState(filters.q ?? '');
-  const debounced = useDebouncedValue(search, 300);
-  useEffect(() => {
-    if ((debounced.trim() || undefined) !== (params.get('q') ?? undefined))
-      setParam({ q: debounced.trim() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced]);
 
   const list = useEmployees(filters);
   const hasFilters = Boolean(
@@ -206,10 +183,6 @@ export function PeoplePage() {
   );
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const clear = () => {
-    setSearch('');
-    setParams({}, { replace: true });
-  };
 
   const header = (
     <PageHeader

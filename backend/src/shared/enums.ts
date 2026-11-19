@@ -13,13 +13,6 @@ export const ROLE_LABELS: Record<Role, string> = {
   PARENT: 'Parent',
 };
 
-export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  SCHOOL_ADMIN: 'Full access to school configuration',
-  FACULTY: 'Teaching staff — limited, read-only view of school setup',
-  STAFF: 'Non-teaching staff — limited, read-only view of school setup',
-  PARENT: 'Guardian access — no access to school configuration',
-};
-
 /** PENDING_ACTIVATION has no password yet. SUSPENDED is reversible. DISABLED is how access ends (an employee exit does it). */
 export const USER_STATUSES = ['PENDING_ACTIVATION', 'ACTIVE', 'SUSPENDED', 'DISABLED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];

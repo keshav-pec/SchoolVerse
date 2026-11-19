@@ -8,7 +8,7 @@ import { createApp } from '../src/app';
 import { BoardRuleVersion, EducationBoard, ClassMaster } from '../src/modules/academic/reference.model';
 import { seedReferenceData } from '../src/modules/academic/reference.seed';
 import { AcademicSession } from '../src/modules/academic/session.model';
-import { todayIn } from '../src/modules/academic/term.service';
+import { todayIn } from '../src/core/dates';
 import { hashPassword } from '../src/platform/auth/password';
 import { User } from '../src/platform/users/user.model';
 import { School } from '../src/modules/school/school.model';

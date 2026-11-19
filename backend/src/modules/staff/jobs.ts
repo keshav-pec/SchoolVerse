@@ -7,7 +7,7 @@ import { completeExit } from './lifecycle.service';
 import { cleanupExpiredExports } from './export.service';
 import { timezonesByTenant } from './status';
 import { DEFAULT_TIMEZONE } from '@shared';
-import { todayIn } from '../academic/term.service';
+import { todayIn } from '../../core/dates';
 
 /**
  * Moves every NOTICE_PERIOD employee whose exit date has arrived to EXITED (and runs the exit hooks, in the same
@@ -23,10 +23,15 @@ export async function processDueExits(now = new Date()): Promise<number> {
   let exited = 0;
   for (const tenantId of tenantIds) {
     const today = todayIn(zones.get(tenantId) ?? DEFAULT_TIMEZONE, now);
-    const due = await Employee.find({ tenantId, status: 'NOTICE_PERIOD', exitDate: { $lte: today } }).lean<EmployeeDoc[]>();
-    for (const employee of due) {
+    const dueFilter = { tenantId, status: 'NOTICE_PERIOD' as const, exitDate: { $lte: today } };
+    const due = await Employee.find(dueFilter).select('_id').lean<{ _id: string }[]>();
+    for (const { _id } of due) {
       try {
-        await withTransaction(async (db) => {
+        const done = await withTransaction(async (db) => {
+          // Re-read inside the transaction: the exit may have been cancelled or moved since the list was taken, or another
+          // server may have finished it already. Either way this run must not exit them (again).
+          const employee = await Employee.findOne({ ...dueFilter, _id }).session(db).lean<EmployeeDoc>();
+          if (!employee) return false;
           const scope = systemScope(tenantId);
           await completeExit(employee, db, scope);
           await recordStaffAudit(scope, db, {
@@ -37,10 +42,11 @@ export async function processDueExits(now = new Date()): Promise<number> {
             employeeId: employee._id,
             metadata: { exitDate: employee.exitDate, scheduled: true },
           });
+          return true;
         });
-        exited += 1;
+        if (done) exited += 1;
       } catch (err) {
-        logger.error({ err, tenantId, employeeId: employee._id }, 'could not complete a scheduled exit');
+        logger.error({ err, tenantId, employeeId: _id }, 'could not complete a scheduled exit');
       }
     }
   }

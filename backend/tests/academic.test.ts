@@ -18,7 +18,6 @@ import { SubjectChoiceConstraint, SubjectChoiceGroup, AcademicProgramme } from '
 import request from 'supertest';
 import { academicService } from '../src/modules/academic/academic.service';
 import { seedDemo } from '../src/scripts/seed';
-import { shiftDate } from '../src/modules/academic/clone.service';
 
 useTestDatabase();
 beforeEach(async () => {
@@ -1369,8 +1368,6 @@ describe('clone / roll forward (AS-13)', () => {
       ['T1', '2027-04-01', '2027-09-30'],
       ['T2', '2027-10-01', '2028-03-30'],
     ]);
-    expect(shiftDate('2026-04-01', 365)).toBe('2027-04-01');
-    expect(shiftDate('2027-03-01', -365)).toBe('2026-03-01');
 
     // The clone is a normal draft that validates, and the original did not move.
     expect(((await act(t, 'validate', copy.academicSessionId).expect(200)).body.data as ValidationResultDTO).canPublish).toBe(true);

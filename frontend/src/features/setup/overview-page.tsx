@@ -23,7 +23,7 @@ const ITEM_ICONS: Record<string, ComponentType<{ className?: string }>> = {
 
 function Stat({ icon: Icon, label, children, hint, tone }: { icon: ComponentType<{ className?: string }>; label: string; children: React.ReactNode; hint?: React.ReactNode; tone: string }) {
   return (
-    <Card className="flex items-start gap-4">
+    <Card className="flex items-start gap-4 px-5 py-4 sm:px-6 sm:py-5">
       <span className={cn('grid size-11 shrink-0 place-items-center rounded-xl', tone)}>
         <Icon className="size-5" />
       </span>
@@ -158,9 +158,9 @@ export function OverviewPage() {
         <PageHeader eyebrow="School Setup" title="Overview" />
         <div role="status" aria-label="Loading overview" className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Skeleton className="h-24 rounded-card" />
-            <Skeleton className="h-24 rounded-card" />
-            <Skeleton className="h-24 rounded-card" />
+            <Skeleton className="h-[88px] rounded-card" />
+            <Skeleton className="h-[88px] rounded-card" />
+            <Skeleton className="h-[88px] rounded-card" />
           </div>
           <Skeleton className="h-72 rounded-card" />
         </div>
@@ -182,7 +182,7 @@ export function OverviewPage() {
       <PageHeader eyebrow="School Setup" title="Overview" description="Where your school’s configuration stands, and what to set up next." />
 
       {justCompleted && (
-        <Alert tone="success" className="mb-6" title="School setup is complete 🎉">
+        <Alert tone="success" className="mb-4" title="School setup is complete 🎉">
           <span className="inline-flex items-center gap-1.5">
             <PartyPopper className="size-4" aria-hidden="true" /> Your school, Primary Location and campuses are ready for the rest of SchoolVerse.
           </span>
@@ -207,7 +207,7 @@ export function OverviewPage() {
         </Stat>
       </div>
 
-      <Card className="mt-6">
+      <Card className="mt-4">
         <div className="grid items-center gap-6 md:grid-cols-[auto_minmax(0,1fr)] md:gap-10">
           <div className="flex flex-col items-center text-center">
             <h2 className="mb-4 text-lg font-bold">Setup completion</h2>
@@ -225,7 +225,7 @@ export function OverviewPage() {
       </Card>
 
       {(can('audit:view') || (nextStep && nextStep.status !== 'upcoming')) && (
-        <div className="mt-6 space-y-6">
+        <div className="mt-4 space-y-4">
           {nextStep && nextStep.status !== 'upcoming' && (
             <Card className="border-brand/25 bg-brand-soft">
               <p className="text-[11px] font-bold tracking-[0.14em] text-brand uppercase">Next up</p>

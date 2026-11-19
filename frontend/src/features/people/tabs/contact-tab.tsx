@@ -9,6 +9,7 @@ import { TextField } from '@/components/ui/field';
 import { Can } from '@/components/sv/can';
 import { InfoGrid, InfoItem } from '@/components/sv/info-grid';
 import { api, ApiError } from '@/lib/api';
+import { changedFields } from '@/lib/utils';
 import { messageFor } from '@/lib/errors';
 import { formatPhone } from '@/lib/format';
 import { usePeopleMutation } from '../api';
@@ -49,11 +50,7 @@ function EditDrawer({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
   const submit = async () => {
     setErrors({});
     setFormError(null);
-    const patch = Object.fromEntries(
-      (Object.keys(form) as (keyof typeof initial)[])
-        .filter((k) => form[k] !== initial[k])
-        .map((k) => [k, form[k]]),
-    );
+    const patch = changedFields(form, initial);
     if (Object.keys(patch).length === 0) return onClose();
     try {
       await save.mutateAsync(patch);

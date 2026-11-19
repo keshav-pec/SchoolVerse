@@ -5,7 +5,7 @@ import { BookOpen, CalendarRange, GraduationCap } from 'lucide-react';
 import type { SessionStatus, ValidationResultDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ComboboxField } from '@/components/ui/field';
+import { Combobox } from '@/components/ui/combobox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
@@ -59,7 +59,7 @@ export function SessionPage() {
 
   return (
     <>
-      <Link to="/academics" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand">
+      <Link to="/academics" className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand">
         <ArrowLeft className="size-4" /> Academic Setup
       </Link>
       <PageHeader
@@ -72,7 +72,7 @@ export function SessionPage() {
         actions={<LifecycleButtons session={session} validationErrors={errors} />}
       />
 
-      <div className="mb-6 space-y-3">
+      <div className="mb-4 space-y-2 empty:hidden">
         {closed && (
           <Alert tone="warning" title={`This session is ${session.status.toLowerCase()}`}>
             <span className="inline-flex items-center gap-1.5">
@@ -81,8 +81,8 @@ export function SessionPage() {
           </Alert>
         )}
         {session.status === 'ACTIVE' && (
-          <Alert tone="info" title="This session is active">
-            Removing or deactivating structure is restricted while other records depend on it. Make that change in the next session’s plan.{' '}
+          <Alert tone="info">
+            <strong>This session is active.</strong> Removing or deactivating structure is restricted while other records depend on it. Make that change in the next session’s plan.{' '}
             {nextPlan ? (
               <Link to={`/academics/sessions/${nextPlan.academicSessionId}`} className="font-semibold text-brand underline">
                 Open the next plan
@@ -100,15 +100,20 @@ export function SessionPage() {
       </div>
 
       {session.locations.length > 1 && (
-        <div className="mb-4 max-w-xs">
-          <ComboboxField
-            label="Location"
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="text-sm font-semibold text-ink" aria-hidden="true">
+            Location
+          </span>
+          <Combobox
+            aria-label="Location"
+            describedBy="session-location-hint"
+            className="h-10 w-64"
             value={locationId}
             onChange={setChosenLocation}
-            hint="Classes and subjects differ per location."
             options={session.locations.map((l) => ({ value: l.locationId, label: l.locationName ?? '', hint: l.boardCode ?? undefined }))}
             searchPlaceholder="Search locations…"
           />
+          <span id="session-location-hint" className="text-[13px] text-muted">Classes and subjects differ per location.</span>
         </div>
       )}
 

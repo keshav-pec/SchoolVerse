@@ -75,15 +75,15 @@ export function LocationDetailPage() {
 
   return (
     <div>
-      <Link to="/school-setup/locations" className="mb-4 inline-flex min-h-9 items-center gap-1.5 rounded-lg text-sm font-semibold text-muted hover:text-ink">
+      <Link to="/school-setup/locations" className="mb-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg text-sm font-semibold text-muted hover:text-ink">
         <ArrowLeft className="size-4" aria-hidden="true" /> All locations
       </Link>
 
-      <header className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <header className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
           <CampusAvatar code={l.locationCode} size="lg" />
           <div className="min-w-0">
-            <h1 className="truncate text-[27px] leading-tight font-extrabold sm:text-[30px]">{l.displayName}</h1>
+            <h1 className="truncate text-[24px] leading-tight font-extrabold sm:text-[26px]">{l.displayName}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusPill status={l.status} />
               {l.isPrimary && <PrimaryBadge />}
@@ -96,7 +96,7 @@ export function LocationDetailPage() {
       </header>
 
       {archived && (
-        <Alert tone="warning" className="mb-6" title="This location is archived">
+        <Alert tone="warning" className="mb-4" title="This location is archived">
           <span className="inline-flex items-center gap-1.5"><Archive className="size-4" aria-hidden="true" /> Archived locations are kept for history only and can’t be changed.</span>
         </Alert>
       )}

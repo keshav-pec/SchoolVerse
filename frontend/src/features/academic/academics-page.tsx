@@ -18,13 +18,13 @@ import { SessionPill } from './session-pill';
 
 function Stat({ icon: Icon, label, value, hint }: { icon: typeof Users; label: string; value: React.ReactNode; hint?: string }) {
   return (
-    <Card className="flex items-start gap-3 p-4 sm:p-4">
-      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-        <Icon className="size-5" aria-hidden="true" />
+    <Card className="flex items-center gap-3 px-4 py-3 sm:px-4 sm:py-3">
+      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+        <Icon className="size-[18px]" aria-hidden="true" />
       </span>
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-muted">{label}</p>
-        <p className="text-xl leading-tight font-extrabold">{value}</p>
+        <p className="text-lg leading-tight font-extrabold">{value}</p>
         {hint && <p className="truncate text-xs text-muted">{hint}</p>}
       </div>
     </Card>
@@ -120,9 +120,9 @@ export function AcademicsPage() {
       <>
         {header}
         <div role="status" aria-label="Loading academic setup" className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-20 rounded-card" />
+              <Skeleton key={i} className="h-16 rounded-card" />
             ))}
           </div>
           <Skeleton className="h-64 rounded-card" />
@@ -162,14 +162,14 @@ export function AcademicsPage() {
     <>
       {header}
       {focus && (
-        <div className="space-y-6">
-          <Card className="flex flex-wrap items-center gap-4">
-            <span className="grid size-12 place-items-center rounded-xl bg-brand-soft text-brand">
-              <CalendarRange className="size-6" aria-hidden="true" />
+        <div className="space-y-4">
+          <Card className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5">
+            <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
+              <CalendarRange className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold tracking-[0.14em] text-brand uppercase">{focus.status === 'ACTIVE' ? 'Current session' : 'Latest plan'}</p>
-              <h2 className="text-xl font-extrabold">{focus.name}</h2>
+              <h2 className="text-lg leading-tight font-extrabold">{focus.name}</h2>
               <p className="text-sm text-muted">
                 {formatDateOnly(focus.startDate)} to {formatDateOnly(focus.endDate)}
               </p>
@@ -182,7 +182,7 @@ export function AcademicsPage() {
             </Button>
           </Card>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Stat icon={GraduationCap} label="Classes" value={counts?.classes ?? '…'} hint={counts ? `${counts.sections} sections` : undefined} />
             <Stat icon={BookOpen} label="Subjects offered" value={counts?.subjects ?? '…'} />
             <Stat icon={Layers} label="Programmes" value={counts?.programmes ?? '…'} hint={counts ? `${counts.choiceGroups} choice group${counts.choiceGroups === 1 ? '' : 's'}` : undefined} />
@@ -192,7 +192,7 @@ export function AcademicsPage() {
           {overview.isError ? <ErrorState error={overview.error} onRetry={() => void overview.refetch()} retrying={overview.isFetching} /> : overview.data ? <Checklist overview={overview.data} /> : <Skeleton className="h-48 rounded-card" />}
         </div>
       )}
-      <div className="mt-6">
+      <div className="mt-4">
         <SessionsList sessions={list} />
       </div>
       {drawer}

@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createLocationSchema, LOCATION_TYPE_LABELS, missingActivationFields, normalizePhone, type CreateLocationInput, type LocationDetailDTO, type SchoolDTO } from '@shared';
-import { ArrowLeft, ArrowRight, Check, Pencil, Rocket, Save, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Rocket, Save, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
+import { DrawerStepper, ReviewCard, ReviewRow, stepOfField } from '@/components/sv/drawer-steps';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { applyServerErrors } from '@/lib/errors';
 import { countryName, formatAddress, formatDateOnly, formatPhone } from '@/lib/format';
-import { cn } from '@/lib/utils';
 import { useCreateLocation } from './api';
 import {
   ADDRESS_FIELDS,
@@ -37,67 +37,6 @@ const STEPS = [
 ] as const;
 
 const LAST = STEPS.length - 1;
-
-function stepOfField(field: string): number {
-  const i = STEPS.findIndex((s) => (s.fields as readonly string[]).includes(field) || (s.fields as readonly string[]).some((f) => field.startsWith(`${f}.`)));
-  return i === -1 ? 0 : i;
-}
-
-function Stepper({ current, onJump }: { current: number; onJump: (i: number) => void }) {
-  return (
-    <ol className="flex items-center gap-1 border-b border-line bg-canvas px-5 py-3 sm:px-6" aria-label="Progress">
-      {STEPS.map((step, i) => {
-        const done = i < current;
-        const active = i === current;
-        return (
-          <li key={step.key} className="flex flex-1 items-center gap-1 last:flex-none">
-            <button
-              type="button"
-              disabled={i > current}
-              onClick={() => onJump(i)}
-              aria-current={active ? 'step' : undefined}
-              className={cn('flex items-center gap-2 rounded-lg py-1 pr-1 text-sm font-semibold outline-none', active ? 'text-brand' : done ? 'text-ink' : 'text-muted')}
-            >
-              <span
-                className={cn(
-                  'grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold',
-                  active ? 'bg-brand text-white' : done ? 'bg-success text-white' : 'bg-ink/10 text-muted',
-                )}
-              >
-                {done ? <Check className="size-3.5" aria-hidden="true" /> : i + 1}
-              </span>
-              <span className={cn(!active && 'hidden sm:inline')}>{step.label}</span>
-            </button>
-            {i < LAST && <span aria-hidden="true" className={cn('h-0.5 flex-1 rounded-full', done ? 'bg-success' : 'bg-ink/10')} />}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ReviewCard({ title, onEdit, children }: { title: string; onEdit: () => void; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border border-line p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-bold">{title}</h3>
-        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${title}`}>
-          <Pencil /> Edit
-        </Button>
-      </div>
-      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[130px_1fr]">{children}</dl>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted">{label}</dt>
-      <dd className="min-w-0 font-medium break-words">{value || '—'}</dd>
-    </>
-  );
-}
 
 interface Props {
   open: boolean;
@@ -178,13 +117,13 @@ export function AddLocationDrawer({ open, onOpenChange, school, isFirst, onCreat
           setFormError(applyServerErrors(err, form.setError, ALL_LOCATION_FIELDS));
           // Take the person to the step that owns the first field the server complained about.
           const first = err instanceof ApiError ? Object.keys(err.fieldErrors).find((f) => (ALL_LOCATION_FIELDS as string[]).includes(f)) : undefined;
-          if (first) setStep(stepOfField(first));
+          if (first) setStep(stepOfField(STEPS, first));
         }
       },
       (errors) => {
         const first = Object.keys(errors).find((k) => k !== 'root') ?? 'displayName';
         const nested = first === 'address' ? `address.${Object.keys((errors as { address?: object }).address ?? {})[0] ?? 'line1'}` : first;
-        setStep(stepOfField(nested));
+        setStep(stepOfField(STEPS, nested));
         setFormError(intent === 'ACTIVE' ? 'Complete the highlighted details to activate this location, or save it as a draft.' : 'Some fields need your attention.');
       },
     )();
@@ -200,7 +139,7 @@ export function AddLocationDrawer({ open, onOpenChange, school, isFirst, onCreat
           description={isFirst ? 'Your Primary Location is the school’s main campus.' : 'Add a campus, branch or administrative office.'}
           onInteractOutside={(e) => e.preventDefault()}
         >
-          <Stepper current={step} onJump={setStep} />
+          <DrawerStepper steps={STEPS} current={step} onJump={setStep} />
           <form
             className="flex min-h-0 flex-1 flex-col"
             noValidate
@@ -231,25 +170,25 @@ export function AddLocationDrawer({ open, onOpenChange, school, isFirst, onCreat
               {step === 4 && (
                 <div className="space-y-4">
                   <ReviewCard title="Basics" onEdit={() => setStep(0)}>
-                    <Row label="Name" value={values.displayName} />
-                    <Row label="Code" value={<span className="font-mono">{values.locationCode.trim().toUpperCase()}</span>} />
-                    <Row label="Type" value={LOCATION_TYPE_LABELS[values.locationType]} />
-                    <Row label="Opening date" value={values.openingDate ? formatDateOnly(values.openingDate) : ''} />
-                    <Row label="Primary" value={values.isPrimary ? 'Yes — will be your Primary Location' : 'No'} />
+                    <ReviewRow label="Name" value={values.displayName} />
+                    <ReviewRow label="Code" value={<span className="font-mono">{values.locationCode.trim().toUpperCase()}</span>} />
+                    <ReviewRow label="Type" value={LOCATION_TYPE_LABELS[values.locationType]} />
+                    <ReviewRow label="Opening date" value={values.openingDate ? formatDateOnly(values.openingDate) : ''} />
+                    <ReviewRow label="Primary" value={values.isPrimary ? 'Yes — will be your Primary Location' : 'No'} />
                   </ReviewCard>
                   <ReviewCard title="Address" onEdit={() => setStep(1)}>
-                    <Row label="Address" value={values.address.line1 ? formatAddress({ ...values.address, line1: values.address.line1, line2: values.address.line2 || null, locality: values.address.locality || null, city: values.address.city || null, district: null, state: values.address.state || null, postalCode: values.address.postalCode || null }) : ''} />
-                    <Row label="Country" value={countryName(values.address.country)} />
+                    <ReviewRow label="Address" value={values.address.line1 ? formatAddress({ ...values.address, line1: values.address.line1, line2: values.address.line2 || null, locality: values.address.locality || null, city: values.address.city || null, district: null, state: values.address.state || null, postalCode: values.address.postalCode || null }) : ''} />
+                    <ReviewRow label="Country" value={countryName(values.address.country)} />
                   </ReviewCard>
                   <ReviewCard title="Contact" onEdit={() => setStep(2)}>
-                    <Row label="Phone" value={values.phone.trim() ? formatPhone(normalizePhone(values.phone) ?? values.phone) : ''} />
-                    <Row label="Email" value={values.email} />
-                    <Row label="Website" value={values.websiteUrl} />
+                    <ReviewRow label="Phone" value={values.phone.trim() ? formatPhone(normalizePhone(values.phone) ?? values.phone) : ''} />
+                    <ReviewRow label="Email" value={values.email} />
+                    <ReviewRow label="Website" value={values.websiteUrl} />
                   </ReviewCard>
                   <ReviewCard title="Defaults" onEdit={() => setStep(3)}>
-                    <Row label="Time zone" value={values.timezoneOverride ?? `${school.defaultTimezone} (school default)`} />
-                    <Row label="Currency" value={values.currencyOverride ?? `${school.defaultCurrency} (school default)`} />
-                    <Row label="Locale" value={values.localeOverride ?? `${school.defaultLocale} (school default)`} />
+                    <ReviewRow label="Time zone" value={values.timezoneOverride ?? `${school.defaultTimezone} (school default)`} />
+                    <ReviewRow label="Currency" value={values.currencyOverride ?? `${school.defaultCurrency} (school default)`} />
+                    <ReviewRow label="Locale" value={values.localeOverride ?? `${school.defaultLocale} (school default)`} />
                   </ReviewCard>
                   {missingCount > 0 && (
                     <Alert tone="warning" title="A few details are needed before this location can go live">

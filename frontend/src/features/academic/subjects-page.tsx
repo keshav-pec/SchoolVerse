@@ -180,7 +180,7 @@ export function SubjectsPage() {
 
   return (
     <>
-      <Link to="/academics" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand">
+      <Link to="/academics" className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand">
         <ArrowLeft className="size-4" /> Academic Setup
       </Link>
       <PageHeader

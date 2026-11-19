@@ -69,15 +69,15 @@ export function EmployeePage() {
     <>
       <Link
         to="/people"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand"
+        className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand"
       >
         <ArrowLeft className="size-4" /> Faculty &amp; Staff
       </Link>
 
-      <header className="mb-6 flex flex-col gap-4 rounded-card border border-line bg-white p-5 shadow-card sm:flex-row sm:items-center sm:p-6">
-        <Avatar name={employee.fullName} className="size-16 text-xl" />
+      <header className="mb-4 flex flex-col gap-3 rounded-card border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+        <Avatar name={employee.fullName} className="size-12 text-lg" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[26px] leading-tight font-extrabold break-words">
+          <h1 className="text-[22px] leading-tight font-extrabold break-words">
             {employee.fullName}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -85,7 +85,7 @@ export function EmployeePage() {
             {employee.designation.name} · {employee.department.name} ·{' '}
             {EMPLOYEE_CATEGORY_LABELS[employee.employeeCategory]}
           </p>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <EmployeeStatusPill status={employee.status} />
             {employee.status === 'NOTICE_PERIOD' && exitInfo && (
               <span className="text-[13px] text-muted">
@@ -98,7 +98,7 @@ export function EmployeePage() {
       </header>
 
       {employee.readOnly && (
-        <Alert tone="warning" title="This employee has left the school" className="mb-6">
+        <Alert tone="warning" title="This employee has left the school" className="mb-4">
           <span className="inline-flex items-center gap-1.5">
             <Lock className="size-4" aria-hidden="true" /> The record is read-only
             {exitInfo ? ` (left on ${formatDateOnly(exitInfo.exitDate)})` : ''}. Everything stays

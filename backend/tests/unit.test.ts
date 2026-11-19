@@ -49,7 +49,8 @@ import { toDirectoryDTO, toProfileDTO } from '../src/modules/staff/mappers';
 import type { PersonDoc } from '../src/modules/staff/person.model';
 import { Person } from '../src/modules/staff/person.model';
 import type { StaffMasterDoc } from '../src/modules/staff/master.model';
-import { addDays, assignmentStatus, overlapping } from '../src/modules/staff/status';
+import { addDays, daysBetween } from '../src/core/dates';
+import { assignmentStatus, overlapping } from '../src/modules/staff/status';
 
 describe('location lifecycle state machine (SCH-LOC-06)', () => {
   const legal: Record<LocationStatus, Partial<Record<LocationAction, LocationStatus>>> = {
@@ -298,6 +299,8 @@ describe('effective-dated assignment status (Module 3 "Effective dating")', () =
     expect(addDays('2026-04-01', -1)).toBe('2026-03-31');
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
     expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
+    expect(daysBetween('2026-04-01', '2027-04-01')).toBe(365);
+    expect(daysBetween('2027-03-01', '2026-03-01')).toBe(-365);
   });
 
   it('builds an overlap filter for open-ended and closed ranges', () => {

@@ -17,7 +17,7 @@ import { AccountToken } from '../src/platform/identity/account-token.model';
 import { SecurityEvent } from '../src/platform/identity/security-event.model';
 import { employeeService } from '../src/modules/staff/employee-contract';
 import { processDueExits } from '../src/modules/staff/jobs';
-import { addDays } from '../src/modules/staff/status';
+import { addDays } from '../src/core/dates';
 import { Session } from '../src/platform/auth/session.model';
 import { suspendUser } from '../src/platform/identity/user-admin.service';
 import { hashToken } from '../src/platform/auth/tokens';
@@ -104,8 +104,10 @@ describe('auth', () => {
     const newCookie = refreshCookieOf(rotated);
     expect(newCookie).not.toBe(oldCookie);
 
-    // Within the grace window a replay is rejected but the family survives (multi-tab race).
-    await request(app).post('/api/v1/auth/refresh').set('Cookie', oldCookie).expect(401);
+    // Within the grace window a replay is rejected but the family survives (multi-tab race), and the losing tab's
+    // response leaves the cookies alone, so it cannot wipe the ones the winning tab was just given.
+    const raced = await request(app).post('/api/v1/auth/refresh').set('Cookie', oldCookie).expect(401);
+    expect(raced.headers['set-cookie']).toBeUndefined();
     await request(app).post('/api/v1/auth/refresh').set('Cookie', newCookie).expect(200);
   });
 
@@ -117,8 +119,10 @@ describe('auth', () => {
     const newCookie = refreshCookieOf(rotated);
 
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000);
-    await request(app).post('/api/v1/auth/refresh').set('Cookie', oldCookie).expect(401);
+    const replay = await request(app).post('/api/v1/auth/refresh').set('Cookie', oldCookie).expect(401);
     vi.restoreAllMocks();
+    // Theft, not a race: the cookies are cleared.
+    expect(replay.headers['set-cookie']).toEqual(expect.arrayContaining([expect.stringMatching(/^sv_refresh=;/)]));
 
     const res = await request(app).post('/api/v1/auth/refresh').set('Cookie', newCookie).expect(401);
     expect(res.body.error.code).toBe('SESSION_EXPIRED');

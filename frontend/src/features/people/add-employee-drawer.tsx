@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { useNavigate } from 'react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,17 +11,17 @@ import {
   type EmployeeCategory,
   type EmployeeProfileDTO,
 } from '@shared';
-import { ArrowLeft, ArrowRight, Check, Pencil, UserPlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
 import { FormComboboxField, TextField } from '@/components/ui/field';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
+import { DrawerStepper, ReviewCard, ReviewRow, stepOfField } from '@/components/sv/drawer-steps';
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/errors';
 import { formatDateOnly } from '@/lib/format';
-import { cn } from '@/lib/utils';
 import { useActiveLocations } from '../academic/api';
 import { useDepartments, useDesignations, useEmployees, usePeopleMutation } from './api';
 
@@ -110,90 +110,6 @@ const STEPS = [
 ] as const;
 const LAST = STEPS.length - 1;
 
-function stepOfField(field: string): number {
-  const i = STEPS.findIndex((s) => (s.fields as readonly string[]).includes(field));
-  return i === -1 ? 0 : i;
-}
-
-function Stepper({ current, onJump }: { current: number; onJump: (i: number) => void }) {
-  return (
-    <ol
-      className="flex items-center gap-1 border-b border-line bg-canvas px-5 py-3 sm:px-6"
-      aria-label="Progress"
-    >
-      {STEPS.map((step, i) => {
-        const done = i < current;
-        const active = i === current;
-        return (
-          <li key={step.key} className="flex flex-1 items-center gap-1 last:flex-none">
-            <button
-              type="button"
-              disabled={i > current}
-              onClick={() => onJump(i)}
-              aria-current={active ? 'step' : undefined}
-              className={cn(
-                'flex items-center gap-2 rounded-lg py-1 pr-1 text-sm font-semibold outline-none',
-                active ? 'text-brand' : done ? 'text-ink' : 'text-muted',
-              )}
-            >
-              <span
-                className={cn(
-                  'grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold',
-                  active
-                    ? 'bg-brand text-white'
-                    : done
-                      ? 'bg-success text-white'
-                      : 'bg-ink/10 text-muted',
-                )}
-              >
-                {done ? <Check className="size-3.5" aria-hidden="true" /> : i + 1}
-              </span>
-              <span>{step.label}</span>
-            </button>
-            {i < LAST && (
-              <span
-                aria-hidden="true"
-                className={cn('h-0.5 flex-1 rounded-full', done ? 'bg-success' : 'bg-ink/10')}
-              />
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ReviewCard({
-  title,
-  onEdit,
-  children,
-}: {
-  title: string;
-  onEdit: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-line p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-bold">{title}</h3>
-        <Button variant="ghost" size="sm" onClick={onEdit} aria-label={`Edit ${title}`}>
-          <Pencil /> Edit
-        </Button>
-      </div>
-      <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[150px_1fr]">{children}</dl>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <>
-      <dt className="text-muted">{label}</dt>
-      <dd className="min-w-0 font-medium break-words">{value || '—'}</dd>
-    </>
-  );
-}
-
 /** Add employee in three steps: basics, placement, review. After saving, the profile opens with its next steps. */
 export function AddEmployeeDrawer({
   open,
@@ -278,12 +194,12 @@ export function AddEmployeeDrawer({
                 (ALL_FIELDS as readonly string[]).includes(f),
               )
             : undefined;
-        if (first) setStep(stepOfField(first));
+        if (first) setStep(stepOfField(STEPS, first));
       }
     },
     (errs) => {
       const first = Object.keys(errs).find((k) => k !== 'root');
-      if (first) setStep(stepOfField(first));
+      if (first) setStep(stepOfField(STEPS, first));
       setFormError('Some fields need your attention.');
     },
   );
@@ -296,7 +212,7 @@ export function AddEmployeeDrawer({
           description="A new team member starts as Onboarding. You can finish their setup on the next screen."
           onInteractOutside={(e) => e.preventDefault()}
         >
-          <Stepper current={step} onJump={setStep} />
+          <DrawerStepper steps={STEPS} current={step} onJump={setStep} />
           <form
             className="flex min-h-0 flex-1 flex-col"
             noValidate
@@ -437,13 +353,13 @@ export function AddEmployeeDrawer({
               {step === 2 && (
                 <div className="space-y-4">
                   <ReviewCard title="Basics" onEdit={() => setStep(0)}>
-                    <Row
+                    <ReviewRow
                       label="Name"
                       value={[values.legalFirstName, values.legalMiddleName, values.legalLastName]
                         .filter((p) => p.trim())
                         .join(' ')}
                     />
-                    <Row
+                    <ReviewRow
                       label="Category"
                       value={
                         values.employeeCategory
@@ -451,7 +367,7 @@ export function AddEmployeeDrawer({
                           : ''
                       }
                     />
-                    <Row
+                    <ReviewRow
                       label="Employee code"
                       value={
                         <span className="font-mono">
@@ -459,17 +375,17 @@ export function AddEmployeeDrawer({
                         </span>
                       }
                     />
-                    <Row
+                    <ReviewRow
                       label="Joining date"
                       value={values.joiningDate ? formatDateOnly(values.joiningDate) : ''}
                     />
-                    <Row label="Employment type" value={values.employmentType} />
+                    <ReviewRow label="Employment type" value={values.employmentType} />
                   </ReviewCard>
                   <ReviewCard title="Placement" onEdit={() => setStep(1)}>
-                    <Row label="Primary location" value={locationName} />
-                    <Row label="Department" value={departmentName} />
-                    <Row label="Designation" value={designationName} />
-                    <Row label="Reporting manager" value={managerName} />
+                    <ReviewRow label="Primary location" value={locationName} />
+                    <ReviewRow label="Department" value={departmentName} />
+                    <ReviewRow label="Designation" value={designationName} />
+                    <ReviewRow label="Reporting manager" value={managerName} />
                   </ReviewCard>
                   <Alert tone="info">
                     After saving you’ll see what’s left to do: classes or responsibilities,

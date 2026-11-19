@@ -56,7 +56,10 @@ async function request<T>(method: Method, path: string, body?: unknown, allowRef
   }
 
   if (res.status === 401 && allowRefresh && !NO_REFRESH.includes(path)) {
-    if (await refreshSession()) return request<T>(method, path, body, false);
+    // Retry even when this refresh lost: another tab may have just renewed the shared cookies. A 401 means the
+    // request never ran, so repeating it once is safe.
+    await refreshSession();
+    return request<T>(method, path, body, false);
   }
 
   if (res.status === 204) return undefined as T;

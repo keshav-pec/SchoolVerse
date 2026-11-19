@@ -17,7 +17,8 @@ import { Location } from '../locations/location.model';
 import { assertAssignable, assertWritable, loadEmployee } from './guards';
 import { toLocationAssignmentDTO, type LocationLabel } from './mappers';
 import { assertNoDependents, assertNoPrimaryOverlap } from './placement';
-import { addDays, assignmentStatus, latest, overlapping, todayFor } from './status';
+import { addDays } from '../../core/dates';
+import { assignmentStatus, latest, overlapping, todayFor } from './status';
 import type { EmployeeDoc } from './employee.model';
 
 /** FSM-03 — where an employee works. Primary and secondary placements, transfers, all effective-dated. */
