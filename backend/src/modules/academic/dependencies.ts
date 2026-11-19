@@ -4,11 +4,11 @@ import type { ClientSession } from 'mongoose';
  * Academic dependency registry — the same idea as the location registry (modules/dependencies).
  *
  * Faculty, Student, Timetable… modules register a checker that says "this section / subject offering /
- * grade offering is in use". On an ACTIVE session, structural changes (deactivating or removing
+ * class offering is in use". On an ACTIVE session, structural changes (deactivating or removing
  * structure) are blocked while any checker reports a count (`ACADEMIC_HAS_DEPENDENCIES`).
  */
 export const ACADEMIC_ENTITY_TYPES = [
-  'grade_offering',
+  'class_offering',
   'section_offering',
   'subject_offering',
   'academic_term',

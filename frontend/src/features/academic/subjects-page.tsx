@@ -18,7 +18,7 @@ import { PageHeader } from '@/components/sv/page-header';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { ApiError, api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
-import { useAcademicMutation, useAllRuleVersions, useBoards, useGradeMaster, useSubjects, type SubjectParams } from './api';
+import { useAcademicMutation, useAllRuleVersions, useBoards, useClassMaster, useSubjects, type SubjectParams } from './api';
 import { StatusToggle } from './status-toggle';
 
 const CATEGORY_OPTIONS = SUBJECT_CATEGORIES.map((c) => ({ value: c, label: SUBJECT_CATEGORY_LABELS[c] }));
@@ -159,7 +159,7 @@ function SubjectDrawer({ open, onOpenChange, subject }: { open: boolean; onOpenC
   );
 }
 
-/** Academics → Subject master. Filters follow the PRD: name, internal code, board code, category, grade, language, status. */
+/** Academics → Subject master. Filters follow the PRD: name, internal code, board code, category, class, language, status. */
 export function SubjectsPage() {
   const [filters, setFilters] = useState<SubjectParams>({});
   const [page, setPage] = useState(1);
@@ -167,7 +167,7 @@ export function SubjectsPage() {
   const [open, setOpen] = useState(false);
   const search = useDebouncedValue(filters.search ?? '', 250);
   const boardCode = useDebouncedValue(filters.boardCode ?? '', 250);
-  const grades = useGradeMaster();
+  const classes = useClassMaster();
   const params: SubjectParams = { ...filters, search, boardCode, page };
   const q = useSubjects(params, 20);
   const toggle = useAcademicMutation(({ id, status }: { id: string; status: string }) => api.patch(`/subjects/${id}`, { status }));
@@ -186,7 +186,7 @@ export function SubjectsPage() {
       <PageHeader
         eyebrow="Academics"
         title="Subject master"
-        description="One list of subjects for the whole school. Sessions offer them grade by grade."
+        description="One list of subjects for the whole school. Sessions offer them class by class."
         actions={
           <Can permission="academic:manage">
             <Button onClick={() => { setEditing(null); setOpen(true); }}>
@@ -204,11 +204,11 @@ export function SubjectsPage() {
           <Input aria-label="Board code" placeholder="Board code (041 or CBSE)" value={filters.boardCode ?? ''} onChange={(e) => set({ boardCode: e.target.value })} />
           <Combobox aria-label="Category" value={filters.category ?? ''} onChange={(v) => set({ category: v })} options={[{ value: '', label: 'All categories' }, ...CATEGORY_OPTIONS]} searchPlaceholder="Search categories…" />
           <Combobox
-            aria-label="Grade"
-            value={filters.gradeId ?? ''}
-            onChange={(v) => set({ gradeId: v })}
-            options={[{ value: '', label: 'Any grade' }, ...(grades.data ?? []).map((g) => ({ value: g.gradeId, label: g.canonicalName }))]}
-            searchPlaceholder="Search grades…"
+            aria-label="Class"
+            value={filters.classId ?? ''}
+            onChange={(v) => set({ classId: v })}
+            options={[{ value: '', label: 'Any class' }, ...(classes.data ?? []).map((g) => ({ value: g.classId, label: g.canonicalName }))]}
+            searchPlaceholder="Search classes…"
           />
           <Input aria-label="Language code" placeholder="Language (en, hi…)" value={filters.languageCode ?? ''} onChange={(e) => set({ languageCode: e.target.value })} />
           <Combobox

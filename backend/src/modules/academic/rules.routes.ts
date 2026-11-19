@@ -21,38 +21,38 @@ import { getAcademicContext } from './context.service';
 import * as programmes from './programme.service';
 import * as rules from './rules.service';
 
-const gradeOfferingParams = z.object({ gradeOfferingId: uuidSchema });
+const classOfferingParams = z.object({ classOfferingId: uuidSchema });
 const choiceGroupParams = z.object({ choiceGroupId: uuidSchema });
 const constraintParams = z.object({ constraintId: uuidSchema });
 const programmeParams = z.object({ programmeId: uuidSchema });
 
-/** /grade-offerings/:id/choice-groups and /constraints (mounted beside the Part 1 grade-offering routes). */
-export const gradeRulesRouter = Router();
-gradeRulesRouter.use(authenticate);
+/** /class-offerings/:id/choice-groups and /constraints (mounted beside the Part 1 class-offering routes). */
+export const classRulesRouter = Router();
+classRulesRouter.use(authenticate);
 
-gradeRulesRouter.get('/:gradeOfferingId/choice-groups', requirePermission('academic:view'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  ok(res, await rules.listChoiceGroups(contextOf(req), req.params.gradeOfferingId as string));
+classRulesRouter.get('/:classOfferingId/choice-groups', requirePermission('academic:view'), validate({ params: classOfferingParams }), async (req, res) => {
+  ok(res, await rules.listChoiceGroups(contextOf(req), req.params.classOfferingId as string));
 });
 
-gradeRulesRouter.post(
-  '/:gradeOfferingId/choice-groups',
+classRulesRouter.post(
+  '/:classOfferingId/choice-groups',
   requirePermission('academic:manage'),
-  validate({ params: gradeOfferingParams, body: createChoiceGroupSchema }),
+  validate({ params: classOfferingParams, body: createChoiceGroupSchema }),
   async (req, res) => {
-    created(res, await rules.createChoiceGroup(contextOf(req), req.params.gradeOfferingId as string, req.body));
+    created(res, await rules.createChoiceGroup(contextOf(req), req.params.classOfferingId as string, req.body));
   },
 );
 
-gradeRulesRouter.get('/:gradeOfferingId/constraints', requirePermission('academic:view'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  ok(res, await rules.listConstraints(contextOf(req), req.params.gradeOfferingId as string));
+classRulesRouter.get('/:classOfferingId/constraints', requirePermission('academic:view'), validate({ params: classOfferingParams }), async (req, res) => {
+  ok(res, await rules.listConstraints(contextOf(req), req.params.classOfferingId as string));
 });
 
-gradeRulesRouter.post(
-  '/:gradeOfferingId/constraints',
+classRulesRouter.post(
+  '/:classOfferingId/constraints',
   requirePermission('academic:manage'),
-  validate({ params: gradeOfferingParams, body: createConstraintSchema }),
+  validate({ params: classOfferingParams, body: createConstraintSchema }),
   async (req, res) => {
-    created(res, await rules.createConstraint(contextOf(req), req.params.gradeOfferingId as string, req.body));
+    created(res, await rules.createConstraint(contextOf(req), req.params.classOfferingId as string, req.body));
   },
 );
 

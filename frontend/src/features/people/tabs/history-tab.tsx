@@ -89,7 +89,7 @@ export function HistoryTab({ employeeId }: { employeeId: string }) {
           empty=""
           rows={h.academicAssignments.map((a) => ({
             key: a.academicAssignmentId,
-            label: `${a.sectionName ? `${a.gradeName} · ${a.sectionName}` : a.gradeName}${a.subjectName ? ` · ${a.subjectName}` : ''}`,
+            label: `${a.sectionName ? `${a.schoolClassName} · ${a.sectionName}` : a.schoolClassName}${a.subjectName ? ` · ${a.subjectName}` : ''}`,
             detail: `${ACADEMIC_ASSIGNMENT_TYPE_LABELS[a.assignmentType]} · ${a.sessionCode} · ${range(a.effectiveFrom, a.effectiveTo)}`,
             status: a.status,
           }))}

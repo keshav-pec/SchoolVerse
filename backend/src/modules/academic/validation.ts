@@ -19,19 +19,19 @@ export interface ValidationInput {
   /** By rule version id. */
   ruleVersions: Record<string, { status: RuleVersionStatus; name: string } | undefined>;
   otherSessions: { id: string; name: string; startDate: string; endDate: string; status: SessionStatus }[];
-  /** By master grade id. */
-  grades: Record<string, { code: string; sequence: number; isBoardGrade: boolean } | undefined>;
-  gradeOfferings: { id: string; locationId: string; gradeId: string; displayName: string; status: OfferingStatus }[];
-  sections: { id: string; gradeOfferingId: string; status: OfferingStatus }[];
-  subjectOfferings: { id: string; gradeOfferingId: string; subjectName: string; offeringType: SubjectOfferingType; status: OfferingStatus; subjectActive: boolean }[];
-  groups: { id: string; gradeOfferingId: string; name: string; ruleType: ChoiceRuleType; min: number; max: number; status: OfferingStatus; subjectOfferingIds: string[] }[];
-  constraints: { id: string; gradeOfferingId: string; type: ConstraintType; subjectOfferingId: string; otherSubjectOfferingId: string }[];
+  /** By master class id. */
+  classes: Record<string, { code: string; sequence: number; isBoardClass: boolean } | undefined>;
+  classOfferings: { id: string; locationId: string; classId: string; displayName: string; status: OfferingStatus }[];
+  sections: { id: string; classOfferingId: string; status: OfferingStatus }[];
+  subjectOfferings: { id: string; classOfferingId: string; subjectName: string; offeringType: SubjectOfferingType; status: OfferingStatus; subjectActive: boolean }[];
+  groups: { id: string; classOfferingId: string; name: string; ruleType: ChoiceRuleType; min: number; max: number; status: OfferingStatus; subjectOfferingIds: string[] }[];
+  constraints: { id: string; classOfferingId: string; type: ConstraintType; subjectOfferingId: string; otherSubjectOfferingId: string }[];
   programmes: { id: string; locationId: string; name: string; status: OfferingStatus; subjectRules: { subjectOfferingId: string }[] }[];
   terms: { id: string; name: string; locationId: string | null; startDate: string; endDate: string }[];
 }
 
-/** Grades whose programmes the dashboard suggests setting up (Grade XI and XII). */
-const SENIOR_GRADE_CODES = ['G11', 'G12'];
+/** Classes whose programmes the dashboard suggests setting up (Class XI and XII). */
+const SENIOR_CLASS_CODES = ['G11', 'G12'];
 
 export function validateAcademicSession(input: ValidationInput): ValidationIssueDTO[] {
   const issues: ValidationIssueDTO[] = [];
@@ -40,11 +40,11 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
   const { session } = input;
 
   const locationName = (locationId: string) => input.locations[locationId]?.name ?? 'an unknown location';
-  const activeGrades = input.gradeOfferings.filter((g) => g.status === 'ACTIVE');
-  const gradeOf = new Map(input.gradeOfferings.map((g) => [g.id, g]));
-  const gradeLabel = (gradeOfferingId: string) => {
-    const g = gradeOf.get(gradeOfferingId);
-    return g ? `${g.displayName} at ${locationName(g.locationId)}` : 'an unknown grade';
+  const activeClasses = input.classOfferings.filter((g) => g.status === 'ACTIVE');
+  const classOf = new Map(input.classOfferings.map((g) => [g.id, g]));
+  const classLabel = (classOfferingId: string) => {
+    const g = classOf.get(classOfferingId);
+    return g ? `${g.displayName} at ${locationName(g.locationId)}` : 'an unknown class';
   };
   const offeringOf = new Map(input.subjectOfferings.map((o) => [o.id, o]));
   const usable = (offeringId: string) => {
@@ -52,7 +52,7 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
     return Boolean(o && o.status === 'ACTIVE' && o.subjectActive);
   };
   const nameOf = (offeringId: string) => offeringOf.get(offeringId)?.subjectName ?? 'an unknown subject';
-  const activeGradeIds = new Set(activeGrades.map((g) => g.id));
+  const activeClassIds = new Set(activeClasses.map((g) => g.id));
 
   // ── session level
   if (session.startDate >= session.endDate) {
@@ -79,16 +79,16 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
     }
   }
 
-  // ── grades, sections, subjects
-  if (activeGrades.length === 0) {
-    add('ERROR', 'NO_GRADE_OFFERINGS', 'Add at least one grade to this session.', 'academic_session', session.id);
+  // ── classes, sections, subjects
+  if (activeClasses.length === 0) {
+    add('ERROR', 'NO_CLASS_OFFERINGS', 'Add at least one class to this session.', 'academic_session', session.id);
   }
-  for (const g of activeGrades) {
-    if (!input.sections.some((s) => s.gradeOfferingId === g.id && s.status === 'ACTIVE')) {
-      add('ERROR', 'GRADE_WITHOUT_SECTIONS', `${gradeLabel(g.id)} has no sections.`, 'grade_offering', g.id);
+  for (const g of activeClasses) {
+    if (!input.sections.some((s) => s.classOfferingId === g.id && s.status === 'ACTIVE')) {
+      add('ERROR', 'CLASS_WITHOUT_SECTIONS', `${classLabel(g.id)} has no sections.`, 'class_offering', g.id);
     }
-    if (!input.subjectOfferings.some((o) => o.gradeOfferingId === g.id && o.status === 'ACTIVE')) {
-      add('ERROR', 'GRADE_WITHOUT_SUBJECTS', `${gradeLabel(g.id)} has no subjects.`, 'grade_offering', g.id);
+    if (!input.subjectOfferings.some((o) => o.classOfferingId === g.id && o.status === 'ACTIVE')) {
+      add('ERROR', 'CLASS_WITHOUT_SUBJECTS', `${classLabel(g.id)} has no subjects.`, 'class_offering', g.id);
     }
   }
 
@@ -101,19 +101,19 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
   if (input.terms.length === 0) {
     add('INFO', 'NO_TERMS', 'No terms are set up yet. Add terms if you plan by term or semester.', 'academic_session', session.id);
   }
-  for (const g of activeGrades) {
-    const grade = input.grades[g.gradeId];
-    if (grade?.isBoardGrade) continue;
+  for (const g of activeClasses) {
+    const schoolClass = input.classes[g.classId];
+    if (schoolClass?.isBoardClass) continue;
     if (!input.terms.some((t) => t.locationId === null || t.locationId === g.locationId)) {
-      add('WARNING', 'GRADE_WITHOUT_TERMS', `${gradeLabel(g.id)} has no terms.`, 'grade_offering', g.id);
+      add('WARNING', 'CLASS_WITHOUT_TERMS', `${classLabel(g.id)} has no terms.`, 'class_offering', g.id);
     }
   }
 
   // ── choice groups
-  const activeGroups = input.groups.filter((g) => g.status === 'ACTIVE' && activeGradeIds.has(g.gradeOfferingId));
+  const activeGroups = input.groups.filter((g) => g.status === 'ACTIVE' && activeClassIds.has(g.classOfferingId));
   for (const group of activeGroups) {
     const eligible = group.subjectOfferingIds.filter(usable).length;
-    const where = `Choice group "${group.name}" (${gradeLabel(group.gradeOfferingId)})`;
+    const where = `Choice group "${group.name}" (${classLabel(group.classOfferingId)})`;
     // "Take all" means every active subject, so it can never ask for more than exists.
     if (group.ruleType !== 'REQUIRED_ALL' && group.min > eligible) {
       add(
@@ -130,14 +130,14 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
     if (group.ruleType !== 'REQUIRED_ALL') {
       for (const id of group.subjectOfferingIds) {
         if (offeringOf.get(id)?.offeringType === 'MANDATORY') {
-          add('WARNING', 'MANDATORY_IN_CHOICE_GROUP', `${nameOf(id)} is mandatory but also sits in the optional choice group "${group.name}" (${gradeLabel(group.gradeOfferingId)}).`, 'subject_choice_group', group.id);
+          add('WARNING', 'MANDATORY_IN_CHOICE_GROUP', `${nameOf(id)} is mandatory but also sits in the optional choice group "${group.name}" (${classLabel(group.classOfferingId)}).`, 'subject_choice_group', group.id);
         }
       }
     }
   }
 
   // ── constraints
-  const constraints = input.constraints.filter((c) => activeGradeIds.has(c.gradeOfferingId));
+  const constraints = input.constraints.filter((c) => activeClassIds.has(c.classOfferingId));
   const reported = new Set<string>();
   for (const c of constraints) {
     const a = nameOf(c.subjectOfferingId);
@@ -149,7 +149,7 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
     const opposite = constraints.find(
       (o) =>
         o.id !== c.id &&
-        o.gradeOfferingId === c.gradeOfferingId &&
+        o.classOfferingId === c.classOfferingId &&
         o.type !== c.type &&
         [o.subjectOfferingId, o.otherSubjectOfferingId].sort().join('|') === pair,
     );
@@ -160,7 +160,7 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
       add(
         'ERROR',
         'CONSTRAINT_CONFLICT',
-        `"${nameOf(requires.subjectOfferingId)} requires ${nameOf(requires.otherSubjectOfferingId)}" conflicts with "${nameOf(excludes.subjectOfferingId)} excludes ${nameOf(excludes.otherSubjectOfferingId)}" in ${gradeLabel(c.gradeOfferingId)}.`,
+        `"${nameOf(requires.subjectOfferingId)} requires ${nameOf(requires.otherSubjectOfferingId)}" conflicts with "${nameOf(excludes.subjectOfferingId)} excludes ${nameOf(excludes.otherSubjectOfferingId)}" in ${classLabel(c.classOfferingId)}.`,
         'subject_choice_constraint',
         requires.id,
       );
@@ -168,20 +168,20 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
 
     if (c.type === 'EXCLUDES') {
       const sameRequiredGroup = activeGroups.some(
-        (g) => g.gradeOfferingId === c.gradeOfferingId && g.ruleType === 'REQUIRED_ALL' && g.subjectOfferingIds.includes(c.subjectOfferingId) && g.subjectOfferingIds.includes(c.otherSubjectOfferingId),
+        (g) => g.classOfferingId === c.classOfferingId && g.ruleType === 'REQUIRED_ALL' && g.subjectOfferingIds.includes(c.subjectOfferingId) && g.subjectOfferingIds.includes(c.otherSubjectOfferingId),
       );
       const bothMandatory = [c.subjectOfferingId, c.otherSubjectOfferingId].every((id) => offeringOf.get(id)?.offeringType === 'MANDATORY' && offeringOf.get(id)?.status === 'ACTIVE');
       if (sameRequiredGroup || bothMandatory) {
         add(
           'ERROR',
           'EXCLUDES_ON_REQUIRED',
-          `"${text}" in ${gradeLabel(c.gradeOfferingId)} can never be met because ${sameRequiredGroup ? 'both subjects are in the same "take all" group' : 'both subjects are mandatory'}.`,
+          `"${text}" in ${classLabel(c.classOfferingId)} can never be met because ${sameRequiredGroup ? 'both subjects are in the same "take all" group' : 'both subjects are mandatory'}.`,
           'subject_choice_constraint',
           c.id,
         );
       }
     } else if (usable(c.subjectOfferingId) && !usable(c.otherSubjectOfferingId)) {
-      add('ERROR', 'REQUIRES_TARGET_INACTIVE', `"${text}" in ${gradeLabel(c.gradeOfferingId)} points at an inactive subject.`, 'subject_choice_constraint', c.id);
+      add('ERROR', 'REQUIRES_TARGET_INACTIVE', `"${text}" in ${classLabel(c.classOfferingId)} points at an inactive subject.`, 'subject_choice_constraint', c.id);
     }
   }
 
@@ -194,9 +194,9 @@ export function validateAcademicSession(input: ValidationInput): ValidationIssue
     }
   }
   for (const l of session.locations) {
-    const hasSenior = activeGrades.some((g) => g.locationId === l.locationId && SENIOR_GRADE_CODES.includes(input.grades[g.gradeId]?.code ?? ''));
+    const hasSenior = activeClasses.some((g) => g.locationId === l.locationId && SENIOR_CLASS_CODES.includes(input.classes[g.classId]?.code ?? ''));
     if (hasSenior && !input.programmes.some((p) => p.locationId === l.locationId && p.status === 'ACTIVE')) {
-      add('INFO', 'NO_PROGRAMMES', `${locationName(l.locationId)} has Grade XI or XII but no programmes (streams or flexible combinations).`, 'session_location', l.locationId);
+      add('INFO', 'NO_PROGRAMMES', `${locationName(l.locationId)} has Class XI or XII but no programmes (streams or flexible combinations).`, 'session_location', l.locationId);
     }
   }
 

@@ -11,7 +11,7 @@ export const AUDIT_ENTITY_TYPES = [
   'board_rule_version',
   'subject',
   'academic_session',
-  'grade_offering',
+  'class_offering',
   'section_offering',
   'subject_offering',
   'academic_term',

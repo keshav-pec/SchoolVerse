@@ -4,18 +4,20 @@ import { CHOICE_RULE_TYPES, CHOICE_RULE_TYPE_LABELS, type ChoiceRuleType, type C
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InfoTip } from '@/components/ui/tooltip';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useChoiceGroups, useConstraints, useSubjectOfferings } from '../api';
-import { GradePicker } from '../grade-picker';
+import { ClassPicker } from '../class-picker';
 import type { TabProps } from '../session-page';
+import { HelpHeading, TabIntro } from '../help';
 import { StatusToggle } from '../status-toggle';
 
-function GroupForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; offerings: SubjectOfferingDTO[] }) {
+function GroupForm({ classOfferingId, offerings }: { classOfferingId: string; offerings: SubjectOfferingDTO[] }) {
   const [name, setName] = useState('');
   const [ruleType, setRuleType] = useState<ChoiceRuleType>('CHOOSE_ONE');
   const [min, setMin] = useState('1');
@@ -24,7 +26,7 @@ function GroupForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; of
   const [error, setError] = useState<string | null>(null);
   const add = useAcademicMutation(
     (_: void) =>
-      api.post(`/grade-offerings/${gradeOfferingId}/choice-groups`, {
+      api.post(`/class-offerings/${classOfferingId}/choice-groups`, {
         name,
         ruleType,
         subjectOfferingIds: picked,
@@ -37,24 +39,27 @@ function GroupForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; of
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Add a choice group</CardTitle>
-          <CardDescription>For example “Language 1: choose one of Punjabi, Hindi, Urdu”.</CardDescription>
+          <HelpHeading title="Add a choice group" helpLabel="How to add a choice group" help={<AddGroupHelp />} />
+          <CardDescription>Give it a name, pick how many subjects a student takes, then tick the subjects. Example: “Language 1: choose one of Punjabi, Hindi, Urdu”.</CardDescription>
         </div>
       </CardHeader>
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label="Group name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Language 1" />
+        <TextField label="Group name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Language 1" hint="A name staff will recognise, e.g. Second language." />
         <ComboboxField
-          label="Rule"
+          label="How many can a student take?"
+          labelAside={<InfoTip label="About the choice types"><RuleTypeHelp /></InfoTip>}
+          hint={RULE_TYPE_HINTS[ruleType]}
           value={ruleType}
           onChange={(v) => setRuleType(v as ChoiceRuleType)}
           options={CHOOSE_RULE_OPTIONS.map((t) => ({ value: t, label: CHOICE_RULE_TYPE_LABELS[t] }))}
           searchPlaceholder="Search rules…"
         />
-        {ruleType === 'CHOOSE_N' && <TextField label="At least" type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} />}
-        {(ruleType === 'CHOOSE_N' || ruleType === 'OPTIONAL') && <TextField label="At most" type="number" min={1} value={max} onChange={(e) => setMax(e.target.value)} />}
+        {ruleType === 'CHOOSE_N' && <TextField label="At least" type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} hint="Fewest subjects a student must pick." />}
+        {(ruleType === 'CHOOSE_N' || ruleType === 'OPTIONAL') && <TextField label="At most" type="number" min={1} value={max} onChange={(e) => setMax(e.target.value)} hint="Most subjects a student may pick." />}
       </div>
       <fieldset className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <legend className="mb-1 text-sm font-semibold">Subjects in this group</legend>
+        {offerings.length === 0 && <p className="text-sm text-muted sm:col-span-3">This class has no subjects yet. Add them on the Subjects tab first.</p>}
         {offerings.map((o) => (
           <label key={o.subjectOfferingId} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm">
             <input type="checkbox" className="accent-[var(--color-brand)]" checked={picked.includes(o.subjectOfferingId)} onChange={() => setPicked((cur) => (cur.includes(o.subjectOfferingId) ? cur.filter((x) => x !== o.subjectOfferingId) : [...cur, o.subjectOfferingId]))} />
@@ -86,21 +91,55 @@ function GroupForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; of
 }
 const CHOOSE_RULE_OPTIONS = CHOICE_RULE_TYPES;
 
-function ConstraintForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; offerings: SubjectOfferingDTO[] }) {
+/** One line under the dropdown so the chosen type is explained without opening the help card. */
+const RULE_TYPE_HINTS: Record<ChoiceRuleType, string> = {
+  REQUIRED_ALL: 'Every student studies all the ticked subjects.',
+  CHOOSE_ONE: 'Each student picks exactly one of the ticked subjects.',
+  CHOOSE_N: 'Each student picks between “at least” and “at most” of them.',
+  OPTIONAL: 'Students may skip these, or pick up to “at most” of them.',
+};
+
+function RuleTypeHelp() {
+  return (
+    <>
+      <p>How many subjects from this group each student takes:</p>
+      <ul>
+        <li><b>Take all</b>: every subject in the group is compulsory.</li>
+        <li><b>Choose one</b>: the student picks exactly one. Example: one of Hindi, Punjabi, Urdu.</li>
+        <li><b>Choose a number</b>: the student picks a set number, e.g. 2 of 4 electives.</li>
+        <li><b>Optional</b>: the student may pick none, or a few extras.</li>
+      </ul>
+    </>
+  );
+}
+
+function AddGroupHelp() {
+  return (
+    <>
+      <p><b>1.</b> Name the group, e.g. “Second language”.</p>
+      <p><b>2.</b> Choose how many subjects a student takes from it.</p>
+      <p><b>3.</b> Tick the subjects that belong in the group, then press Add group.</p>
+      <p>A subject should sit in only one group.</p>
+    </>
+  );
+}
+
+function ConstraintForm({ classOfferingId, offerings }: { classOfferingId: string; offerings: SubjectOfferingDTO[] }) {
   const [type, setType] = useState<ConstraintType>('REQUIRES');
   const [a, setA] = useState('');
   const [b, setB] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const add = useAcademicMutation((_: void) => api.post(`/grade-offerings/${gradeOfferingId}/constraints`, { type, subjectOfferingId: a, otherSubjectOfferingId: b }), { quiet: true, success: 'Rule added.' });
+  const add = useAcademicMutation((_: void) => api.post(`/class-offerings/${classOfferingId}/constraints`, { type, subjectOfferingId: a, otherSubjectOfferingId: b }), { quiet: true, success: 'Rule added.' });
   const options = offerings.map((o) => ({ value: o.subjectOfferingId, label: o.subjectName }));
   return (
     <div className="mt-4 grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr_auto]">
       <ComboboxField label="Subject" value={a} onChange={setA} placeholder="Choose…" options={options} searchPlaceholder="Search subjects…" />
       <ComboboxField
         label="Rule"
+        labelAside={<InfoTip label="About requires and excludes"><LinkTypeHelp /></InfoTip>}
         value={type}
         onChange={(v) => setType(v as ConstraintType)}
-        options={[{ value: 'REQUIRES', label: 'requires' }, { value: 'EXCLUDES', label: 'excludes' }]}
+        options={[{ value: 'REQUIRES', label: 'requires', hint: 'must also take' }, { value: 'EXCLUDES', label: 'excludes', hint: 'cannot take both' }]}
         searchPlaceholder="Search rules…"
       />
       <ComboboxField label="Other subject" value={b} onChange={setB} placeholder="Choose…" options={options} searchPlaceholder="Search subjects…" />
@@ -126,10 +165,19 @@ function ConstraintForm({ gradeOfferingId, offerings }: { gradeOfferingId: strin
   );
 }
 
-function Rules({ gradeOfferingId, readOnly, draft }: { gradeOfferingId: string; readOnly: boolean; draft: boolean }) {
-  const groups = useChoiceGroups(gradeOfferingId);
-  const constraints = useConstraints(gradeOfferingId);
-  const offerings = useSubjectOfferings(gradeOfferingId);
+function LinkTypeHelp() {
+  return (
+    <ul>
+      <li><b>requires</b>: a student who takes the first subject must also take the other. Example: Computer Science requires Mathematics.</li>
+      <li><b>excludes</b>: a student cannot take both subjects. Example: Hindi excludes Sanskrit.</li>
+    </ul>
+  );
+}
+
+function Rules({ classOfferingId, readOnly, draft }: { classOfferingId: string; readOnly: boolean; draft: boolean }) {
+  const groups = useChoiceGroups(classOfferingId);
+  const constraints = useConstraints(classOfferingId);
+  const offerings = useSubjectOfferings(classOfferingId);
   const toggle = useAcademicMutation(({ id, status }: { id: string; status: string }) => api.patch(`/choice-groups/${id}`, { status }));
   const removeGroup = useAcademicMutation((id: string) => api.delete<void>(`/choice-groups/${id}`), { success: 'Group removed.' });
   const removeConstraint = useAcademicMutation((id: string) => api.delete<void>(`/constraints/${id}`), { success: 'Rule removed.' });
@@ -142,8 +190,19 @@ function Rules({ gradeOfferingId, readOnly, draft }: { gradeOfferingId: string; 
   return (
     <div className="space-y-6">
       <section aria-label="Choice groups" className="space-y-3">
-        <h2 className="text-lg font-bold">Choice groups</h2>
-        {(groups.data ?? []).length === 0 && <p className="text-sm text-muted">No choice groups. Every subject is simply offered.</p>}
+        <HelpHeading
+          title="Choice groups"
+          helpLabel="What is a choice group?"
+          help={
+            <>
+              <p>A <b>choice group</b> is a set of subjects where students <b>pick</b> instead of studying all of them.</p>
+              <p>Example: “Second language: choose one of Hindi, Punjabi, Sanskrit”. Each student studies one of the three.</p>
+              <p><b>Do I need one?</b> Only if students in this class choose between subjects. If everyone studies every subject, leave this empty.</p>
+            </>
+          }
+        />
+        <p className="text-sm text-muted">Use these when students choose between subjects, such as picking one second language.</p>
+        {(groups.data ?? []).length === 0 && <p className="text-sm text-muted">No choice groups yet. That’s fine if every student in this class studies all of its subjects.</p>}
         <ul className="space-y-3">
           {(groups.data ?? []).map((g) => (
             <li key={g.choiceGroupId} className="rounded-xl border border-line bg-white px-4 py-3">
@@ -164,12 +223,23 @@ function Rules({ gradeOfferingId, readOnly, draft }: { gradeOfferingId: string; 
             </li>
           ))}
         </ul>
-        {!readOnly && <GroupForm gradeOfferingId={gradeOfferingId} offerings={active} />}
+        {!readOnly && <GroupForm classOfferingId={classOfferingId} offerings={active} />}
       </section>
 
       <section aria-label="Subject rules" className="space-y-3">
-        <h2 className="text-lg font-bold">Subject rules</h2>
-        {(constraints.data ?? []).length === 0 && <p className="text-sm text-muted">No “requires” or “excludes” rules.</p>}
+        <HelpHeading
+          title="Subject rules"
+          helpLabel="What is a subject rule?"
+          help={
+            <>
+              <p>A <b>subject rule</b> links two subjects, so one choice affects the other.</p>
+              <LinkTypeHelp />
+              <p><b>Do I need one?</b> Rarely. Most classes need none. Add one only when your board or school has such a rule.</p>
+            </>
+          }
+        />
+        <p className="text-sm text-muted">Link two subjects when taking one means a student must also take, or cannot take, the other.</p>
+        {(constraints.data ?? []).length === 0 && <p className="text-sm text-muted">No subject rules yet. Most classes don’t need any.</p>}
         <ul className="space-y-2">
           {(constraints.data ?? []).map((c) => (
             <li key={c.constraintId} className="flex items-center gap-3 rounded-xl border border-line bg-white px-4 py-2.5 text-sm">
@@ -182,17 +252,23 @@ function Rules({ gradeOfferingId, readOnly, draft }: { gradeOfferingId: string; 
             </li>
           ))}
         </ul>
-        {!readOnly && <ConstraintForm gradeOfferingId={gradeOfferingId} offerings={active} />}
+        {!readOnly && <ConstraintForm classOfferingId={classOfferingId} offerings={active} />}
       </section>
     </div>
   );
 }
 
 export function RulesTab({ sessionId, locationId, readOnly, status }: TabProps) {
-  const [gradeOfferingId, setGradeOfferingId] = useState('');
+  const [classOfferingId, setClassOfferingId] = useState('');
   return (
-    <GradePicker sessionId={sessionId} locationId={locationId} value={gradeOfferingId} onChange={setGradeOfferingId}>
-      {(id) => <Rules key={id} gradeOfferingId={id} readOnly={readOnly} draft={status === 'DRAFT'} />}
-    </GradePicker>
+    <div className="space-y-5">
+      <TabIntro title="Subject Choice Rules" need="optional">
+        <p>Set this up only when students <b>choose</b> their subjects, for example picking one second language, or electives in Class 11.</p>
+        <p>If every student in a class studies the same subjects, you can skip this tab for that class.</p>
+      </TabIntro>
+      <ClassPicker sessionId={sessionId} locationId={locationId} value={classOfferingId} onChange={setClassOfferingId}>
+        {(id) => <Rules key={id} classOfferingId={id} readOnly={readOnly} draft={status === 'DRAFT'} />}
+      </ClassPicker>
+    </div>
   );
 }

@@ -3,8 +3,8 @@ import type { ValidationIssueDTO, ValidationResultDTO } from '@shared';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { Location } from '../locations/location.model';
-import { GradeOffering, SectionOffering, SubjectOffering, type GradeOfferingDoc, type SectionOfferingDoc, type SubjectOfferingDoc } from './offering.model';
-import { BoardRuleVersion, GradeMaster, visibleToTenant, type BoardRuleVersionDoc, type GradeMasterDoc } from './reference.model';
+import { ClassOffering, SectionOffering, SubjectOffering, type ClassOfferingDoc, type SectionOfferingDoc, type SubjectOfferingDoc } from './offering.model';
+import { BoardRuleVersion, ClassMaster, visibleToTenant, type BoardRuleVersionDoc, type ClassMasterDoc } from './reference.model';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup, type AcademicProgrammeDoc, type SubjectChoiceConstraintDoc, type SubjectChoiceGroupDoc } from './rules.model';
 import { AcademicSession, AcademicTerm, type AcademicSessionDoc, type AcademicTermDoc } from './session.model';
 import { getSessionOrThrow } from './session.service';
@@ -17,11 +17,11 @@ export async function loadValidationInput(ctx: ServiceContext, session: Academic
   const scope = { tenantId: ctx.tenantId, sessionId: session._id };
   const s = db ?? null;
 
-  const [locations, versions, others, gradeOfferings, sections, subjectOfferings, groups, constraints, programmes, terms] = await Promise.all([
+  const [locations, versions, others, classOfferings, sections, subjectOfferings, groups, constraints, programmes, terms] = await Promise.all([
     Location.find({ tenantId: ctx.tenantId, _id: { $in: session.locations.map((l) => l.locationId) } }).select('status displayName').session(s).lean<{ _id: string; status: string; displayName: string }[]>(),
     BoardRuleVersion.find({ _id: { $in: session.locations.map((l) => l.boardRuleVersionId) }, ...visibleToTenant(ctx.tenantId) }).session(s).lean<BoardRuleVersionDoc[]>(),
     AcademicSession.find({ tenantId: ctx.tenantId, schoolId: session.schoolId, _id: { $ne: session._id } }).session(s).lean<AcademicSessionDoc[]>(),
-    GradeOffering.find(scope).session(s).lean<GradeOfferingDoc[]>(),
+    ClassOffering.find(scope).session(s).lean<ClassOfferingDoc[]>(),
     SectionOffering.find(scope).session(s).lean<SectionOfferingDoc[]>(),
     SubjectOffering.find(scope).session(s).lean<SubjectOfferingDoc[]>(),
     SubjectChoiceGroup.find(scope).session(s).lean<SubjectChoiceGroupDoc[]>(),
@@ -29,9 +29,9 @@ export async function loadValidationInput(ctx: ServiceContext, session: Academic
     AcademicProgramme.find(scope).session(s).lean<AcademicProgrammeDoc[]>(),
     AcademicTerm.find(scope).session(s).lean<AcademicTermDoc[]>(),
   ]);
-  const [subjects, grades] = await Promise.all([
+  const [subjects, classes] = await Promise.all([
     Subject.find({ tenantId: ctx.tenantId, _id: { $in: [...new Set(subjectOfferings.map((o) => o.subjectId))] } }).session(s).lean<SubjectDoc[]>(),
-    GradeMaster.find({ _id: { $in: [...new Set(gradeOfferings.map((g) => g.gradeId))] } }).session(s).lean<GradeMasterDoc[]>(),
+    ClassMaster.find({ _id: { $in: [...new Set(classOfferings.map((g) => g.classId))] } }).session(s).lean<ClassMasterDoc[]>(),
   ]);
   const subjectById = new Map(subjects.map((s) => [s._id, s]));
 
@@ -40,19 +40,19 @@ export async function loadValidationInput(ctx: ServiceContext, session: Academic
     locations: Object.fromEntries(locations.map((l) => [l._id, { status: l.status, name: l.displayName }])),
     ruleVersions: Object.fromEntries(versions.map((v) => [v._id, { status: v.status, name: v.name }])),
     otherSessions: others.map((o) => ({ id: o._id, name: o.name, startDate: o.startDate, endDate: o.endDate, status: o.status })),
-    grades: Object.fromEntries(grades.map((g) => [g._id, { code: g.canonicalCode, sequence: g.sequenceNumber, isBoardGrade: g.isBoardGrade }])),
-    gradeOfferings: gradeOfferings.map((g) => ({ id: g._id, locationId: g.locationId, gradeId: g.gradeId, displayName: g.displayName, status: g.status })),
-    sections: sections.map((s) => ({ id: s._id, gradeOfferingId: s.gradeOfferingId, status: s.status })),
+    classes: Object.fromEntries(classes.map((g) => [g._id, { code: g.canonicalCode, sequence: g.sequenceNumber, isBoardClass: g.isBoardClass }])),
+    classOfferings: classOfferings.map((g) => ({ id: g._id, locationId: g.locationId, classId: g.classId, displayName: g.displayName, status: g.status })),
+    sections: sections.map((s) => ({ id: s._id, classOfferingId: s.classOfferingId, status: s.status })),
     subjectOfferings: subjectOfferings.map((o) => ({
       id: o._id,
-      gradeOfferingId: o.gradeOfferingId,
+      classOfferingId: o.classOfferingId,
       subjectName: subjectById.get(o.subjectId)?.name ?? '',
       offeringType: o.offeringType,
       status: o.status,
       subjectActive: subjectById.get(o.subjectId)?.status === 'ACTIVE',
     })),
-    groups: groups.map((g) => ({ id: g._id, gradeOfferingId: g.gradeOfferingId, name: g.name, ruleType: g.ruleType, min: g.min, max: g.max, status: g.status, subjectOfferingIds: g.subjectOfferingIds })),
-    constraints: constraints.map((c) => ({ id: c._id, gradeOfferingId: c.gradeOfferingId, type: c.type, subjectOfferingId: c.subjectOfferingId, otherSubjectOfferingId: c.otherSubjectOfferingId })),
+    groups: groups.map((g) => ({ id: g._id, classOfferingId: g.classOfferingId, name: g.name, ruleType: g.ruleType, min: g.min, max: g.max, status: g.status, subjectOfferingIds: g.subjectOfferingIds })),
+    constraints: constraints.map((c) => ({ id: c._id, classOfferingId: c.classOfferingId, type: c.type, subjectOfferingId: c.subjectOfferingId, otherSubjectOfferingId: c.otherSubjectOfferingId })),
     programmes: programmes.map((p) => ({ id: p._id, locationId: p.locationId, name: p.name, status: p.status, subjectRules: p.subjectRules })),
     terms: terms.map((t) => ({ id: t._id, name: t.name, locationId: t.locationId ?? null, startDate: t.startDate, endDate: t.endDate })),
   };

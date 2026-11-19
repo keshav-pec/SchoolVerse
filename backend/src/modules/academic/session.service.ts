@@ -23,7 +23,7 @@ import { assertOperationalLocation } from '../master/master.service';
 import { getCurrentSchool } from '../school/school.service';
 import { removeRulesForSession } from './cleanup';
 import { assertEditable } from './guard';
-import { GradeOffering, SectionOffering, SubjectOffering } from './offering.model';
+import { ClassOffering, SectionOffering, SubjectOffering } from './offering.model';
 import { BoardRuleVersion, EducationBoard, visibleToTenant, type BoardRuleVersionDoc, type EducationBoardDoc } from './reference.model';
 import { getUsableRuleVersion } from './reference.service';
 import { AcademicSession, AcademicTerm, type AcademicSessionDoc, type SessionLocation } from './session.model';
@@ -300,15 +300,15 @@ export async function updateSession(ctx: ServiceContext, academicSessionId: stri
 async function assertLocationChangesAllowed(ctx: ServiceContext, before: AcademicSessionDoc, after: SessionLocation[], db: ClientSession) {
   const removed = before.locations.filter((b) => !after.some((a) => a.locationId === b.locationId));
   for (const location of removed) {
-    const [grades, terms] = await Promise.all([
-      GradeOffering.countDocuments({ tenantId: ctx.tenantId, sessionId: before._id, locationId: location.locationId }).session(db),
+    const [classes, terms] = await Promise.all([
+      ClassOffering.countDocuments({ tenantId: ctx.tenantId, sessionId: before._id, locationId: location.locationId }).session(db),
       AcademicTerm.countDocuments({ tenantId: ctx.tenantId, sessionId: before._id, locationId: location.locationId }).session(db),
     ]);
-    if (grades + terms > 0) {
-      throw new AppError('ACADEMIC_HAS_DEPENDENCIES', 'This location cannot be removed because grades or terms are already set up for it. Remove them first.', {
+    if (classes + terms > 0) {
+      throw new AppError('ACADEMIC_HAS_DEPENDENCIES', 'This location cannot be removed because classes or terms are already set up for it. Remove them first.', {
         locationId: location.locationId,
         dependencies: [
-          ...(grades ? [{ key: 'academic.grade_offerings', label: 'Grades', count: grades, message: `${grades} grade${grades === 1 ? '' : 's'} set up for this location.` }] : []),
+          ...(classes ? [{ key: 'academic.class_offerings', label: 'Classes', count: classes, message: `${classes} class${classes === 1 ? '' : 's'} set up for this location.` }] : []),
           ...(terms ? [{ key: 'academic.terms', label: 'Terms', count: terms, message: `${terms} term${terms === 1 ? '' : 's'} set up for this location.` }] : []),
         ],
       });
@@ -339,17 +339,17 @@ async function assertLocationChangesAllowed(ctx: ServiceContext, before: Academi
 /** Removes everything planned inside a session. */
 export async function deleteSessionContents(tenantId: string, sessionId: string, db: ClientSession) {
   const rules = await removeRulesForSession(tenantId, sessionId, db);
-  const [terms, subjectOfferings, sections, gradeOfferings] = await Promise.all([
+  const [terms, subjectOfferings, sections, classOfferings] = await Promise.all([
     AcademicTerm.deleteMany({ tenantId, sessionId }, { session: db }),
     SubjectOffering.deleteMany({ tenantId, sessionId }, { session: db }),
     SectionOffering.deleteMany({ tenantId, sessionId }, { session: db }),
-    GradeOffering.deleteMany({ tenantId, sessionId }, { session: db }),
+    ClassOffering.deleteMany({ tenantId, sessionId }, { session: db }),
   ]);
   return {
     terms: terms.deletedCount,
     subjectOfferings: subjectOfferings.deletedCount,
     sections: sections.deletedCount,
-    gradeOfferings: gradeOfferings.deletedCount,
+    classOfferings: classOfferings.deletedCount,
     ...rules,
   };
 }

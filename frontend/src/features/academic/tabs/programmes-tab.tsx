@@ -4,24 +4,26 @@ import { PROGRAMME_KINDS, type ProgrammeDTO, type ProgrammeKind, type ProgrammeR
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
 import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InfoTip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
-import { useAcademicMutation, useGradeMaster, useGradeOfferings, useProgrammes, useSubjectOfferingsOf } from '../api';
+import { useAcademicMutation, useClassMaster, useClassOfferings, useProgrammes, useSubjectOfferingsOf } from '../api';
 import type { TabProps } from '../session-page';
+import { HelpHeading, TabIntro } from '../help';
 import { StatusToggle } from '../status-toggle';
 
 const REQUIREMENTS: ProgrammeRequirement[] = ['REQUIRED', 'CHOICE', 'OPTIONAL'];
 const REQUIREMENT_OPTIONS = [{ value: '', label: 'Not included' }, ...REQUIREMENTS.map((r) => ({ value: r, label: r.charAt(0) + r.slice(1).toLowerCase() }))];
 
 function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationId: string }) {
-  const master = useGradeMaster();
-  const offeringsAtLocation = useGradeOfferings(sessionId, locationId);
+  const master = useClassMaster();
+  const offeringsAtLocation = useClassOfferings(sessionId, locationId);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [kind, setKind] = useState<ProgrammeKind>('STREAM');
@@ -31,14 +33,14 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
   const [choice, setChoice] = useState({ min: '1', max: '1' });
   const [error, setError] = useState<string | null>(null);
 
-  const grades = master.data ?? [];
-  const gradeOptions = grades.map((g) => ({ value: g.gradeId, label: g.canonicalName }));
-  const seq = (id: string) => grades.find((g) => g.gradeId === id)?.sequenceNumber ?? 0;
-  const senior = grades.filter((g) => g.sequenceNumber >= 3);
-  const from = fromId || senior.find((g) => g.canonicalCode === 'G11')?.gradeId || '';
-  const to = toId || senior.find((g) => g.canonicalCode === 'G12')?.gradeId || '';
-  const inRange = useMemo(() => (offeringsAtLocation.data ?? []).filter((g) => seq(g.gradeId) >= seq(from) && seq(g.gradeId) <= seq(to)), [offeringsAtLocation.data, from, to, grades]); // eslint-disable-line react-hooks/exhaustive-deps
-  const subjectQueries = useSubjectOfferingsOf(kind === 'STREAM' ? inRange.map((g) => g.gradeOfferingId) : []);
+  const classes = master.data ?? [];
+  const classOptions = classes.map((g) => ({ value: g.classId, label: g.canonicalName }));
+  const seq = (id: string) => classes.find((g) => g.classId === id)?.sequenceNumber ?? 0;
+  const senior = classes.filter((g) => g.sequenceNumber >= 3);
+  const from = fromId || senior.find((g) => g.canonicalCode === 'G11')?.classId || '';
+  const to = toId || senior.find((g) => g.canonicalCode === 'G12')?.classId || '';
+  const inRange = useMemo(() => (offeringsAtLocation.data ?? []).filter((g) => seq(g.classId) >= seq(from) && seq(g.classId) <= seq(to)), [offeringsAtLocation.data, from, to, classes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const subjectQueries = useSubjectOfferingsOf(kind === 'STREAM' ? inRange.map((g) => g.classOfferingId) : []);
   const choiceCount = Object.values(rules).filter((r) => r === 'CHOICE').length;
 
   const add = useAcademicMutation(
@@ -49,8 +51,8 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
         name,
         code,
         kind,
-        gradeFromId: from,
-        gradeToId: to,
+        classFromId: from,
+        classToId: to,
         subjectRules: kind === 'STREAM' ? Object.entries(rules).map(([subjectOfferingId, requirement]) => ({ subjectOfferingId, requirement })) : [],
         ...(choiceCount > 0 ? { choiceMin: Number(choice.min), choiceMax: Number(choice.max) } : {}),
       }),
@@ -61,27 +63,57 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
     <Card>
       <CardHeader>
         <div>
-          <CardTitle>Add a programme</CardTitle>
-          <CardDescription>A stream has fixed subjects. A flexible combination lets students pick within the grade’s choice rules.</CardDescription>
+          <HelpHeading
+            title="Add a programme"
+            helpLabel="How to add a programme"
+            help={
+              <>
+                <p><b>1.</b> Give it a name and short code, e.g. Science / SCI.</p>
+                <p><b>2.</b> Choose the kind: a fixed stream, or a flexible combination.</p>
+                <p><b>3.</b> Pick the classes it covers, usually Class 11 to Class 12.</p>
+                <p><b>4.</b> For a stream, mark each subject as Required, Choice or Optional.</p>
+              </>
+            }
+          />
+          <CardDescription>A stream has a fixed set of subjects. A flexible combination lets students pick any subjects the Subject Choice Rules allow.</CardDescription>
         </div>
       </CardHeader>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Science" />
-        <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SCI" />
+        <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SCI" hint="A short form, used in lists and reports." />
         <ComboboxField
           label="Kind"
+          labelAside={
+            <InfoTip label="About programme kinds">
+              <ul>
+                <li><b>Stream</b>: a fixed bundle of subjects, e.g. Science = Physics, Chemistry, Mathematics, English.</li>
+                <li><b>Flexible combination</b>: no fixed bundle. Students pick any subjects that the class’s Subject Choice Rules allow.</li>
+              </ul>
+            </InfoTip>
+          }
           value={kind}
           onChange={(v) => setKind(v as ProgrammeKind)}
           options={PROGRAMME_KINDS.map((k) => ({ value: k, label: k === 'STREAM' ? 'Stream' : 'Flexible combination' }))}
           searchPlaceholder="Search kinds…"
         />
-        <ComboboxField label="From grade" value={from} onChange={setFromId} options={gradeOptions} searchPlaceholder="Search grades…" />
-        <ComboboxField label="To grade" value={to} onChange={setToId} options={gradeOptions} searchPlaceholder="Search grades…" />
+        <ComboboxField label="From class" value={from} onChange={setFromId} options={classOptions} searchPlaceholder="Search classes…" hint="First class this programme covers." />
+        <ComboboxField label="To class" value={to} onChange={setToId} options={classOptions} searchPlaceholder="Search classes…" hint="Last class this programme covers." />
       </div>
 
       {kind === 'STREAM' && (
         <fieldset className="mt-4">
-          <legend className="mb-2 text-sm font-semibold">Subjects</legend>
+          <legend className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+            Subjects
+            <InfoTip label="About subject requirements">
+              <p>For each subject, choose how it fits this stream:</p>
+              <ul>
+                <li><b>Required</b>: every student in the stream studies it.</li>
+                <li><b>Choice</b>: students pick from these. Set how many below.</li>
+                <li><b>Optional</b>: students may add it as an extra.</li>
+                <li><b>Not included</b>: not part of this stream.</li>
+              </ul>
+            </InfoTip>
+          </legend>
           <ul className="grid gap-2 sm:grid-cols-2">
             {subjectQueries.flatMap((q, i) =>
               (q.data ?? [])
@@ -108,7 +140,7 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
                 )),
             )}
           </ul>
-          {subjectQueries.length === 0 && <p className="text-sm text-muted">No grades in this range at this location yet.</p>}
+          {subjectQueries.length === 0 && <p className="text-sm text-muted">No classes in this range at this location yet.</p>}
           {choiceCount > 0 && (
             <div className="mt-3 flex gap-3">
               <TextField containerClassName="w-32" label="Choose at least" type="number" min={0} value={choice.min} onChange={(e) => setChoice({ ...choice, min: e.target.value })} />
@@ -143,10 +175,10 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
 
 export function ProgrammesTab({ sessionId, locationId, readOnly, status }: TabProps) {
   const programmes = useProgrammes(sessionId, locationId);
-  const master = useGradeMaster();
+  const master = useClassMaster();
   const toggle = useAcademicMutation(({ id, status }: { id: string; status: string }) => api.patch(`/academic-programmes/${id}`, { status }));
   const remove = useAcademicMutation((id: string) => api.delete<void>(`/academic-programmes/${id}`), { success: 'Programme removed.' });
-  const name = (id: string) => master.data?.find((g) => g.gradeId === id)?.canonicalName ?? '';
+  const name = (id: string) => master.data?.find((g) => g.classId === id)?.canonicalName ?? '';
 
   if (programmes.isLoading) return <Skeleton className="h-48 rounded-card" role="status" aria-label="Loading programmes" />;
   if (programmes.isError) return <ErrorState error={programmes.error} onRetry={() => void programmes.refetch()} retrying={programmes.isFetching} />;
@@ -154,9 +186,15 @@ export function ProgrammesTab({ sessionId, locationId, readOnly, status }: TabPr
 
   return (
     <div className="space-y-6">
+      <TabIntro title="Programmes" need="optional">
+        <p>
+          A <b>programme</b> is a stream students join in the senior classes, such as Science, Commerce or Humanities. It decides which subjects those students study.
+        </p>
+        <p>Skip this tab if your school has no streams, or only teaches up to Class 10.</p>
+      </TabIntro>
       {list.length === 0 ? (
         <Card>
-          <EmptyState title="No programmes yet" description="Programmes (Science, Commerce, Humanities or a flexible combination) are for the senior grades. They are optional." />
+          <EmptyState title="No programmes yet" description="Programmes (Science, Commerce, Humanities or a flexible combination) are for the senior classes. They are optional." />
         </Card>
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2" aria-label="Programmes">
@@ -174,9 +212,9 @@ export function ProgrammesTab({ sessionId, locationId, readOnly, status }: TabPr
                   </Button>
                 )}
               </div>
-              <p className="text-[13px] text-muted">{name(p.gradeFromId)} to {name(p.gradeToId)}</p>
+              <p className="text-[13px] text-muted">{name(p.classFromId)} to {name(p.classToId)}</p>
               {p.kind === 'FLEXIBLE' ? (
-                <p className="mt-2 text-sm">Students pick any combination the grade’s choice rules allow.</p>
+                <p className="mt-2 text-sm">Students pick any combination the class’s Subject Choice Rules allow.</p>
               ) : (
                 <dl className="mt-3 space-y-1.5 text-sm">
                   {REQUIREMENTS.map((r) => {

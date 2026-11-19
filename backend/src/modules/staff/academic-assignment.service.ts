@@ -10,7 +10,7 @@ import { AppError } from '../../core/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { academicService } from '../academic/academic.service';
-import { GradeOffering, SectionOffering, SubjectOffering } from '../academic/offering.model';
+import { ClassOffering, SectionOffering, SubjectOffering } from '../academic/offering.model';
 import { AcademicSession } from '../academic/session.model';
 import { getSessionOrThrow } from '../academic/session.service';
 import { Subject } from '../academic/subject.model';
@@ -27,25 +27,25 @@ import { assignmentStatus, latest, overlapping, todayFor } from './status';
 
 /** FSM-04 — which classes, sections and subjects a faculty member covers, in which session. Offering IDs only (Module 2). */
 
-const AUDITED = ['academicSessionId', 'locationId', 'gradeOfferingId', 'sectionId', 'subjectOfferingId', 'assignmentType', 'effectiveFrom', 'effectiveTo'] as const;
+const AUDITED = ['academicSessionId', 'locationId', 'classOfferingId', 'sectionId', 'subjectOfferingId', 'assignmentType', 'effectiveFrom', 'effectiveTo'] as const;
 
 /** Names for a page of assignments, in a handful of batched lookups. */
 async function dtosOf(ctx: ServiceContext, docs: AcademicAssignmentDoc[], db?: ClientSession): Promise<FacultyAssignmentDTO[]> {
   if (docs.length === 0) return [];
   const tenantId = ctx.tenantId;
   const ids = (pick: (d: AcademicAssignmentDoc) => string | null) => [...new Set(docs.map(pick).filter((id): id is string => Boolean(id)))];
-  const [today, locations, sessions, grades, sections, subjectOfferings] = await Promise.all([
+  const [today, locations, sessions, classes, sections, subjectOfferings] = await Promise.all([
     todayFor(ctx, db),
     labelsFor(tenantId, ids((d) => d.locationId), db),
     AcademicSession.find({ tenantId, _id: { $in: ids((d) => d.academicSessionId) } }).session(db ?? null).select('code name').lean<{ _id: string; code: string; name: string }[]>(),
-    GradeOffering.find({ tenantId, _id: { $in: ids((d) => d.gradeOfferingId) } }).session(db ?? null).select('displayName').lean<{ _id: string; displayName: string }[]>(),
+    ClassOffering.find({ tenantId, _id: { $in: ids((d) => d.classOfferingId) } }).session(db ?? null).select('displayName').lean<{ _id: string; displayName: string }[]>(),
     SectionOffering.find({ tenantId, _id: { $in: ids((d) => d.sectionId) } }).session(db ?? null).select('sectionCode displayName').lean<{ _id: string; sectionCode: string; displayName: string }[]>(),
     SubjectOffering.find({ tenantId, _id: { $in: ids((d) => d.subjectOfferingId) } }).session(db ?? null).select('subjectId').lean<{ _id: string; subjectId: string }[]>(),
   ]);
   const subjects = await Subject.find({ tenantId, _id: { $in: subjectOfferings.map((o) => o.subjectId) } }).session(db ?? null).select('name').lean<{ _id: string; name: string }[]>();
 
   const sessionOf = new Map(sessions.map((s) => [s._id, s]));
-  const gradeOf = new Map(grades.map((g) => [g._id, g]));
+  const classOf = new Map(classes.map((g) => [g._id, g]));
   const sectionOf = new Map(sections.map((s) => [s._id, s]));
   const subjectNameOf = new Map(subjects.map((s) => [s._id, s.name]));
   const subjectOf = new Map(subjectOfferings.map((o) => [o._id, { subjectId: o.subjectId, name: subjectNameOf.get(o.subjectId) ?? 'Unknown subject' }]));
@@ -56,7 +56,7 @@ async function dtosOf(ctx: ServiceContext, docs: AcademicAssignmentDoc[], db?: C
       {
         session: sessionOf.get(d.academicSessionId) ?? { code: '?', name: 'Unknown session' },
         location: locations.get(d.locationId) ?? { locationCode: '?', displayName: 'Unknown location' },
-        gradeName: gradeOf.get(d.gradeOfferingId)?.displayName ?? 'Unknown grade',
+        schoolClassName: classOf.get(d.classOfferingId)?.displayName ?? 'Unknown class',
         section: d.sectionId ? sectionOf.get(d.sectionId) ?? null : null,
         subject: d.subjectOfferingId ? subjectOf.get(d.subjectOfferingId) ?? null : null,
       },
@@ -73,27 +73,27 @@ export async function listAcademicAssignments(ctx: ServiceContext, employeeId: s
   return dtosOf(ctx, docs);
 }
 
-/** Finds the Location → Session → Grade (→ Section → Subject) chain an item points at, and checks it all belongs together. */
+/** Finds the Location → Session → Class (→ Section → Subject) chain an item points at, and checks it all belongs together. */
 async function resolveItem(
   ctx: ServiceContext,
   item: CreateAcademicAssignmentsData['items'][number],
   db: ClientSession,
-): Promise<{ chain: AcademicUsabilityDTO; gradeOfferingId: string }> {
+): Promise<{ chain: AcademicUsabilityDTO; classOfferingId: string }> {
   const purpose = { purpose: 'NEW_ASSIGNMENT' } as const;
   let chain: AcademicUsabilityDTO;
   if (item.sectionId) chain = await academicService.assertSectionUsable(ctx, item.sectionId, purpose, db);
   else if (item.subjectOfferingId) chain = await academicService.assertSubjectOfferingUsable(ctx, item.subjectOfferingId, purpose, db);
-  else chain = await academicService.assertGradeOfferingUsable(ctx, item.gradeOfferingId!, purpose, db);
-  const gradeOfferingId = chain.gradeOffering.gradeOfferingId;
+  else chain = await academicService.assertClassOfferingUsable(ctx, item.classOfferingId!, purpose, db);
+  const classOfferingId = chain.classOffering.classOfferingId;
 
-  const mismatch = (field: string) => AppError.validation({ [field]: 'This does not belong to the selected grade.' });
-  if (item.gradeOfferingId && item.gradeOfferingId !== gradeOfferingId) throw mismatch('gradeOfferingId');
+  const mismatch = (field: string) => AppError.validation({ [field]: 'This does not belong to the selected class.' });
+  if (item.classOfferingId && item.classOfferingId !== classOfferingId) throw mismatch('classOfferingId');
   if (item.sectionId && item.subjectOfferingId) {
     const subject = await academicService.assertSubjectOfferingUsable(ctx, item.subjectOfferingId, purpose, db);
-    if (subject.gradeOffering.gradeOfferingId !== gradeOfferingId) throw mismatch('subjectOfferingId');
+    if (subject.classOffering.classOfferingId !== classOfferingId) throw mismatch('subjectOfferingId');
     chain = { ...chain, subjectOffering: subject.subjectOffering };
   }
-  return { chain, gradeOfferingId };
+  return { chain, classOfferingId };
 }
 
 /** Adds the item number to an error, so a bulk request says which row failed. */
@@ -117,7 +117,7 @@ export async function createAcademicAssignments(ctx: ServiceContext, employeeId:
     const created: AcademicAssignmentDoc[] = [];
     for (const [index, item] of data.items.entries()) {
       try {
-        const { chain, gradeOfferingId } = await resolveItem(ctx, item, db);
+        const { chain, classOfferingId } = await resolveItem(ctx, item, db);
         const session = await getSessionOrThrow(ctx, chain.session.academicSessionId, db);
         const from = item.effectiveFrom ?? latest(session.startDate, employee.joiningDate);
         const to = item.effectiveTo ?? session.endDate;
@@ -133,7 +133,7 @@ export async function createAcademicAssignments(ctx: ServiceContext, employeeId:
         const sectionId = item.sectionId ?? null;
         const subjectOfferingId = item.subjectOfferingId ?? null;
         const same = { tenantId: ctx.tenantId, cancelledAt: null, ...overlapping(from, to) };
-        const duplicate = await AcademicAssignment.exists({ ...same, employeeId, assignmentType: item.assignmentType, gradeOfferingId, sectionId, subjectOfferingId }).session(db);
+        const duplicate = await AcademicAssignment.exists({ ...same, employeeId, assignmentType: item.assignmentType, classOfferingId, sectionId, subjectOfferingId }).session(db);
         if (duplicate) throw new AppError('ASSIGNMENT_DUPLICATE');
         if (item.assignmentType === 'CLASS_TEACHER') {
           const other = await AcademicAssignment.exists({ ...same, assignmentType: 'CLASS_TEACHER', sectionId }).session(db);
@@ -147,7 +147,7 @@ export async function createAcademicAssignments(ctx: ServiceContext, employeeId:
               employeeId,
               academicSessionId: chain.session.academicSessionId,
               locationId: chain.location.locationId,
-              gradeOfferingId,
+              classOfferingId,
               sectionId,
               subjectOfferingId,
               assignmentType: item.assignmentType,

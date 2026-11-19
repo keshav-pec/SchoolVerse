@@ -1,13 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AcademicSessionDTO, GradeOfferingDTO, ValidationResultDTO } from '@shared';
+import type { AcademicSessionDTO, ClassOfferingDTO, ValidationResultDTO } from '@shared';
 import { mockApi, renderWithApp } from '@/test/utils';
 import { AcademicStructurePage } from '../academic-structure-page';
 import { LifecycleButtons } from '../lifecycle-buttons';
 import { SubjectsPage } from '../subjects-page';
-import { GradesTab } from '../tabs/grades-tab';
+import { ClassesTab } from '../tabs/classes-tab';
 import { OverviewTab } from '../tabs/overview-tab';
+import { RulesTab } from '../tabs/rules-tab';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -37,11 +38,11 @@ function session(overrides: Partial<AcademicSessionDTO> = {}): AcademicSessionDT
   };
 }
 
-const grade: GradeOfferingDTO = {
-  gradeOfferingId: GO,
+const schoolClass: ClassOfferingDTO = {
+  classOfferingId: GO,
   academicSessionId: SID,
   locationId: LOC,
-  gradeId: 'g8',
+  classId: 'g8',
   canonicalCode: 'G08',
   displayName: 'Class VIII',
   displayCode: 'VIII',
@@ -56,7 +57,7 @@ const grade: GradeOfferingDTO = {
 describe('validation panel', () => {
   it('lists errors, warnings and suggestions with links, and disables Publish while errors exist', async () => {
     mockApi('SCHOOL_ADMIN', {
-      [`GET ${API}/academic-sessions/${SID}/overview`]: { data: { academicSessionId: SID, status: 'DRAFT', counts: {}, boards: [], checklist: [{ key: 'grades', label: 'Grades', status: 'pending', detail: 'Add grades' }], lastValidation: null } },
+      [`GET ${API}/academic-sessions/${SID}/overview`]: { data: { academicSessionId: SID, status: 'DRAFT', counts: {}, boards: [], checklist: [{ key: 'classes', label: 'Classes', status: 'pending', detail: 'Add classes' }], lastValidation: null } },
     });
     const result: ValidationResultDTO = {
       academicSessionId: SID,
@@ -64,8 +65,8 @@ describe('validation panel', () => {
       summary: { errors: 1, warnings: 1, info: 1 },
       canPublish: false,
       issues: [
-        { level: 'ERROR', code: 'GRADE_WITHOUT_SECTIONS', message: 'Class VIII at Mohali Campus has no sections.', entityType: 'grade_offering', entityId: GO },
-        { level: 'WARNING', code: 'GRADE_WITHOUT_TERMS', message: 'Class VIII at Mohali Campus has no terms.', entityType: 'grade_offering', entityId: GO },
+        { level: 'ERROR', code: 'CLASS_WITHOUT_SECTIONS', message: 'Class VIII at Mohali Campus has no sections.', entityType: 'class_offering', entityId: GO },
+        { level: 'WARNING', code: 'CLASS_WITHOUT_TERMS', message: 'Class VIII at Mohali Campus has no terms.', entityType: 'class_offering', entityId: GO },
         { level: 'INFO', code: 'NO_TERMS', message: 'No terms are set up yet.', entityType: 'academic_session', entityId: SID },
       ],
     };
@@ -80,8 +81,8 @@ describe('validation panel', () => {
     expect(await screen.findByRole('button', { name: /^publish$/i })).toBeDisabled();
     expect(screen.getByText(/fix 1 validation error to publish/i)).toBeInTheDocument();
 
-    await userEvent.click(within(errors).getByRole('button', { name: /go to grades & sections/i }));
-    expect(goTo).toHaveBeenCalledWith('grades');
+    await userEvent.click(within(errors).getByRole('button', { name: /go to classes & sections/i }));
+    expect(goTo).toHaveBeenCalledWith('classes');
   });
 
   it('enables Publish once validation has no errors', async () => {
@@ -96,21 +97,40 @@ describe('validation panel', () => {
 describe('bulk section add', () => {
   it('shows the server’s duplicate-code error next to the input', async () => {
     const mock = mockApi('SCHOOL_ADMIN', {
-      [`GET ${API}/academic-sessions/${SID}/grade-offerings`]: { data: [grade] },
-      [`GET ${API}/grades`]: { data: [] },
-      [`GET ${API}/grade-offerings/${GO}/sections`]: { data: [{ sectionOfferingId: 's1', gradeOfferingId: GO, academicSessionId: SID, locationId: LOC, sectionCode: 'A', displayName: 'A', capacity: null, sequenceOrder: 1, status: 'ACTIVE' }] },
-      [`POST ${API}/grade-offerings/${GO}/sections`]: { status: 409, error: { code: 'SECTION_CODE_TAKEN', message: 'Section A already exists for this grade.', details: { codes: ['A'] } } },
+      [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [schoolClass] },
+      [`GET ${API}/classes`]: { data: [] },
+      [`GET ${API}/class-offerings/${GO}/sections`]: { data: [{ sectionOfferingId: 's1', classOfferingId: GO, academicSessionId: SID, locationId: LOC, sectionCode: 'A', displayName: 'A', capacity: null, sequenceOrder: 1, status: 'ACTIVE' }] },
+      [`POST ${API}/class-offerings/${GO}/sections`]: { status: 409, error: { code: 'SECTION_CODE_TAKEN', message: 'Section A already exists for this class.', details: { codes: ['A'] } } },
     });
-    renderWithApp(<GradesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
 
     await userEvent.click(await screen.findByRole('button', { name: /show sections of class viii/i }));
     const input = await screen.findByLabelText(/add sections to class viii/i);
     await userEvent.type(input, 'a, B');
     await userEvent.click(screen.getByRole('button', { name: /add sections/i }));
 
-    expect(await screen.findByText('Section A already exists for this grade.')).toBeInTheDocument();
+    expect(await screen.findByText('Section A already exists for this class.')).toBeInTheDocument();
     // Codes were normalised to upper case and split on commas before they were sent.
-    expect(mock.callsTo(`/grade-offerings/${GO}/sections`, 'POST')[0]?.body).toEqual({ codes: ['A', 'B'] });
+    expect(mock.callsTo(`/class-offerings/${GO}/sections`, 'POST')[0]?.body).toEqual({ codes: ['A', 'B'] });
+  });
+});
+
+describe('plain-language help', () => {
+  it('Subject Choice Rules says it is optional, and the "i" card explains a choice group on tap', async () => {
+    mockApi('SCHOOL_ADMIN', {
+      [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [schoolClass] },
+      [`GET ${API}/class-offerings/${GO}/choice-groups`]: { data: [] },
+      [`GET ${API}/class-offerings/${GO}/constraints`]: { data: [] },
+      [`GET ${API}/class-offerings/${GO}/subjects`]: { data: [] },
+    });
+    renderWithApp(<RulesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
+
+    const intro = screen.getByRole('complementary', { name: 'About Subject Choice Rules' });
+    expect(within(intro).getByText('Optional')).toBeInTheDocument();
+    expect(await screen.findByText(/that’s fine if every student in this class studies all of its subjects/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'What is a choice group?' }));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/do i need one\?/i);
   });
 });
 
@@ -118,7 +138,7 @@ describe('read-only roles', () => {
   it('Faculty sees the structure and no controls to change it', async () => {
     mockApi('FACULTY', {
       [`GET ${API}/academic-sessions`]: { data: [session({ status: 'ACTIVE', isCurrent: true })] },
-      [`GET ${API}/academic-context`]: { data: { academicSessionId: SID, locationId: LOC, sessionStatus: 'ACTIVE', board: { boardId: 'b1', boardCode: 'CBSE', boardRuleVersionId: 'v1', ruleVersionName: '2026-27' }, grades: [grade] } },
+      [`GET ${API}/academic-context`]: { data: { academicSessionId: SID, locationId: LOC, sessionStatus: 'ACTIVE', board: { boardId: 'b1', boardCode: 'CBSE', boardRuleVersionId: 'v1', ruleVersionName: '2026-27' }, classes: [schoolClass] } },
     });
     renderWithApp(<AcademicStructurePage />);
     expect(await screen.findByRole('heading', { name: 'Academic Structure' })).toBeInTheDocument();
@@ -130,20 +150,20 @@ describe('read-only roles', () => {
   it('the subject master hides add and edit for Faculty', async () => {
     mockApi('FACULTY', {
       [`GET ${API}/subjects`]: { data: { items: [{ subjectId: 'x', subjectCode: 'MATH', name: 'Mathematics', shortName: null, category: 'MATHEMATICS', languageCode: null, hasTheory: true, hasPractical: false, hasProject: false, hasInternalAssessment: false, status: 'ACTIVE', boardCodes: [], createdAt: '', updatedAt: '' }], page: 1, pageSize: 20, total: 1 } },
-      [`GET ${API}/grades`]: { data: [] },
+      [`GET ${API}/classes`]: { data: [] },
     });
     renderWithApp(<SubjectsPage />);
     expect(await screen.findByText('MATH')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add subject|edit/i })).toBeNull();
   });
 
-  it('GradesTab hides add and delete controls when read-only', async () => {
+  it('ClassesTab hides add and delete controls when read-only', async () => {
     mockApi('SCHOOL_ADMIN', {
-      [`GET ${API}/academic-sessions/${SID}/grade-offerings`]: { data: [grade] },
+      [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [schoolClass] },
     });
-    renderWithApp(<GradesTab sessionId={SID} locationId={LOC} readOnly status="CLOSED" />);
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly status="CLOSED" />);
     expect(await screen.findByText('Class VIII')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /add .*grade|delete|edit|deactivate/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /add .*class|delete|edit|deactivate/i })).toBeNull();
   });
 });
 

@@ -8,6 +8,7 @@
     "build": "tsup",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
+    "migrate:grade-to-class": "tsx src/scripts/migrate-grade-to-class.ts",
     "data-inventory": "tsx src/scripts/data-inventory.ts",
     "e2e:server": "tsx src/scripts/e2e-server.ts",
     "test": "vitest run",

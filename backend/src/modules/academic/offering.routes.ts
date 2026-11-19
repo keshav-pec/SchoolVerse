@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   createSectionsSchema,
   createSubjectOfferingsSchema,
-  updateGradeOfferingSchema,
+  updateClassOfferingSchema,
   updateSectionSchema,
   updateSubjectOfferingSchema,
   updateTermSchema,
@@ -17,68 +17,68 @@ import { contextOf } from '../../platform/rbac/tenant-context';
 import * as offerings from './offering.service';
 import * as terms from './term.service';
 
-const gradeOfferingParams = z.object({ gradeOfferingId: uuidSchema });
-const copyParams = z.object({ gradeOfferingId: uuidSchema, otherGradeOfferingId: uuidSchema });
+const classOfferingParams = z.object({ classOfferingId: uuidSchema });
+const copyParams = z.object({ classOfferingId: uuidSchema, otherClassOfferingId: uuidSchema });
 const sectionParams = z.object({ sectionId: uuidSchema });
 const subjectOfferingParams = z.object({ subjectOfferingId: uuidSchema });
 const termParams = z.object({ termId: uuidSchema });
 
-/** /grade-offerings/:id — a grade offering with its sections and subjects. */
-export const gradeOfferingRouter = Router();
-gradeOfferingRouter.use(authenticate);
+/** /class-offerings/:id — a class offering with its sections and subjects. */
+export const classOfferingRouter = Router();
+classOfferingRouter.use(authenticate);
 
-gradeOfferingRouter.get('/:gradeOfferingId', requirePermission('academic:view'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  ok(res, await offerings.getGradeOfferingDTO(contextOf(req), req.params.gradeOfferingId as string));
+classOfferingRouter.get('/:classOfferingId', requirePermission('academic:view'), validate({ params: classOfferingParams }), async (req, res) => {
+  ok(res, await offerings.getClassOfferingDTO(contextOf(req), req.params.classOfferingId as string));
 });
 
-gradeOfferingRouter.patch(
-  '/:gradeOfferingId',
+classOfferingRouter.patch(
+  '/:classOfferingId',
   requirePermission('academic:manage'),
-  validate({ params: gradeOfferingParams, body: updateGradeOfferingSchema }),
+  validate({ params: classOfferingParams, body: updateClassOfferingSchema }),
   async (req, res) => {
-    ok(res, await offerings.updateGradeOffering(contextOf(req), req.params.gradeOfferingId as string, req.body));
+    ok(res, await offerings.updateClassOffering(contextOf(req), req.params.classOfferingId as string, req.body));
   },
 );
 
-gradeOfferingRouter.delete('/:gradeOfferingId', requirePermission('academic:manage'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  await offerings.deleteGradeOffering(contextOf(req), req.params.gradeOfferingId as string);
+classOfferingRouter.delete('/:classOfferingId', requirePermission('academic:manage'), validate({ params: classOfferingParams }), async (req, res) => {
+  await offerings.deleteClassOffering(contextOf(req), req.params.classOfferingId as string);
   noContent(res);
 });
 
 // ── sections (AS-04)
-gradeOfferingRouter.get('/:gradeOfferingId/sections', requirePermission('academic:view'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  ok(res, await offerings.listSections(contextOf(req), req.params.gradeOfferingId as string));
+classOfferingRouter.get('/:classOfferingId/sections', requirePermission('academic:view'), validate({ params: classOfferingParams }), async (req, res) => {
+  ok(res, await offerings.listSections(contextOf(req), req.params.classOfferingId as string));
 });
 
-gradeOfferingRouter.post(
-  '/:gradeOfferingId/sections',
+classOfferingRouter.post(
+  '/:classOfferingId/sections',
   requirePermission('academic:manage'),
-  validate({ params: gradeOfferingParams, body: createSectionsSchema }),
+  validate({ params: classOfferingParams, body: createSectionsSchema }),
   async (req, res) => {
-    created(res, await offerings.createSections(contextOf(req), req.params.gradeOfferingId as string, req.body));
+    created(res, await offerings.createSections(contextOf(req), req.params.classOfferingId as string, req.body));
   },
 );
 
 // ── subject offerings (AS-07)
-gradeOfferingRouter.get('/:gradeOfferingId/subjects', requirePermission('academic:view'), validate({ params: gradeOfferingParams }), async (req, res) => {
-  ok(res, await offerings.listSubjectOfferings(contextOf(req), req.params.gradeOfferingId as string));
+classOfferingRouter.get('/:classOfferingId/subjects', requirePermission('academic:view'), validate({ params: classOfferingParams }), async (req, res) => {
+  ok(res, await offerings.listSubjectOfferings(contextOf(req), req.params.classOfferingId as string));
 });
 
-gradeOfferingRouter.post(
-  '/:gradeOfferingId/subjects',
+classOfferingRouter.post(
+  '/:classOfferingId/subjects',
   requirePermission('academic:manage'),
-  validate({ params: gradeOfferingParams, body: createSubjectOfferingsSchema }),
+  validate({ params: classOfferingParams, body: createSubjectOfferingsSchema }),
   async (req, res) => {
-    created(res, await offerings.createSubjectOfferings(contextOf(req), req.params.gradeOfferingId as string, req.body));
+    created(res, await offerings.createSubjectOfferings(contextOf(req), req.params.classOfferingId as string, req.body));
   },
 );
 
-gradeOfferingRouter.post(
-  '/:gradeOfferingId/subjects/copy-from/:otherGradeOfferingId',
+classOfferingRouter.post(
+  '/:classOfferingId/subjects/copy-from/:otherClassOfferingId',
   requirePermission('academic:manage'),
   validate({ params: copyParams }),
   async (req, res) => {
-    created(res, await offerings.copySubjectOfferings(contextOf(req), req.params.gradeOfferingId as string, req.params.otherGradeOfferingId as string));
+    created(res, await offerings.copySubjectOfferings(contextOf(req), req.params.classOfferingId as string, req.params.otherClassOfferingId as string));
   },
 );
 

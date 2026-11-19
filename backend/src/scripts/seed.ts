@@ -26,7 +26,7 @@ import { RestrictedPersonData } from '../platform/identity/restricted-data.model
 import { SecurityEvent } from '../platform/identity/security-event.model';
 import { EmployeeDocument, ProfileChangeRequest, StaffExport } from '../modules/staff/identity.models';
 import { LocationReference } from '../modules/dependencies/simulated-references';
-import { GradeOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
+import { ClassOffering, SectionOffering, SubjectOffering } from '../modules/academic/offering.model';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '../modules/academic/rules.model';
 import { BoardRuleVersion, EducationBoard } from '../modules/academic/reference.model';
 import { AcademicSession, AcademicTerm } from '../modules/academic/session.model';
@@ -160,7 +160,7 @@ async function wipeTenant(tenantId: string) {
     // Academic structure (Module 2)
     AcademicSession.deleteMany({ tenantId }),
     AcademicTerm.deleteMany({ tenantId }),
-    GradeOffering.deleteMany({ tenantId }),
+    ClassOffering.deleteMany({ tenantId }),
     SectionOffering.deleteMany({ tenantId }),
     SubjectOffering.deleteMany({ tenantId }),
     SubjectChoiceGroup.deleteMany({ tenantId }),
@@ -193,7 +193,7 @@ async function wipeTenant(tenantId: string) {
 export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
   const log = quiet ? () => undefined : console.log;
   const passwordHash = await hashPassword(DEMO_PASSWORD);
-  await seedReferenceData(); // system boards, rule versions and the grade master
+  await seedReferenceData(); // system boards, rule versions and the class master
 
   for (const def of DEMO_TENANTS) {
     const previous = await Tenant.findOne({ slug: def.slug }).lean();

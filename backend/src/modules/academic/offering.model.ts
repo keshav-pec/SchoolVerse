@@ -13,12 +13,12 @@ import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
  * Other modules store these UUIDs, never labels.
  */
 
-/** AS-03 — a grade as taught at one location in one session. */
-export interface GradeOfferingDoc extends BaseDoc, AuditFields {
+/** AS-03 — a class as taught at one location in one session. */
+export interface ClassOfferingDoc extends BaseDoc, AuditFields {
   tenantId: string;
   sessionId: string;
   locationId: string;
-  gradeId: string;
+  classId: string;
   displayName: string;
   displayCode: string;
   medium: string | null;
@@ -27,13 +27,13 @@ export interface GradeOfferingDoc extends BaseDoc, AuditFields {
   status: OfferingStatus;
 }
 
-const gradeOfferingSchema = new Schema<GradeOfferingDoc>(
+const classOfferingSchema = new Schema<ClassOfferingDoc>(
   {
     ...uuidPrimaryKey,
     tenantId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
-    gradeId: { type: String, required: true, immutable: true },
+    classId: { type: String, required: true, immutable: true },
     displayName: { type: String, required: true, trim: true },
     displayCode: { type: String, required: true, trim: true },
     medium: { type: String, default: null },
@@ -42,18 +42,18 @@ const gradeOfferingSchema = new Schema<GradeOfferingDoc>(
     status: { type: String, enum: OFFERING_STATUSES, default: 'ACTIVE', required: true },
     ...auditFields,
   },
-  baseSchemaOptions('grade_offerings'),
+  baseSchemaOptions('class_offerings'),
 );
-gradeOfferingSchema.index({ tenantId: 1, sessionId: 1, locationId: 1, gradeId: 1 }, { unique: true });
-gradeOfferingSchema.index({ tenantId: 1, locationId: 1 });
-gradeOfferingSchema.plugin(tenantScopePlugin);
+classOfferingSchema.index({ tenantId: 1, sessionId: 1, locationId: 1, classId: 1 }, { unique: true });
+classOfferingSchema.index({ tenantId: 1, locationId: 1 });
+classOfferingSchema.plugin(tenantScopePlugin);
 
-export const GradeOffering = model<GradeOfferingDoc>('GradeOffering', gradeOfferingSchema);
+export const ClassOffering = model<ClassOfferingDoc>('ClassOffering', classOfferingSchema);
 
-/** AS-04 — a section of a grade offering. Codes are stored upper-cased, so "a" and "A" collide. */
+/** AS-04 — a section of a class offering. Codes are stored upper-cased, so "a" and "A" collide. */
 export interface SectionOfferingDoc extends BaseDoc, AuditFields {
   tenantId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   sessionId: string;
   locationId: string;
   sectionCode: string;
@@ -67,7 +67,7 @@ const sectionOfferingSchema = new Schema<SectionOfferingDoc>(
   {
     ...uuidPrimaryKey,
     tenantId: { type: String, required: true, immutable: true },
-    gradeOfferingId: { type: String, required: true, immutable: true },
+    classOfferingId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
     sectionCode: { type: String, required: true, uppercase: true, trim: true, immutable: true },
@@ -79,16 +79,16 @@ const sectionOfferingSchema = new Schema<SectionOfferingDoc>(
   },
   baseSchemaOptions('section_offerings'),
 );
-sectionOfferingSchema.index({ tenantId: 1, gradeOfferingId: 1, sectionCode: 1 }, { unique: true });
+sectionOfferingSchema.index({ tenantId: 1, classOfferingId: 1, sectionCode: 1 }, { unique: true });
 sectionOfferingSchema.index({ tenantId: 1, sessionId: 1 });
 sectionOfferingSchema.plugin(tenantScopePlugin);
 
 export const SectionOffering = model<SectionOfferingDoc>('SectionOffering', sectionOfferingSchema);
 
-/** AS-07 — a subject taught in a grade offering. */
+/** AS-07 — a subject taught in a class offering. */
 export interface SubjectOfferingDoc extends BaseDoc, AuditFields {
   tenantId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   sessionId: string;
   locationId: string;
   subjectId: string;
@@ -101,7 +101,7 @@ const subjectOfferingSchema = new Schema<SubjectOfferingDoc>(
   {
     ...uuidPrimaryKey,
     tenantId: { type: String, required: true, immutable: true },
-    gradeOfferingId: { type: String, required: true, immutable: true },
+    classOfferingId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
     subjectId: { type: String, required: true, immutable: true },
@@ -112,7 +112,7 @@ const subjectOfferingSchema = new Schema<SubjectOfferingDoc>(
   },
   baseSchemaOptions('subject_offerings'),
 );
-subjectOfferingSchema.index({ tenantId: 1, gradeOfferingId: 1, subjectId: 1 }, { unique: true });
+subjectOfferingSchema.index({ tenantId: 1, classOfferingId: 1, subjectId: 1 }, { unique: true });
 subjectOfferingSchema.index({ tenantId: 1, sessionId: 1 });
 subjectOfferingSchema.index({ tenantId: 1, subjectId: 1 });
 subjectOfferingSchema.plugin(tenantScopePlugin);

@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient, ty
 import { toast } from 'sonner';
 import type {
   AcademicContextDTO,
-  AcademicContextGradesDTO,
+  AcademicContextClassesDTO,
   AcademicOverviewDTO,
   AcademicSessionDTO,
   AcademicTermDTO,
@@ -11,8 +11,8 @@ import type {
   BoardRuleVersionDTO,
   ChoiceGroupDTO,
   ConstraintDTO,
-  GradeMasterDTO,
-  GradeOfferingDTO,
+  ClassMasterDTO,
+  ClassOfferingDTO,
   MasterLocationDTO,
   PaginatedDTO,
   ProgrammeDTO,
@@ -45,8 +45,8 @@ export const useSession = (id: string | undefined) =>
 export const useOverview = (id: string | undefined, enabled = true) =>
   useQuery({ queryKey: [...A, 'overview', id], queryFn: () => api.get<AcademicOverviewDTO>(`/academic-sessions/${id}/overview`), enabled: !!id && enabled });
 
-export const useGradeMaster = () =>
-  useQuery({ queryKey: [...A, 'grades'], queryFn: () => api.get<GradeMasterDTO[]>('/grades'), staleTime: Infinity });
+export const useClassMaster = () =>
+  useQuery({ queryKey: [...A, 'classes'], queryFn: () => api.get<ClassMasterDTO[]>('/classes'), staleTime: Infinity });
 
 export const useBoards = () => useQuery({ queryKey: [...A, 'boards'], queryFn: () => api.get<BoardDTO[]>('/boards'), staleTime: 60_000 });
 
@@ -63,31 +63,31 @@ export function useAllRuleVersions(boards: BoardDTO[]) {
 export const useActiveLocations = () =>
   useQuery({ queryKey: [...A, 'locations'], queryFn: () => api.get<MasterLocationDTO[]>('/master/locations'), staleTime: 30_000 });
 
-export const useGradeOfferings = (sessionId: string | undefined, locationId: string | undefined) =>
+export const useClassOfferings = (sessionId: string | undefined, locationId: string | undefined) =>
   useQuery({
-    queryKey: [...A, 'grade-offerings', sessionId, locationId],
-    queryFn: () => api.get<GradeOfferingDTO[]>(`/academic-sessions/${sessionId}/grade-offerings${qs({ locationId })}`),
+    queryKey: [...A, 'class-offerings', sessionId, locationId],
+    queryFn: () => api.get<ClassOfferingDTO[]>(`/academic-sessions/${sessionId}/class-offerings${qs({ locationId })}`),
     enabled: !!sessionId && !!locationId,
   });
 
-export const useSections = (gradeOfferingId: string | undefined, enabled = true) =>
-  useQuery({ queryKey: [...A, 'sections', gradeOfferingId], queryFn: () => api.get<SectionOfferingDTO[]>(`/grade-offerings/${gradeOfferingId}/sections`), enabled: !!gradeOfferingId && enabled });
+export const useSections = (classOfferingId: string | undefined, enabled = true) =>
+  useQuery({ queryKey: [...A, 'sections', classOfferingId], queryFn: () => api.get<SectionOfferingDTO[]>(`/class-offerings/${classOfferingId}/sections`), enabled: !!classOfferingId && enabled });
 
-export const useSubjectOfferings = (gradeOfferingId: string | undefined) =>
-  useQuery({ queryKey: [...A, 'subject-offerings', gradeOfferingId], queryFn: () => api.get<SubjectOfferingDTO[]>(`/grade-offerings/${gradeOfferingId}/subjects`), enabled: !!gradeOfferingId });
+export const useSubjectOfferings = (classOfferingId: string | undefined) =>
+  useQuery({ queryKey: [...A, 'subject-offerings', classOfferingId], queryFn: () => api.get<SubjectOfferingDTO[]>(`/class-offerings/${classOfferingId}/subjects`), enabled: !!classOfferingId });
 
-/** Subject offerings of several grade offerings (programme subject picker). */
-export function useSubjectOfferingsOf(gradeOfferingIds: string[]) {
+/** Subject offerings of several class offerings (programme subject picker). */
+export function useSubjectOfferingsOf(classOfferingIds: string[]) {
   return useQueries({
-    queries: gradeOfferingIds.map((id) => ({ queryKey: [...A, 'subject-offerings', id], queryFn: () => api.get<SubjectOfferingDTO[]>(`/grade-offerings/${id}/subjects`) })),
+    queries: classOfferingIds.map((id) => ({ queryKey: [...A, 'subject-offerings', id], queryFn: () => api.get<SubjectOfferingDTO[]>(`/class-offerings/${id}/subjects`) })),
   });
 }
 
-export const useChoiceGroups = (gradeOfferingId: string | undefined) =>
-  useQuery({ queryKey: [...A, 'choice-groups', gradeOfferingId], queryFn: () => api.get<ChoiceGroupDTO[]>(`/grade-offerings/${gradeOfferingId}/choice-groups`), enabled: !!gradeOfferingId });
+export const useChoiceGroups = (classOfferingId: string | undefined) =>
+  useQuery({ queryKey: [...A, 'choice-groups', classOfferingId], queryFn: () => api.get<ChoiceGroupDTO[]>(`/class-offerings/${classOfferingId}/choice-groups`), enabled: !!classOfferingId });
 
-export const useConstraints = (gradeOfferingId: string | undefined) =>
-  useQuery({ queryKey: [...A, 'constraints', gradeOfferingId], queryFn: () => api.get<ConstraintDTO[]>(`/grade-offerings/${gradeOfferingId}/constraints`), enabled: !!gradeOfferingId });
+export const useConstraints = (classOfferingId: string | undefined) =>
+  useQuery({ queryKey: [...A, 'constraints', classOfferingId], queryFn: () => api.get<ConstraintDTO[]>(`/class-offerings/${classOfferingId}/constraints`), enabled: !!classOfferingId });
 
 export const useProgrammes = (sessionId: string | undefined, locationId: string | undefined) =>
   useQuery({
@@ -103,7 +103,7 @@ export interface SubjectParams {
   search?: string;
   boardCode?: string;
   category?: string;
-  gradeId?: string;
+  classId?: string;
   languageCode?: string;
   status?: string;
   page?: number;
@@ -115,10 +115,10 @@ export const useSubjects = (params: SubjectParams, pageSize = 50) =>
     queryFn: () => api.get<PaginatedDTO<SubjectDTO>>(`/subjects${qs({ ...params, pageSize })}`),
   });
 
-export function useAcademicContext(args: { academicSessionId?: string; locationId?: string; gradeId?: string }) {
+export function useAcademicContext(args: { academicSessionId?: string; locationId?: string; classId?: string }) {
   return useQuery({
     queryKey: [...A, 'context', args],
-    queryFn: () => api.get<AcademicContextGradesDTO | AcademicContextDTO>(`/academic-context${qs(args)}`),
+    queryFn: () => api.get<AcademicContextClassesDTO | AcademicContextDTO>(`/academic-context${qs(args)}`),
     enabled: !!args.academicSessionId && !!args.locationId,
   });
 }

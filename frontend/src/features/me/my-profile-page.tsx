@@ -512,7 +512,7 @@ export function MyProfilePage() {
                     .map((a) => (
                       <li key={a.academicAssignmentId} className="text-sm">
                         <span className="font-semibold">
-                          {a.sectionName ? `${a.gradeName} · ${a.sectionName}` : a.gradeName}
+                          {a.sectionName ? `${a.schoolClassName} · ${a.sectionName}` : a.schoolClassName}
                           {a.subjectName ? ` · ${a.subjectName}` : ''}
                         </span>
                         <span className="block text-[13px] text-muted">

@@ -158,7 +158,7 @@ export function toLocationAssignmentDTO(doc: LocationAssignmentDoc, location: Lo
 export interface AcademicLabels {
   session: { code: string; name: string };
   location: LocationLabel;
-  gradeName: string;
+  schoolClassName: string;
   section: { sectionCode: string; displayName: string } | null;
   subject: { subjectId: string; name: string } | null;
 }
@@ -173,8 +173,8 @@ export function toFacultyAssignmentDTO(doc: AcademicAssignmentDoc, labels: Acade
     locationId: doc.locationId,
     locationCode: labels.location.locationCode,
     locationName: labels.location.displayName,
-    gradeOfferingId: doc.gradeOfferingId,
-    gradeName: labels.gradeName,
+    classOfferingId: doc.classOfferingId,
+    schoolClassName: labels.schoolClassName,
     sectionId: doc.sectionId ?? null,
     sectionCode: labels.section?.sectionCode ?? null,
     sectionName: labels.section?.displayName ?? null,

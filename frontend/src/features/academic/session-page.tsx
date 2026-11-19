@@ -14,7 +14,7 @@ import { formatDateOnly } from '@/lib/format';
 import { useSession, useSessions } from './api';
 import { LifecycleButtons } from './lifecycle-buttons';
 import { SessionPill } from './session-pill';
-import { GradesTab } from './tabs/grades-tab';
+import { ClassesTab } from './tabs/classes-tab';
 import { HistoryTab } from './tabs/history-tab';
 import { OverviewTab } from './tabs/overview-tab';
 import { ProgrammesTab } from './tabs/programmes-tab';
@@ -105,7 +105,7 @@ export function SessionPage() {
             label="Location"
             value={locationId}
             onChange={setChosenLocation}
-            hint="Grades and subjects differ per location."
+            hint="Classes and subjects differ per location."
             options={session.locations.map((l) => ({ value: l.locationId, label: l.locationName ?? '', hint: l.boardCode ?? undefined }))}
             searchPlaceholder="Search locations…"
           />
@@ -115,9 +115,9 @@ export function SessionPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList aria-label="Session setup">
           <TabsTrigger value="overview"><ListChecks /> Overview</TabsTrigger>
-          <TabsTrigger value="grades"><GraduationCap /> Grades &amp; Sections</TabsTrigger>
+          <TabsTrigger value="classes"><GraduationCap /> Classes &amp; Sections</TabsTrigger>
           <TabsTrigger value="subjects"><BookOpen /> Subjects</TabsTrigger>
-          <TabsTrigger value="rules"><Network /> Choice Rules</TabsTrigger>
+          <TabsTrigger value="rules"><Network /> Subject Choice Rules</TabsTrigger>
           <TabsTrigger value="programmes"><Layers /> Programmes</TabsTrigger>
           <TabsTrigger value="terms"><CalendarRange /> Terms</TabsTrigger>
           {can('audit:view') && (
@@ -127,7 +127,7 @@ export function SessionPage() {
         <TabsContent value="overview">
           <OverviewTab session={session} readOnly={readOnly} validation={validation} onValidated={setValidation} onGoTo={setTab} />
         </TabsContent>
-        <TabsContent value="grades">{locationId ? <GradesTab {...tabProps} /> : <NoLocation />}</TabsContent>
+        <TabsContent value="classes">{locationId ? <ClassesTab {...tabProps} /> : <NoLocation />}</TabsContent>
         <TabsContent value="subjects">{locationId ? <SubjectsTab {...tabProps} /> : <NoLocation />}</TabsContent>
         <TabsContent value="rules">{locationId ? <RulesTab {...tabProps} /> : <NoLocation />}</TabsContent>
         <TabsContent value="programmes">{locationId ? <ProgrammesTab {...tabProps} /> : <NoLocation />}</TabsContent>

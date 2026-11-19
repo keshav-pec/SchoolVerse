@@ -7,7 +7,7 @@ import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { diffFields } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
-import { GradeOffering, SectionOffering, SubjectOffering, type GradeOfferingDoc, type SectionOfferingDoc, type SubjectOfferingDoc } from './offering.model';
+import { ClassOffering, SectionOffering, SubjectOffering, type ClassOfferingDoc, type SectionOfferingDoc, type SubjectOfferingDoc } from './offering.model';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup, type AcademicProgrammeDoc, type SubjectChoiceConstraintDoc, type SubjectChoiceGroupDoc } from './rules.model';
 import { AcademicSession, AcademicTerm, type AcademicSessionDoc, type AcademicTermDoc } from './session.model';
 import { assertDates, getSessionDTO, getSessionOrThrow } from './session.service';
@@ -22,7 +22,7 @@ export function shiftDate(date: string, days: number): string {
 }
 
 /**
- * AS-13 — clone / roll forward. Copies PLANNING data only: locations + board mapping, grades, sections, subject offerings,
+ * AS-13 — clone / roll forward. Copies PLANNING data only: locations + board mapping, classes, sections, subject offerings,
  * choice groups, constraints, programmes and terms (dates shift with the new start date). Only ACTIVE rows are carried over.
  * Students, faculty, attendance, marks and fees are never touched: this code copies exactly the collections below.
  */
@@ -71,16 +71,16 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
     s,
   );
 
-  // Grades → sections → subject offerings, remapping every id.
-  const grades = await GradeOffering.find(scope).session(db).lean<GradeOfferingDoc[]>();
-  const gradeMap = new Map(grades.map((g) => [g._id, randomUUID()]));
-  await GradeOffering.insertMany(
-    grades.map((g) => ({
+  // Classes → sections → subject offerings, remapping every id.
+  const classes = await ClassOffering.find(scope).session(db).lean<ClassOfferingDoc[]>();
+  const classMap = new Map(classes.map((g) => [g._id, randomUUID()]));
+  await ClassOffering.insertMany(
+    classes.map((g) => ({
       ...base,
-      _id: gradeMap.get(g._id),
+      _id: classMap.get(g._id),
       sessionId: newId,
       locationId: g.locationId,
-      gradeId: g.gradeId,
+      classId: g.classId,
       displayName: g.displayName,
       displayCode: g.displayCode,
       medium: g.medium,
@@ -91,12 +91,12 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
     s,
   );
 
-  const sections = (await SectionOffering.find(scope).session(db).lean<SectionOfferingDoc[]>()).filter((x) => gradeMap.has(x.gradeOfferingId));
+  const sections = (await SectionOffering.find(scope).session(db).lean<SectionOfferingDoc[]>()).filter((x) => classMap.has(x.classOfferingId));
   await SectionOffering.insertMany(
     sections.map((x) => ({
       ...base,
       _id: randomUUID(),
-      gradeOfferingId: gradeMap.get(x.gradeOfferingId),
+      classOfferingId: classMap.get(x.classOfferingId),
       sessionId: newId,
       locationId: x.locationId,
       sectionCode: x.sectionCode,
@@ -111,13 +111,13 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
   const activeSubjects = new Set(
     (await Subject.find({ tenantId, status: 'ACTIVE' }).select('_id').session(db).lean<{ _id: string }[]>()).map((x) => x._id),
   );
-  const offerings = (await SubjectOffering.find(scope).session(db).lean<SubjectOfferingDoc[]>()).filter((o) => gradeMap.has(o.gradeOfferingId) && activeSubjects.has(o.subjectId));
+  const offerings = (await SubjectOffering.find(scope).session(db).lean<SubjectOfferingDoc[]>()).filter((o) => classMap.has(o.classOfferingId) && activeSubjects.has(o.subjectId));
   const offeringMap = new Map(offerings.map((o) => [o._id, randomUUID()]));
   await SubjectOffering.insertMany(
     offerings.map((o) => ({
       ...base,
       _id: offeringMap.get(o._id),
-      gradeOfferingId: gradeMap.get(o.gradeOfferingId),
+      classOfferingId: classMap.get(o.classOfferingId),
       sessionId: newId,
       locationId: o.locationId,
       subjectId: o.subjectId,
@@ -131,14 +131,14 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
   // Rules.
   const mapIds = (ids: string[]) => ids.flatMap((id) => offeringMap.get(id) ?? []);
   const groups = (await SubjectChoiceGroup.find(scope).session(db).lean<SubjectChoiceGroupDoc[]>())
-    .filter((g) => gradeMap.has(g.gradeOfferingId))
+    .filter((g) => classMap.has(g.classOfferingId))
     .map((g) => ({ g, items: mapIds(g.subjectOfferingIds) }))
     .filter(({ items }) => items.length > 0);
   await SubjectChoiceGroup.insertMany(
     groups.map(({ g, items }) => ({
       ...base,
       _id: randomUUID(),
-      gradeOfferingId: gradeMap.get(g.gradeOfferingId),
+      classOfferingId: classMap.get(g.classOfferingId),
       sessionId: newId,
       locationId: g.locationId,
       name: g.name,
@@ -159,7 +159,7 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
     constraints.map((c) => ({
       ...base,
       _id: randomUUID(),
-      gradeOfferingId: gradeMap.get(c.gradeOfferingId),
+      classOfferingId: classMap.get(c.classOfferingId),
       sessionId: newId,
       locationId: c.locationId,
       type: c.type,
@@ -179,8 +179,8 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
       name: p.name,
       code: p.code,
       kind: p.kind,
-      gradeFromId: p.gradeFromId,
-      gradeToId: p.gradeToId,
+      classFromId: p.classFromId,
+      classToId: p.classToId,
       boardId: p.boardId,
       subjectRules: p.subjectRules.filter((r) => offeringMap.has(r.subjectOfferingId)).map((r) => ({ requirement: r.requirement, subjectOfferingId: offeringMap.get(r.subjectOfferingId) })),
       choiceMin: p.choiceMin,
@@ -220,7 +220,7 @@ async function copyInto(ctx: ServiceContext, source: AcademicSessionDoc, data: C
       schoolId: source.schoolId,
       clonedFromSessionId: source._id,
       copied: {
-        gradeOfferings: grades.length,
+        classOfferings: classes.length,
         sections: sections.length,
         subjectOfferings: offerings.length,
         choiceGroups: groups.length,

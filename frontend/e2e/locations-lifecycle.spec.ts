@@ -44,7 +44,7 @@ test('add a location, make it Primary, deactivate the old Primary, then archive 
   await page.getByRole('alertdialog').getByRole('button', { name: /deactivate location/i }).click();
   await expect(page.getByRole('row', { name: /Mohali Campus/ })).toContainText('Inactive');
 
-  // ── Mohali has grades in the active academic session, so Academic Structure blocks archiving it
+  // ── Mohali has classes in the active academic session, so Academic Structure blocks archiving it
   await page.getByRole('button', { name: 'Actions for Mohali Campus' }).click();
   await page.getByRole('menuitem', { name: /^archive/i }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: /archive location/i }).click();

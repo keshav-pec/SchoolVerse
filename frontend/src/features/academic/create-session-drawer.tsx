@@ -181,7 +181,7 @@ export function CreateSessionDrawer({ open, onOpenChange, sessions, onCreated }:
             <>
               <fieldset className="grid gap-3 sm:grid-cols-2">
                 <legend className="mb-2 text-sm font-semibold">How do you want to start?</legend>
-                {([['BLANK', 'Start blank', 'Add grades, sections and subjects yourself.', FilePlus2], ['CLONE', 'Clone a previous session', 'Copy its grades, sections, subjects, rules and terms.', Copy]] as const).map(([value, title, hint, Icon]) => (
+                {([['BLANK', 'Start blank', 'Add classes, sections and subjects yourself.', FilePlus2], ['CLONE', 'Clone a previous session', 'Copy its classes, sections, subjects, rules and terms.', Copy]] as const).map(([value, title, hint, Icon]) => (
                   <label key={value} className={cn('flex cursor-pointer gap-3 rounded-xl border p-4', mode === value ? 'border-brand bg-brand-soft/50' : 'border-line')}>
                     <input type="radio" name="start" className="mt-1 accent-[var(--color-brand)]" checked={mode === value} onChange={() => setMode(value)} />
                     <span>

@@ -254,7 +254,7 @@ describe('faculty academic assignments (FSM-04)', () => {
     expect(await AcademicAssignment.countDocuments({ tenantId: t.tenantId })).toBe(0);
   });
 
-  it('checks what each assignment type needs and that the section, subject and grade belong together', async () => {
+  it('checks what each assignment type needs and that the section, subject and class belong together', async () => {
     const t = await staffSchool();
     const e = await addActiveEmployee(t);
     expectError(await assign(t, e.employeeId, [{ assignmentType: 'SUBJECT_FACULTY', sectionId: t.sections.A }]), 400, 'VALIDATION_FAILED');
@@ -262,15 +262,15 @@ describe('faculty academic assignments (FSM-04)', () => {
     expectError(await assign(t, e.employeeId, [{ assignmentType: 'HOD' }]), 400, 'VALIDATION_FAILED');
     expectError(await assign(t, e.employeeId, [{ assignmentType: 'CLASS_TEACHER', sectionId: t.sections.A, effectiveFrom: '2026-09-01', effectiveTo: '2026-08-01' }]), 400, 'VALIDATION_FAILED');
 
-    // A grade-level role needs no section.
-    const hod = await assign(t, e.employeeId, [{ assignmentType: 'HOD', gradeOfferingId: t.gradeOfferingId }]);
+    // A class-level role needs no section.
+    const hod = await assign(t, e.employeeId, [{ assignmentType: 'HOD', classOfferingId: t.classOfferingId }]);
     expect(hod.status).toBe(201);
-    expect((hod.body.data as FacultyAssignmentDTO[])[0]).toMatchObject({ sectionId: null, gradeName: 'Grade 8' });
+    expect((hod.body.data as FacultyAssignmentDTO[])[0]).toMatchObject({ sectionId: null, schoolClassName: 'Class 8' });
 
-    // A subject from another grade does not belong to this section.
-    const [other] = await t.agent.get(`${API}/academic-sessions/${t.sessionId}/grade-offerings`).query({ locationId: t.moh.locationId }).expect(200).then((r) => r.body.data as { gradeOfferingId: string }[]);
-    expect(other!.gradeOfferingId).toBe(t.gradeOfferingId);
-    expectError(await assign(t, e.employeeId, [{ assignmentType: 'COORDINATOR', gradeOfferingId: randomUUID() }]), 404, 'NOT_FOUND');
+    // A subject from another class does not belong to this section.
+    const [other] = await t.agent.get(`${API}/academic-sessions/${t.sessionId}/class-offerings`).query({ locationId: t.moh.locationId }).expect(200).then((r) => r.body.data as { classOfferingId: string }[]);
+    expect(other!.classOfferingId).toBe(t.classOfferingId);
+    expectError(await assign(t, e.employeeId, [{ assignmentType: 'COORDINATOR', classOfferingId: randomUUID() }]), 404, 'NOT_FOUND');
   });
 
   it('refuses non-teaching staff, an unplaced location, dates outside the session and a closed session', async () => {

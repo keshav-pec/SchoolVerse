@@ -12,8 +12,8 @@ import {
 import { permissionsFor } from '@shared';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { User } from '../../platform/users/user.model';
-import { GradeOffering, SectionOffering, SubjectOffering } from '../academic/offering.model';
-import { GradeMaster } from '../academic/reference.model';
+import { ClassOffering, SectionOffering, SubjectOffering } from '../academic/offering.model';
+import { ClassMaster } from '../academic/reference.model';
 import { AcademicSession } from '../academic/session.model';
 import { Subject } from '../academic/subject.model';
 import { createAcademicAssignments } from './academic-assignment.service';
@@ -44,26 +44,26 @@ import { createResponsibility } from './responsibility.service';
 export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string; userIdsByEmail: Record<string, string> }) {
   await departmentService.addSuggested(ctx);
   await designationService.addSuggested(ctx);
-  const [departments, designations, grade8, active] = await Promise.all([
+  const [departments, designations, class8, active] = await Promise.all([
     departmentService.list(ctx, {}),
     designationService.list(ctx, {}),
-    GradeMaster.findOne({ canonicalCode: 'G08' }).lean<{ _id: string }>(),
+    ClassMaster.findOne({ canonicalCode: 'G08' }).lean<{ _id: string }>(),
     AcademicSession.findOne({ tenantId: ctx.tenantId, status: 'ACTIVE' }).lean<{ _id: string }>(),
   ]);
   const department = (code: string) => departments.find((d) => d.code === code)!.departmentId;
   const designation = (code: string) => designations.find((d) => d.code === code)!.designationId;
 
-  // Grade VIII at a location in the ACTIVE session: its section and subject offerings, found by code.
-  const grade8Offering = async (locationId: string) =>
-    GradeOffering.findOne({ tenantId: ctx.tenantId, sessionId: active!._id, locationId, gradeId: grade8!._id }).lean<{ _id: string }>();
+  // Class VIII at a location in the ACTIVE session: its section and subject offerings, found by code.
+  const class8Offering = async (locationId: string) =>
+    ClassOffering.findOne({ tenantId: ctx.tenantId, sessionId: active!._id, locationId, classId: class8!._id }).lean<{ _id: string }>();
   const section = async (locationId: string, code: string) => {
-    const g = await grade8Offering(locationId);
-    return (await SectionOffering.findOne({ tenantId: ctx.tenantId, gradeOfferingId: g!._id, sectionCode: code }).lean<{ _id: string }>())!._id;
+    const g = await class8Offering(locationId);
+    return (await SectionOffering.findOne({ tenantId: ctx.tenantId, classOfferingId: g!._id, sectionCode: code }).lean<{ _id: string }>())!._id;
   };
   const subject = async (locationId: string, subjectCode: string) => {
-    const g = await grade8Offering(locationId);
+    const g = await class8Offering(locationId);
     const s = await Subject.findOne({ tenantId: ctx.tenantId, subjectCode }).lean<{ _id: string }>();
-    return (await SubjectOffering.findOne({ tenantId: ctx.tenantId, gradeOfferingId: g!._id, subjectId: s!._id }).lean<{ _id: string }>())!._id;
+    return (await SubjectOffering.findOne({ tenantId: ctx.tenantId, classOfferingId: g!._id, subjectId: s!._id }).lean<{ _id: string }>())!._id;
   };
 
   let phone = 0;
@@ -136,7 +136,7 @@ export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: stri
     { first: 'Rajiv', last: 'Malhotra', email: 'rajiv.malhotra@greenfield.demo' },
     { code: 'FAC-004', category: 'FACULTY', joined: '2014-04-01', locationId: moh, department: 'ACADEMICS', designation: 'PGT', manager: principal },
   );
-  await classes(rajiv.employeeId, [{ assignmentType: 'COORDINATOR', gradeOfferingId: (await grade8Offering(moh))!._id }]);
+  await classes(rajiv.employeeId, [{ assignmentType: 'COORDINATOR', classOfferingId: (await class8Offering(moh))!._id }]);
 
   // ── non-teaching staff
   const rohan = await hire(

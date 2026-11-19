@@ -254,7 +254,7 @@ export type TransferData = z.output<typeof transferSchema>;
 const academicItemSchema = z
   .object({
     assignmentType: z.enum(ACADEMIC_ASSIGNMENT_TYPES, { message: 'Choose an assignment type.' }),
-    gradeOfferingId: nullableUuid,
+    classOfferingId: nullableUuid,
     sectionId: nullableUuid,
     subjectOfferingId: nullableUuid,
     effectiveFrom: startDate,
@@ -263,7 +263,7 @@ const academicItemSchema = z
   .strict()
   .superRefine((item, ctx) => {
     orderedDates(item, ctx);
-    const need = (path: 'sectionId' | 'subjectOfferingId' | 'gradeOfferingId', label: string) => {
+    const need = (path: 'sectionId' | 'subjectOfferingId' | 'classOfferingId', label: string) => {
       if (!item[path]) ctx.addIssue({ code: 'custom', message: `${label} is required for this assignment type.`, path: [path] });
     };
     if (item.assignmentType === 'SUBJECT_FACULTY') {
@@ -272,8 +272,8 @@ const academicItemSchema = z
     } else if (item.assignmentType === 'CLASS_TEACHER' || item.assignmentType === 'CO_CLASS_TEACHER') {
       need('sectionId', 'Section');
       if (item.subjectOfferingId) ctx.addIssue({ code: 'custom', message: 'A class teacher is not tied to one subject.', path: ['subjectOfferingId'] });
-    } else if (!item.gradeOfferingId) {
-      need('gradeOfferingId', 'Grade');
+    } else if (!item.classOfferingId) {
+      need('classOfferingId', 'Class');
     }
   });
 

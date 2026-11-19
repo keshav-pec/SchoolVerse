@@ -23,10 +23,10 @@ export async function removeRulesForSubjectOfferings(tenantId: string, subjectOf
   await SubjectChoiceGroup.deleteMany({ tenantId, subjectOfferingIds: { $size: 0 } }, { session: db });
 }
 
-export async function removeRulesForGradeOffering(tenantId: string, gradeOfferingId: string, db: ClientSession) {
+export async function removeRulesForClassOffering(tenantId: string, classOfferingId: string, db: ClientSession) {
   const [groups, constraints] = await Promise.all([
-    SubjectChoiceGroup.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
-    SubjectChoiceConstraint.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
+    SubjectChoiceGroup.deleteMany({ tenantId, classOfferingId }, { session: db }),
+    SubjectChoiceConstraint.deleteMany({ tenantId, classOfferingId }, { session: db }),
   ]);
   return { choiceGroups: groups.deletedCount, constraints: constraints.deletedCount };
 }

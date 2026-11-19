@@ -13,7 +13,7 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 
 | Part | Scope | Status |
 |---|---|---|
-| 1 | Boards, grade master, subjects, sessions, grade / section / subject offerings, terms (API) | ✅ Done |
+| 1 | Boards, class master, subjects, sessions, class / section / subject offerings, terms (API) | ✅ Done |
 | 2 | Choice rules, programmes, clone, validation engine, lifecycle, academic context (API) | ✅ Done |
 | 3 | Academic Setup UI, QA and integration hardening | ✅ Done |
 
@@ -77,7 +77,7 @@ The seed also creates each tenant's School Master and the PRD §19 location data
 | Chandigarh Campus | CHD | No | Active |
 | Panchkula Campus | PKL | No | Draft |
 
-**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (grades Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Grade VI language choice group, Grade XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 15-grade master are built-in reference data shared by every school.
+**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (classes Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Class VI language choice group, Class XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 15-class master are built-in reference data shared by every school.
 
 Greenfield's first-time setup is **completed**, so its admin goes straight to the app. Riverside Academy has one active campus that reuses the code `MOH` (codes only have to be unique within a school) and an unfinished setup. A workspace you create through **Sign up** always starts in the wizard.
 
@@ -126,12 +126,12 @@ All routes are under `/api/v1`, require a session cookie, and are scoped to the 
 | Setup | `GET /schools/:schoolId/setup-status` · `PATCH /schools/:schoolId/setup` (wizard step) · `POST /schools/:schoolId/setup/complete` |
 | Master (downstream, read-only) | `GET /master/school-context` · `GET /master/locations?scope=operational\|configuration\|all` · `GET /master/locations/:id` · `POST /master/locations/validate` |
 | Audit | `GET /audit?entityType=&entityId=&cursor=&limit=` |
-| Academic reference | `GET /boards` · `/boards/:id/rule-versions` · `/grades` · `POST /boards` (a school's own board) |
+| Academic reference | `GET /boards` · `/boards/:id/rule-versions` · `/classes` · `POST /boards` (a school's own board) |
 | Subjects | `GET`/`POST /subjects` · `GET`/`PATCH /subjects/:id` · `PUT /subjects/:id/board-codes` · `DELETE /subjects/:id/board-codes/:ruleVersionId` |
 | Sessions | `GET`/`POST /academic-sessions` · `GET /academic-sessions/current` · `GET`/`PATCH`/`DELETE /academic-sessions/:id` · `GET …/overview` · `POST …/validate` · `…/publish` · `…/activate` · `…/close` · `…/archive` · `…/clone` |
-| Offerings and terms | `…/grade-offerings` · `/grade-offerings/:id` (+ `/sections`, `/subjects`, `/subjects/copy-from/:otherId`) · `/sections/:id` · `/subject-offerings/:id` · `…/terms` · `/terms/:id` |
-| Rules | `/grade-offerings/:id/choice-groups` · `/choice-groups/:id` · `/grade-offerings/:id/constraints` · `/constraints/:id` · `/academic-programmes` |
-| Academic context | `GET /academic-context?academicSessionId=&locationId=&gradeId=` |
+| Offerings and terms | `…/class-offerings` · `/class-offerings/:id` (+ `/sections`, `/subjects`, `/subjects/copy-from/:otherId`) · `/sections/:id` · `/subject-offerings/:id` · `…/terms` · `/terms/:id` |
+| Rules | `/class-offerings/:id/choice-groups` · `/choice-groups/:id` · `/class-offerings/:id/constraints` · `/constraints/:id` · `/academic-programmes` |
+| Academic context | `GET /academic-context?academicSessionId=&locationId=&classId=` |
 | Departments, designations | `GET`/`POST /departments` · `/designations` · `PATCH …/:id` · `POST …/suggested` |
 | Employees | `GET`/`POST /employees` · `GET`/`PATCH`/`DELETE /employees/:id` · `GET …/history` · `POST …/status` · `…/exit` · `…/cancel-exit` · `…/transfer` |
 | Assignments | `…/employees/:id/location-assignments` · `/academic-assignments` (bulk) · `/responsibilities`, and `POST /location-assignments\|academic-assignments\|responsibilities/:id/end\|cancel` |
@@ -185,8 +185,8 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 |---|---|
 | QA 1 · a session with explicit dates, not tied to April–March | `academic-setup` (QA 1) |
 | QA 2 · clone copies structure only and remaps ids | `academic-lifecycle` (QA 2) · e2e academics (clone) |
-| QA 3–4 · one then many locations; the same grade differently at two locations | `academic-setup` (QA 3, QA 4) |
-| QA 5–6 · grades and sections in bulk; a duplicate section is blocked in any case | `academic-setup` (QA 5, QA 6) · `academic.test.tsx` (bulk section add) |
+| QA 3–4 · one then many locations; the same class differently at two locations | `academic-setup` (QA 3, QA 4) |
+| QA 5–6 · classes and sections in bulk; a duplicate section is blocked in any case | `academic-setup` (QA 5, QA 6) · `academic.test.tsx` (bulk section add) |
 | QA 7–8 · subject master + board codes; mandatory and elective offerings | `academic-setup` (QA 7, QA 8) |
 | QA 9–11 · language groups, CHOOSE_ONE / CHOOSE_N, REQUIRES / EXCLUDES | `academic-rules` (QA 9, 10, 11) |
 | QA 12 · impossible rules are detected and named | `academic-rules` (QA 12 + engine unit tests) · `academic.test.tsx` (validation panel) |
@@ -198,7 +198,7 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | QA 19–22 · role matrix: admin edits, Faculty/Staff read-only, Parents 403 | `security` (route matrix) · `academic-setup` · e2e academics (Faculty) · `academic.test.tsx` |
 | QA 23 · cross-tenant ids return 404 on every route | `security` (route matrix) |
 | QA 24 · audit rows for each mutation, with old and new values | `academic-setup` · `academic-lifecycle` (QA 24) |
-| Downstream contract · Location → Session → Grade → Section → Subject | `academic-lifecycle` (stub consumer through `academicService`) · `ACADEMIC_CONTRACTS.md` |
+| Downstream contract · Location → Session → Class → Section → Subject | `academic-lifecycle` (stub consumer through `academicService`) · `ACADEMIC_CONTRACTS.md` |
 
 **Acceptance criteria — Faculty & Staff (Module 3; the PRD §36–37 scenarios as captured in `Module3.md`)**
 
@@ -206,7 +206,7 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 |---|---|
 | QA F1 · Faculty and Staff created with the minimum fields, as separate person and employee rows | `employees` (QA F1) · `people.test.tsx` (onboarding errors) · e2e people-onboarding |
 | QA F2 · a duplicate employee code is blocked in any case | `employees` (QA F2) |
-| QA F3 · one faculty member, many grades, sections and subjects, one profile | `employees` (QA F3) · e2e people-onboarding (Maths for VIII-A/B in one save) |
+| QA F3 · one faculty member, many classes, sections and subjects, one profile | `employees` (QA F3) · e2e people-onboarding (Maths for VIII-A/B in one save) |
 | QA F4 · several locations; a transfer keeps history | `employees` (QA F4) · e2e people-onboarding (transfer → History) |
 | QA F5 · a login is created independently; a pending user cannot sign in | `identity` (QA F5) · `people.test.tsx` (no password field) · e2e people-onboarding |
 | QA F6 · the self profile returns only permitted fields | `employee-data` (QA F6) |
@@ -226,7 +226,7 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | UI states · masked, restricted, empty, loading and error on every people page; tables become cards under 768px | `people.test.tsx` · e2e people-visual (no sideways scrolling at 390px) |
 | Security gate | [`backend/docs/SECURITY_GATE.md`](backend/docs/SECURITY_GATE.md) · [`backend/docs/DATA_INVENTORY.md`](backend/docs/DATA_INVENTORY.md) |
 
-Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px. Academic: partial unique `one_active_session_per_school`, unique `(sessionId, locationId, gradeId)` for grade offerings, `(gradeOfferingId, sectionCode)` for sections.
+Database constraints: partial unique `one_primary_per_school`, unique `(tenantId, schoolId, locationCode)`, unique `tenantId` on schools. Tables stack to cards under 768px. Academic: partial unique `one_active_session_per_school`, unique `(sessionId, locationId, classId)` for class offerings, `(classOfferingId, sectionCode)` for sections.
 
 **Web routes (Module 3).** Admin: `/people` (directory, filters, export, add), `/people/:employeeId` (tabs: Overview, Employment, Academic Assignment or Responsibilities, Contact, Personal Information, Documents, Account & Access, History), `/people/requests`, `/people/settings`. Faculty and Staff: `/me`, `/colleagues`. Anyone: `/activate`, `/forgot-password`, `/reset-password`, and `/dev/outbox` on testing builds. Faculty opening an administrators-only people URL see Not Found; Parents see the restricted page. For a demo deployment set `VITE_DEV_OUTBOX=true` on the web build so the dev outbox link shows (and `DEV_OUTBOX=true` on the API).
 

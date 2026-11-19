@@ -1,23 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { createSubjectSchema, type BoardType, type EducationStage, type SubjectCategory } from '@shared';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { BoardRuleVersion, EducationBoard, GradeMaster } from './reference.model';
+import { BoardRuleVersion, EducationBoard, ClassMaster } from './reference.model';
 import { Subject } from './subject.model';
 import { createSubject } from './subject.service';
 
 /**
- * System reference data (Module 2): the 15-grade master, the built-in boards and one `2026-27` rule version for each.
+ * System reference data (Module 2): the 15-class master, the built-in boards and one `2026-27` rule version for each.
  * Idempotent (upserts by code), so it is safe to run on every seed and in tests.
  */
 
-const GRADES: { code: string; name: string; short: string; stage: EducationStage }[] = [
+const CLASSES: { code: string; name: string; short: string; stage: EducationStage }[] = [
   { code: 'PRE_NURSERY', name: 'Pre-Nursery', short: 'PN', stage: 'FOUNDATIONAL' },
   { code: 'NURSERY', name: 'Nursery', short: 'N', stage: 'FOUNDATIONAL' },
   { code: 'KG', name: 'KG', short: 'KG', stage: 'FOUNDATIONAL' },
   ...Array.from({ length: 12 }, (_, i) => {
     const n = i + 1;
     const stage: EducationStage = n <= 2 ? 'FOUNDATIONAL' : n <= 5 ? 'PREPARATORY' : n <= 8 ? 'MIDDLE' : 'SECONDARY';
-    return { code: `G${String(n).padStart(2, '0')}`, name: `Grade ${n}`, short: String(n), stage };
+    return { code: `G${String(n).padStart(2, '0')}`, name: `Class ${n}`, short: String(n), stage };
   }),
 ];
 
@@ -32,8 +32,8 @@ const BOARDS: { code: string; name: string; type: BoardType; stateCode: string |
 export const SYSTEM_RULE_VERSION_NAME = '2026-27';
 
 export async function seedReferenceData() {
-  for (const [index, g] of GRADES.entries()) {
-    await GradeMaster.updateOne(
+  for (const [index, g] of CLASSES.entries()) {
+    await ClassMaster.updateOne(
       { canonicalCode: g.code },
       {
         $set: {
@@ -42,7 +42,7 @@ export async function seedReferenceData() {
           sequenceNumber: index + 1,
           educationStage: g.stage,
           isPrePrimary: index < 3,
-          isBoardGrade: g.code === 'G10' || g.code === 'G12',
+          isBoardClass: g.code === 'G10' || g.code === 'G12',
         },
         $setOnInsert: { _id: randomUUID() },
       },

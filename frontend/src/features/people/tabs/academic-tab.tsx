@@ -21,7 +21,7 @@ import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { formatDateOnly } from '@/lib/format';
 import {
-  useGradeOfferings,
+  useClassOfferings,
   useSections,
   useSessions,
   useSubjectOfferings,
@@ -53,7 +53,7 @@ function AssignDrawer({
 
   const [type, setType] = useState<AcademicAssignmentType>('SUBJECT_FACULTY');
   const [locationId, setLocationId] = useState('');
-  const [gradeOfferingId, setGrade] = useState('');
+  const [classOfferingId, setClass] = useState('');
   const [sectionIds, setSectionIds] = useState<string[]>([]);
   const [subjectOfferingId, setSubject] = useState('');
   const [effectiveFrom, setFrom] = useState('');
@@ -64,9 +64,9 @@ function AssignDrawer({
     if (!locationId && locations[0]) setLocationId(locations[0].locationId);
   }, [locations, locationId]);
 
-  const grades = useGradeOfferings(sessionId, locationId);
-  const sections = useSections(gradeOfferingId || undefined);
-  const subjects = useSubjectOfferings(gradeOfferingId || undefined);
+  const classes = useClassOfferings(sessionId, locationId);
+  const sections = useSections(classOfferingId || undefined);
+  const subjects = useSubjectOfferings(classOfferingId || undefined);
   const needsSections = NEEDS_SECTIONS.includes(type);
   const activeSections = (sections.data ?? []).filter((s) => s.status === 'ACTIVE');
   const activeSubjects = (subjects.data ?? []).filter((s) => s.status === 'ACTIVE');
@@ -88,7 +88,7 @@ function AssignDrawer({
   const submit = async () => {
     setError(null);
     if (!locationId) return setError('Choose a location.');
-    if (!gradeOfferingId) return setError('Choose a grade.');
+    if (!classOfferingId) return setError('Choose a class.');
     if (needsSections && sectionIds.length === 0) return setError('Choose at least one section.');
     if (type === 'SUBJECT_FACULTY' && !subjectOfferingId) return setError('Choose a subject.');
     const dates = {
@@ -102,7 +102,7 @@ function AssignDrawer({
           ...(type === 'SUBJECT_FACULTY' ? { subjectOfferingId } : {}),
           ...dates,
         }))
-      : [{ assignmentType: type, gradeOfferingId, ...dates }];
+      : [{ assignmentType: type, classOfferingId, ...dates }];
     try {
       await create.mutateAsync(items);
       onClose();
@@ -148,7 +148,7 @@ function AssignDrawer({
                 value={locationId}
                 onChange={(v) => {
                   setLocationId(v);
-                  setGrade('');
+                  setClass('');
                   setSectionIds([]);
                   setSubject('');
                 }}
@@ -156,23 +156,23 @@ function AssignDrawer({
                 searchPlaceholder="Search locations…"
               />
               <ComboboxField
-                label="Grade"
+                label="Class"
                 required
-                value={gradeOfferingId}
+                value={classOfferingId}
                 onChange={(v) => {
-                  setGrade(v);
+                  setClass(v);
                   setSectionIds([]);
                   setSubject('');
                 }}
                 placeholder="Choose…"
-                options={(grades.data ?? [])
+                options={(classes.data ?? [])
                   .filter((g) => g.status === 'ACTIVE')
-                  .map((g) => ({ value: g.gradeOfferingId, label: g.displayName }))}
-                searchPlaceholder="Search grades…"
+                  .map((g) => ({ value: g.classOfferingId, label: g.displayName }))}
+                searchPlaceholder="Search classes…"
               />
             </div>
 
-            {needsSections && gradeOfferingId && (
+            {needsSections && classOfferingId && (
               <fieldset aria-labelledby="assign-sections-label">
                 <div className="mb-2 flex items-center justify-between">
                   <legend id="assign-sections-label" className="text-sm font-semibold">
@@ -201,7 +201,7 @@ function AssignDrawer({
                 {sections.isLoading ? (
                   <Skeleton className="h-10" />
                 ) : activeSections.length === 0 ? (
-                  <p className="text-sm text-muted">This grade has no active sections.</p>
+                  <p className="text-sm text-muted">This class has no active sections.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {activeSections.map((s) => (
@@ -223,7 +223,7 @@ function AssignDrawer({
               </fieldset>
             )}
 
-            {type === 'SUBJECT_FACULTY' && gradeOfferingId && (
+            {type === 'SUBJECT_FACULTY' && classOfferingId && (
               <ComboboxField
                 label="Subject"
                 required
@@ -275,7 +275,7 @@ function AssignDrawer({
 }
 
 function classLabel(a: FacultyAssignmentDTO) {
-  return a.sectionName ? `${a.gradeName} · ${a.sectionName}` : a.gradeName;
+  return a.sectionName ? `${a.schoolClassName} · ${a.sectionName}` : a.schoolClassName;
 }
 
 export function AcademicTab({ employee }: { employee: EmployeeProfileDTO }) {

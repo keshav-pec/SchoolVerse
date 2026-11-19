@@ -97,7 +97,7 @@ export function AcademicsPage() {
     <PageHeader
       eyebrow="Academics"
       title="Academic Setup"
-      description="Plan the year once: sessions, grades, sections, subjects and the rules students choose within."
+      description="Plan the year once: sessions, classes, sections, subjects and the rules students choose within."
       actions={
         <>
           <Button asChild variant="outline">
@@ -142,7 +142,7 @@ export function AcademicsPage() {
           <EmptyState
             illustration={<LostPlanet className="w-48" />}
             title="No academic session yet. Let’s plan your first year"
-            description="A session holds your grades, sections and subjects for one year. Start blank, or copy a previous one later."
+            description="A session holds your classes, sections and subjects for one year. Start blank, or copy a previous one later."
             action={
               <Can permission="academic:manage">
                 <Button onClick={() => setCreating(true)}>
@@ -183,7 +183,7 @@ export function AcademicsPage() {
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat icon={GraduationCap} label="Grades" value={counts?.grades ?? '…'} hint={counts ? `${counts.sections} sections` : undefined} />
+            <Stat icon={GraduationCap} label="Classes" value={counts?.classes ?? '…'} hint={counts ? `${counts.sections} sections` : undefined} />
             <Stat icon={BookOpen} label="Subjects offered" value={counts?.subjects ?? '…'} />
             <Stat icon={Layers} label="Programmes" value={counts?.programmes ?? '…'} hint={counts ? `${counts.choiceGroups} choice group${counts.choiceGroups === 1 ? '' : 's'}` : undefined} />
             <Stat icon={MapPinned} label="Board per location" value={overview.data ? overview.data.boards.length : '…'} hint={overview.data?.boards.map((b) => `${b.locationCode ?? ''}: ${b.boardCode ?? ''}`).join(' · ')} />

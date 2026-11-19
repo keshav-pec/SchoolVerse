@@ -56,7 +56,7 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
     .first()
     .click();
   const assign = page.getByRole('dialog', { name: /assign classes/i });
-  await chooseOption(assign.getByLabel(/^grade/i), /^Grade 8$/);
+  await chooseOption(assign.getByLabel(/^class/i), /^Class 8$/);
   await expect(assign.getByRole('group', { name: /sections/i })).toBeVisible();
   const boxes = assign.getByRole('checkbox');
   await boxes.nth(0).check();

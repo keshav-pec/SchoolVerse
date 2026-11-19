@@ -17,12 +17,12 @@ import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
 import { assertDeletable, assertEditable } from './guard';
 import { SubjectOffering, type SubjectOfferingDoc } from './offering.model';
-import { getGradeOfferingOrThrow } from './offering.service';
+import { getClassOfferingOrThrow } from './offering.service';
 import { SubjectChoiceConstraint, SubjectChoiceGroup, type SubjectChoiceConstraintDoc, type SubjectChoiceGroupDoc } from './rules.model';
 import { getSessionOrThrow } from './session.service';
 import { Subject, type SubjectDoc } from './subject.model';
 
-/** AS-08 / AS-09 — subject choice groups and REQUIRES / EXCLUDES constraints, per grade offering. */
+/** AS-08 / AS-09 — subject choice groups and REQUIRES / EXCLUDES constraints, per class offering. */
 
 // ───────────────────────────────────────────────────────────── helpers
 
@@ -87,7 +87,7 @@ async function toGroupDTOs(ctx: ServiceContext, docs: SubjectChoiceGroupDoc[], d
     }));
     return {
       choiceGroupId: d._id,
-      gradeOfferingId: d.gradeOfferingId,
+      classOfferingId: d.classOfferingId,
       academicSessionId: d.sessionId,
       name: d.name,
       ruleType: d.ruleType,
@@ -101,20 +101,20 @@ async function toGroupDTOs(ctx: ServiceContext, docs: SubjectChoiceGroupDoc[], d
   });
 }
 
-/** Items must be offerings of this grade offering and in no other group of it. */
-async function assertGroupItems(ctx: ServiceContext, gradeOfferingId: string, ids: string[], exceptGroupId: string | null, db: ClientSession) {
-  const found = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId, _id: { $in: ids } }).select('_id').session(db).lean<{ _id: string }[]>();
+/** Items must be offerings of this class offering and in no other group of it. */
+async function assertGroupItems(ctx: ServiceContext, classOfferingId: string, ids: string[], exceptGroupId: string | null, db: ClientSession) {
+  const found = await SubjectOffering.find({ tenantId: ctx.tenantId, classOfferingId, _id: { $in: ids } }).select('_id').session(db).lean<{ _id: string }[]>();
   if (found.length !== ids.length) {
-    throw AppError.validation({ subjectOfferingIds: 'Choose subjects that are offered for this grade.' });
+    throw AppError.validation({ subjectOfferingIds: 'Choose subjects that are offered for this class.' });
   }
-  const others = await SubjectChoiceGroup.find({ tenantId: ctx.tenantId, gradeOfferingId, ...(exceptGroupId ? { _id: { $ne: exceptGroupId } } : {}), subjectOfferingIds: { $in: ids } })
+  const others = await SubjectChoiceGroup.find({ tenantId: ctx.tenantId, classOfferingId, ...(exceptGroupId ? { _id: { $ne: exceptGroupId } } : {}), subjectOfferingIds: { $in: ids } })
     .session(db)
     .lean<SubjectChoiceGroupDoc[]>();
   if (others.length > 0) {
     const labels = await labelsFor(ctx, ids, db);
     const clashes = ids.filter((id) => others.some((g) => g.subjectOfferingIds.includes(id)));
     const names = clashes.map((id) => labels.get(id)?.subjectName ?? id);
-    throw new AppError('SUBJECT_IN_ANOTHER_GROUP', `${names.join(', ')} already belong${names.length === 1 ? 's' : ''} to another choice group in this grade.`, {
+    throw new AppError('SUBJECT_IN_ANOTHER_GROUP', `${names.join(', ')} already belong${names.length === 1 ? 's' : ''} to another choice group in this class.`, {
       fields: { subjectOfferingIds: `Already in another group: ${names.join(', ')}.` },
       subjectOfferingIds: clashes,
     });
@@ -130,34 +130,34 @@ async function getGroupOrThrow(ctx: ServiceContext, choiceGroupId: string, db?: 
   return { group, session };
 }
 
-export async function listChoiceGroups(ctx: ServiceContext, gradeOfferingId: string): Promise<ChoiceGroupDTO[]> {
-  await getGradeOfferingOrThrow(ctx, gradeOfferingId);
-  return listChoiceGroupsFor(ctx, gradeOfferingId);
+export async function listChoiceGroups(ctx: ServiceContext, classOfferingId: string): Promise<ChoiceGroupDTO[]> {
+  await getClassOfferingOrThrow(ctx, classOfferingId);
+  return listChoiceGroupsFor(ctx, classOfferingId);
 }
 
-export async function listChoiceGroupsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<ChoiceGroupDTO[]> {
-  const docs = await SubjectChoiceGroup.find({ tenantId: ctx.tenantId, gradeOfferingId }).sort({ sequence: 1, _id: 1 }).lean<SubjectChoiceGroupDoc[]>();
+export async function listChoiceGroupsFor(ctx: ServiceContext, classOfferingId: string): Promise<ChoiceGroupDTO[]> {
+  const docs = await SubjectChoiceGroup.find({ tenantId: ctx.tenantId, classOfferingId }).sort({ sequence: 1, _id: 1 }).lean<SubjectChoiceGroupDoc[]>();
   return toGroupDTOs(ctx, docs);
 }
 
-export async function createChoiceGroup(ctx: ServiceContext, gradeOfferingId: string, data: CreateChoiceGroupData): Promise<ChoiceGroupDTO> {
+export async function createChoiceGroup(ctx: ServiceContext, classOfferingId: string, data: CreateChoiceGroupData): Promise<ChoiceGroupDTO> {
   const ids = [...new Set(data.subjectOfferingIds)];
   return withTransaction(async (db) => {
-    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     await assertEditable(session, {}, db);
-    await assertGroupItems(ctx, gradeOfferingId, ids, null, db);
+    await assertGroupItems(ctx, classOfferingId, ids, null, db);
     const { min, max } = normaliseRule(data.ruleType, data, ids.length);
 
     let sequence = data.sequence;
     if (sequence === undefined || sequence === null) {
-      const last = await SubjectChoiceGroup.findOne({ tenantId: ctx.tenantId, gradeOfferingId }).sort({ sequence: -1 }).select('sequence').session(db).lean<{ sequence: number }>();
+      const last = await SubjectChoiceGroup.findOne({ tenantId: ctx.tenantId, classOfferingId }).sort({ sequence: -1 }).select('sequence').session(db).lean<{ sequence: number }>();
       sequence = (last?.sequence ?? 0) + 1;
     }
     const [created] = await SubjectChoiceGroup.create(
       [
         {
           tenantId: ctx.tenantId,
-          gradeOfferingId,
+          classOfferingId,
           sessionId: offering.sessionId,
           locationId: offering.locationId,
           name: data.name,
@@ -180,7 +180,7 @@ export async function createChoiceGroup(ctx: ServiceContext, gradeOfferingId: st
       action: 'choice_group.created',
       changes: diffFields({}, group, CHOICE_GROUP_EDITABLE_FIELDS),
       academicSessionId: offering.sessionId,
-      metadata: { gradeOfferingId, locationId: offering.locationId },
+      metadata: { classOfferingId, locationId: offering.locationId },
     });
     return (await toGroupDTOs(ctx, [group], db))[0]!;
   });
@@ -195,7 +195,7 @@ export async function updateChoiceGroup(ctx: ServiceContext, choiceGroupId: stri
     const removesItems = before.subjectOfferingIds.some((id) => !ids.includes(id));
     const deactivating = updates.status === 'INACTIVE' && before.status === 'ACTIVE';
     await assertEditable(session, removesItems || deactivating ? { structural: { entityType: 'choice_group', entityId: choiceGroupId } } : {}, db);
-    if (updates.subjectOfferingIds) await assertGroupItems(ctx, before.gradeOfferingId, ids, choiceGroupId, db);
+    if (updates.subjectOfferingIds) await assertGroupItems(ctx, before.classOfferingId, ids, choiceGroupId, db);
 
     const ruleType = updates.ruleType ?? before.ruleType;
     // Omitted min/max keep their stored values, so changing only the type of a CHOOSE_N group stays valid.
@@ -211,7 +211,7 @@ export async function updateChoiceGroup(ctx: ServiceContext, choiceGroupId: stri
         action: 'choice_group.updated',
         changes,
         academicSessionId: before.sessionId,
-        metadata: { gradeOfferingId: before.gradeOfferingId, name: before.name, status: session.status },
+        metadata: { classOfferingId: before.classOfferingId, name: before.name, status: session.status },
       });
     }
     return (await toGroupDTOs(ctx, [merged], db))[0]!;
@@ -229,7 +229,7 @@ export async function deleteChoiceGroup(ctx: ServiceContext, choiceGroupId: stri
       action: 'choice_group.deleted',
       changes: diffFields(before, {}, ['name', 'ruleType', 'min', 'max', 'status']),
       academicSessionId: before.sessionId,
-      metadata: { gradeOfferingId: before.gradeOfferingId },
+      metadata: { classOfferingId: before.classOfferingId },
     });
   });
 }
@@ -243,7 +243,7 @@ async function toConstraintDTOs(ctx: ServiceContext, docs: SubjectChoiceConstrai
     const b = labels.get(d.otherSubjectOfferingId)?.subjectName ?? '';
     return {
       constraintId: d._id,
-      gradeOfferingId: d.gradeOfferingId,
+      classOfferingId: d.classOfferingId,
       academicSessionId: d.sessionId,
       type: d.type,
       subjectOfferingId: d.subjectOfferingId,
@@ -255,35 +255,35 @@ async function toConstraintDTOs(ctx: ServiceContext, docs: SubjectChoiceConstrai
   });
 }
 
-export async function listConstraints(ctx: ServiceContext, gradeOfferingId: string): Promise<ConstraintDTO[]> {
-  await getGradeOfferingOrThrow(ctx, gradeOfferingId);
-  return listConstraintsFor(ctx, gradeOfferingId);
+export async function listConstraints(ctx: ServiceContext, classOfferingId: string): Promise<ConstraintDTO[]> {
+  await getClassOfferingOrThrow(ctx, classOfferingId);
+  return listConstraintsFor(ctx, classOfferingId);
 }
 
-export async function listConstraintsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<ConstraintDTO[]> {
-  const docs = await SubjectChoiceConstraint.find({ tenantId: ctx.tenantId, gradeOfferingId }).sort({ createdAt: 1, _id: 1 }).lean<SubjectChoiceConstraintDoc[]>();
+export async function listConstraintsFor(ctx: ServiceContext, classOfferingId: string): Promise<ConstraintDTO[]> {
+  const docs = await SubjectChoiceConstraint.find({ tenantId: ctx.tenantId, classOfferingId }).sort({ createdAt: 1, _id: 1 }).lean<SubjectChoiceConstraintDoc[]>();
   return toConstraintDTOs(ctx, docs);
 }
 
-export async function createConstraint(ctx: ServiceContext, gradeOfferingId: string, data: CreateConstraintData): Promise<ConstraintDTO> {
+export async function createConstraint(ctx: ServiceContext, classOfferingId: string, data: CreateConstraintData): Promise<ConstraintDTO> {
   if (data.subjectOfferingId === data.otherSubjectOfferingId) {
     throw AppError.validation({ otherSubjectOfferingId: 'Choose two different subjects.' });
   }
   return withTransaction(async (db) => {
-    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     await assertEditable(session, {}, db);
 
     const found = await SubjectOffering.countDocuments({
       tenantId: ctx.tenantId,
-      gradeOfferingId,
+      classOfferingId,
       _id: { $in: [data.subjectOfferingId, data.otherSubjectOfferingId] },
     }).session(db);
-    if (found !== 2) throw AppError.validation({ subjectOfferingId: 'Both subjects must be offered for this grade.' });
+    if (found !== 2) throw AppError.validation({ subjectOfferingId: 'Both subjects must be offered for this class.' });
 
     // "A excludes B" and "B excludes A" are the same rule.
     const same = await SubjectChoiceConstraint.exists({
       tenantId: ctx.tenantId,
-      gradeOfferingId,
+      classOfferingId,
       type: data.type,
       $or: [
         { subjectOfferingId: data.subjectOfferingId, otherSubjectOfferingId: data.otherSubjectOfferingId },
@@ -293,7 +293,7 @@ export async function createConstraint(ctx: ServiceContext, gradeOfferingId: str
     if (same) throw new AppError('CONSTRAINT_EXISTS');
 
     const [created] = await SubjectChoiceConstraint.create(
-      [{ ...data, tenantId: ctx.tenantId, gradeOfferingId, sessionId: offering.sessionId, locationId: offering.locationId, createdBy: ctx.userId, updatedBy: ctx.userId }],
+      [{ ...data, tenantId: ctx.tenantId, classOfferingId, sessionId: offering.sessionId, locationId: offering.locationId, createdBy: ctx.userId, updatedBy: ctx.userId }],
       { session: db },
     );
     const constraint = created!.toObject() as SubjectChoiceConstraintDoc;
@@ -307,7 +307,7 @@ export async function createConstraint(ctx: ServiceContext, gradeOfferingId: str
         { field: 'rule', from: null, to: dto.summary },
       ],
       academicSessionId: offering.sessionId,
-      metadata: { gradeOfferingId },
+      metadata: { classOfferingId },
     });
     return dto;
   }).catch(onDuplicate('type', () => new AppError('CONSTRAINT_EXISTS')));
@@ -327,7 +327,7 @@ export async function deleteConstraint(ctx: ServiceContext, constraintId: string
       action: 'constraint.deleted',
       changes: [{ field: 'rule', from: dto.summary, to: null }],
       academicSessionId: before.sessionId,
-      metadata: { gradeOfferingId: before.gradeOfferingId, status: session.status },
+      metadata: { classOfferingId: before.classOfferingId, status: session.status },
     });
   });
 }

@@ -127,8 +127,8 @@ export const listSubjectsQuerySchema = z.object({
   status: z.enum(SUBJECT_STATUSES).optional(),
   /** Official board subject code (e.g. `041`) or a board code (e.g. `CBSE`). */
   boardCode: optionalFilter,
-  /** Subjects offered for this master grade in any session (narrow with `academicSessionId`). */
-  gradeId: uuidSchema.optional(),
+  /** Subjects offered for this master class in any session (narrow with `academicSessionId`). */
+  classId: uuidSchema.optional(),
   academicSessionId: uuidSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
@@ -174,18 +174,18 @@ export type UpdateSessionData = z.output<typeof updateSessionSchema>;
 export const listSessionsQuerySchema = z.object({ status: z.enum(SESSION_STATUSES).optional() });
 export type ListSessionsQuery = z.output<typeof listSessionsQuerySchema>;
 
-// ───────────────────────────────────────────────────────────── grade offerings & sections
+// ───────────────────────────────────────────────────────────── class offerings & sections
 
-export const createGradeOfferingsSchema = z.object({
+export const createClassOfferingsSchema = z.object({
   locationId: uuidSchema,
-  gradeIds: uuidList('Grades', 20),
+  classIds: uuidList('Classes', 20),
   medium: optionalText(50),
 });
-export type CreateGradeOfferingsData = z.output<typeof createGradeOfferingsSchema>;
+export type CreateClassOfferingsData = z.output<typeof createClassOfferingsSchema>;
 
-export const GRADE_OFFERING_EDITABLE_FIELDS = ['displayName', 'displayCode', 'medium', 'capacity', 'sequenceOrder', 'status'] as const;
+export const CLASS_OFFERING_EDITABLE_FIELDS = ['displayName', 'displayCode', 'medium', 'capacity', 'sequenceOrder', 'status'] as const;
 
-export const updateGradeOfferingSchema = z
+export const updateClassOfferingSchema = z
   .object({
     displayName: requiredText('Display name', 60),
     displayCode: requiredText('Display code', 20),
@@ -195,7 +195,7 @@ export const updateGradeOfferingSchema = z
     status: z.enum(OFFERING_STATUSES, { message: 'Choose a valid status.' }),
   })
   .partial();
-export type UpdateGradeOfferingData = z.output<typeof updateGradeOfferingSchema>;
+export type UpdateClassOfferingData = z.output<typeof updateClassOfferingSchema>;
 
 export const createSectionsSchema = z.object({
   codes: z
@@ -294,7 +294,7 @@ export type CreateConstraintData = z.output<typeof createConstraintSchema>;
 
 // ───────────────────────────────────────────────────────────── programmes (AS-10, AS-11)
 
-export const PROGRAMME_EDITABLE_FIELDS = ['name', 'kind', 'gradeFromId', 'gradeToId', 'boardId', 'subjectRules', 'choiceMin', 'choiceMax', 'status'] as const;
+export const PROGRAMME_EDITABLE_FIELDS = ['name', 'kind', 'classFromId', 'classToId', 'boardId', 'subjectRules', 'choiceMin', 'choiceMax', 'status'] as const;
 
 export const programmeSubjectRuleSchema = z.object({
   subjectOfferingId: uuidSchema,
@@ -304,8 +304,8 @@ export const programmeSubjectRuleSchema = z.object({
 const programmeShape = {
   name: requiredText('Programme name', 80),
   kind: z.enum(PROGRAMME_KINDS, { message: 'Choose STREAM or FLEXIBLE.' }),
-  gradeFromId: uuidSchema,
-  gradeToId: uuidSchema,
+  classFromId: uuidSchema,
+  classToId: uuidSchema,
   boardId: z.preprocess(emptyToNull, uuidSchema.nullable()),
   subjectRules: z.array(programmeSubjectRuleSchema).max(60, { message: 'Too many subjects.' }),
   choiceMin: optionalInt('Minimum choices', 0, 50),
@@ -343,7 +343,7 @@ export type CloneSessionData = z.output<typeof cloneSessionSchema>;
 export const academicContextQuerySchema = z.object({
   academicSessionId: uuidSchema,
   locationId: uuidSchema,
-  /** Master grade id. Omit it to list the grades offered at the location. */
-  gradeId: uuidSchema.optional(),
+  /** Master class id. Omit it to list the classes offered at the location. */
+  classId: uuidSchema.optional(),
 });
 export type AcademicContextQuery = z.output<typeof academicContextQuerySchema>;

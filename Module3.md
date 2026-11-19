@@ -4,7 +4,7 @@ Source of truth: `../School_ERP_Faculty_Staff_Technical_PRD_Sensitive_Data.pdf` 
 Depends on: Module 1 (School & Locations), Module 2 (Academic Structure). Next module: Student & Parent Management.
 Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 
-**Goal:** one authoritative employee record per person, linked to `School → Location → Department → Designation`, and for Faculty to `Session → Grade → Section → Subject` (Module 2 IDs only). The same module adds the shared identity layer (accounts, activation, MFA, restricted data, private documents) that Students and Parents will reuse later. **No second identity stack.**
+**Goal:** one authoritative employee record per person, linked to `School → Location → Department → Designation`, and for Faculty to `Session → Class → Section → Subject` (Module 2 IDs only). The same module adds the shared identity layer (accounts, activation, MFA, restricted data, private documents) that Students and Parents will reuse later. **No second identity stack.**
 
 **Principle:** sensitive data is protected on the server (DTO allowlists, encryption, permissions, audit). Hiding fields in the UI is never the control.
 
@@ -57,7 +57,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 | `departments` / `designations` | code, name, status (`ACTIVE`, `INACTIVE`) | `UNIQUE(tenantId, code)`; never deleted |
 | `employees` | personId, schoolId, employeeCode, employeeCategory (`FACULTY`, `NON_TEACHING_STAFF`), employmentType (free text + suggestions), joiningDate, confirmationDate?, departmentId, designationId, reportingManagerId?, officialEmail?, officialPhone?, status, exitDate?, exitReasonCategory?, exitNote? | `UNIQUE(tenantId, schoolId, employeeCode)`; partial unique `{tenantId, personId}` where status ≠ `EXITED` (one live employment per person) |
 | `employee_location_assignments` | employeeId, locationId, isPrimary, effectiveFrom, effectiveTo?, cancelledAt?, endReason? (`TRANSFER`, `EXIT`, `ENDED`) | Service check in a transaction: no two primary assignments overlap. Index `{tenantId, locationId, effectiveTo}` |
-| `faculty_academic_assignments` | employeeId, academicSessionId, locationId, gradeOfferingId, sectionId?, subjectOfferingId?, assignmentType (`SUBJECT_FACULTY`, `CLASS_TEACHER`, `CO_CLASS_TEACHER`, `COORDINATOR`, `HOD`), effectiveFrom, effectiveTo?, cancelledAt? | Indexes on `sectionId`, `subjectOfferingId`, `employeeId` |
+| `faculty_academic_assignments` | employeeId, academicSessionId, locationId, classOfferingId, sectionId?, subjectOfferingId?, assignmentType (`SUBJECT_FACULTY`, `CLASS_TEACHER`, `CO_CLASS_TEACHER`, `COORDINATOR`, `HOD`), effectiveFrom, effectiveTo?, cancelledAt? | Indexes on `sectionId`, `subjectOfferingId`, `employeeId` |
 | `staff_responsibility_assignments` | employeeId, locationId, responsibilityType (free text + suggestions: Transport In-charge, Library, Lab, Admissions, Accounts, IT Support, Exam Cell, Reception), description?, effectiveFrom, effectiveTo?, cancelledAt? | |
 
 **Part 2**
@@ -106,8 +106,8 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 11. `POST /employees/:id/transfer { toLocationId, effectiveFrom, keepOldAsSecondary? }` ends the current primary the day before and creates the new primary, in one transaction. A transfer dated in the future shows as PLANNED until that date. The old row keeps its history.
 
 **Faculty academic assignments (FSM-04)**
-12. `GET/POST /employees/:id/academic-assignments`. POST is **bulk** (`items[]`), so one faculty member can take Maths for VIII-A/B/C in one call. Each item is checked through `academicService` with `purpose: NEW_ASSIGNMENT` (PUBLISHED/ACTIVE session, ACTIVE offerings, section and subject belong to the grade offering, which belongs to the location).
-    - Required by type: `SUBJECT_FACULTY` needs section + subject. `CLASS_TEACHER` / `CO_CLASS_TEACHER` need a section. `COORDINATOR` / `HOD` need a grade offering (section/subject optional).
+12. `GET/POST /employees/:id/academic-assignments`. POST is **bulk** (`items[]`), so one faculty member can take Maths for VIII-A/B/C in one call. Each item is checked through `academicService` with `purpose: NEW_ASSIGNMENT` (PUBLISHED/ACTIVE session, ACTIVE offerings, section and subject belong to the class offering, which belongs to the location).
+    - Required by type: `SUBJECT_FACULTY` needs section + subject. `CLASS_TEACHER` / `CO_CLASS_TEACHER` need a section. `COORDINATOR` / `HOD` need a class offering (section/subject optional).
     - The employee must be `FACULTY` and have a location assignment at that location covering the dates (`LOCATION_NOT_ASSIGNED`). Dates default to the session dates and must sit inside them.
     - Only one active `CLASS_TEACHER` per section at a time, and no overlapping duplicate of the same (employee, type, section, subject).
 13. `POST /academic-assignments/:id/end`, `…/cancel`. No delete.
@@ -130,7 +130,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 21. In-process `employeeService` for later modules: `getEmployeeSummary()`, `assertEmployeeUsable(purpose)`, `listFacultyForSection()`.
 22. Seed (Greenfield, synthetic data only): starter departments/designations, about 10 employees across Mohali and Chandigarh. Includes `faculty@greenfield.demo` (Maths for VIII-A/B/C + class teacher VIII-A in 2026-27), a faculty member transferred from Chandigarh to Mohali (history visible), `staff@greenfield.demo` (Transport In-charge), a lab assistant with **no login**, and one EXITED employee. The admin user is not linked to an employee, to show the separation.
 
-**Tests (one new area file `tests/staff.test.ts`; extend `security.test.ts`'s route matrix):** QA F1 Faculty and Staff created with minimum fields, as separate person + employee rows · QA F2 duplicate code blocked (any case) · QA F3 one faculty member, many grades/sections/subjects, one profile · QA F4 multiple locations + transfer keeps history · QA F8 (part) exit closes and cancels assignments, `processDueExits` flips a future exit · class-teacher uniqueness · category mismatch · assignment refused on a CLOSED session (`NEW_ASSIGNMENT`) · location with active staff can't be archived · section with active faculty blocks the unsafe change on an ACTIVE session · QA S1 (part) and S2 (part) Faculty can't read a non-colleague by UUID; cross-tenant 404 · QA S11 (part) PATCH with `status`/`role`/unknown keys rejected · audit rows for each mutation · unit: lifecycle transitions, computed assignment status, data classification coverage.
+**Tests (one new area file `tests/staff.test.ts`; extend `security.test.ts`'s route matrix):** QA F1 Faculty and Staff created with minimum fields, as separate person + employee rows · QA F2 duplicate code blocked (any case) · QA F3 one faculty member, many classes/sections/subjects, one profile · QA F4 multiple locations + transfer keeps history · QA F8 (part) exit closes and cancels assignments, `processDueExits` flips a future exit · class-teacher uniqueness · category mismatch · assignment refused on a CLOSED session (`NEW_ASSIGNMENT`) · location with active staff can't be archived · section with active faculty blocks the unsafe change on an ACTIVE session · QA S1 (part) and S2 (part) Faculty can't read a non-colleague by UUID; cross-tenant 404 · QA S11 (part) PATCH with `status`/`role`/unknown keys rejected · audit rows for each mutation · unit: lifecycle transitions, computed assignment status, data classification coverage.
 
 **Done when:** an admin can onboard Faculty and Staff, place them at locations, transfer them, assign classes and responsibilities, and exit them through the API with history intact. Two tenants can't see each other's staff, and `npm test` is green.
 
@@ -214,7 +214,7 @@ Visual reference: same Quill theme and SchoolVerse accents as Modules 1–2.
 5. Tabs:
    - **Overview**: directory fields + locations, with *Add location* and *Transfer*.
    - **Employment**: dates, type, manager.
-   - **Academic Assignment** (Faculty only): session picker, then a bulk picker (grade → sections → subject + type) and a list with computed status chips plus end/cancel.
+   - **Academic Assignment** (Faculty only): session picker, then a bulk picker (class → sections → subject + type) and a list with computed status chips plus end/cancel.
    - **Responsibilities** (Staff only, in place of Academic Assignment).
    - **Contact**: official contact always shown; personal contact only with permission.
    - **Personal Information**: masked values with a **Reveal** button. It opens a step-up dialog (password or code), shows the value for 30 s, then masks it again. **Edit** also uses step-up.

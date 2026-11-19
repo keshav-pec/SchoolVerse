@@ -10,7 +10,7 @@ let registered = false;
 /**
  * Module 3 on the two dependency registries (Part 1 item 14):
  *  - a location with staff placed there cannot be archived, and any assignment at all locks its code;
- *  - a section, subject or grade offering with active faculty assignments blocks unsafe changes on an ACTIVE session.
+ *  - a section, subject or class offering with active faculty assignments blocks unsafe changes on an ACTIVE session.
  */
 export function registerStaffDependencies() {
   if (registered) return;
@@ -47,13 +47,13 @@ export function registerStaffDependencies() {
   academicService.registerAcademicDependency({
     key: 'staff.faculty_assignments',
     label: 'Faculty assignments',
-    entityTypes: ['grade_offering', 'section_offering', 'subject_offering', 'session_location'],
+    entityTypes: ['class_offering', 'section_offering', 'subject_offering', 'session_location'],
     message: (n) => `${n} faculty assignment${n === 1 ? ' depends' : 's depend'} on this.`,
     async count({ tenantId, academicSessionId, entityType, entityId, session }) {
       const today = await todayForTenant(tenantId, session);
       const target: Record<string, string> =
-        entityType === 'grade_offering'
-          ? { gradeOfferingId: entityId }
+        entityType === 'class_offering'
+          ? { classOfferingId: entityId }
           : entityType === 'section_offering'
             ? { sectionId: entityId }
             : entityType === 'subject_offering'

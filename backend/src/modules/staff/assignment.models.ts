@@ -66,7 +66,7 @@ export interface AcademicAssignmentDoc extends BaseDoc, AuditFields, EffectiveDa
   employeeId: string;
   academicSessionId: string;
   locationId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   /** A `section_offerings` id (Module 2). */
   sectionId: string | null;
   subjectOfferingId: string | null;
@@ -81,7 +81,7 @@ const academicAssignmentSchema = new Schema<AcademicAssignmentDoc>(
     employeeId: { type: String, required: true, immutable: true },
     academicSessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
-    gradeOfferingId: { type: String, required: true, immutable: true },
+    classOfferingId: { type: String, required: true, immutable: true },
     sectionId: { type: String, default: null, immutable: true },
     subjectOfferingId: { type: String, default: null, immutable: true },
     assignmentType: { type: String, enum: ACADEMIC_ASSIGNMENT_TYPES, required: true, immutable: true },
@@ -94,7 +94,7 @@ const academicAssignmentSchema = new Schema<AcademicAssignmentDoc>(
 academicAssignmentSchema.index({ tenantId: 1, employeeId: 1 });
 academicAssignmentSchema.index({ tenantId: 1, sectionId: 1 });
 academicAssignmentSchema.index({ tenantId: 1, subjectOfferingId: 1 });
-academicAssignmentSchema.index({ tenantId: 1, gradeOfferingId: 1 });
+academicAssignmentSchema.index({ tenantId: 1, classOfferingId: 1 });
 academicAssignmentSchema.index({ tenantId: 1, locationId: 1 });
 academicAssignmentSchema.plugin(tenantScopePlugin);
 

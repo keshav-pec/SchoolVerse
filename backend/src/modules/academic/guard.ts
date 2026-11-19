@@ -5,7 +5,7 @@ import type { AcademicSessionDoc } from './session.model';
 
 export interface EditChange {
   /**
-   * Set when the change deactivates or removes structure (a grade, section, subject, term…).
+   * Set when the change deactivates or removes structure (a class, section, subject, term…).
    * On an ACTIVE session such changes are blocked while downstream records reference the entity.
    */
   structural?: { entityType: AcademicEntityType; entityId: string };

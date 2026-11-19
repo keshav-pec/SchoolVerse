@@ -14,7 +14,7 @@ import { auditFields, baseSchemaOptions, uuidPrimaryKey, type AuditFields, type 
 /**
  * Reference data (Module 2, AS-01/AS-03).
  *
- * Boards, rule versions and the grade master are SYSTEM data: seeded rows with `tenantId: null`,
+ * Boards, rule versions and the class master are SYSTEM data: seeded rows with `tenantId: null`,
  * readable by every school and editable by none. A school can add its own board (and rule versions)
  * with its `tenantId` set. Because of that mix these collections do NOT use `tenantScopePlugin`;
  * always read them through `visibleToTenant(tenantId)` below so another school's own boards never leak.
@@ -77,17 +77,17 @@ boardRuleVersionSchema.index({ tenantId: 1, boardId: 1 });
 
 export const BoardRuleVersion = model<BoardRuleVersionDoc>('BoardRuleVersion', boardRuleVersionSchema);
 
-export interface GradeMasterDoc extends BaseDoc {
+export interface ClassMasterDoc extends BaseDoc {
   canonicalCode: string;
   canonicalName: string;
   shortCode: string;
   sequenceNumber: number;
   educationStage: EducationStage;
   isPrePrimary: boolean;
-  isBoardGrade: boolean;
+  isBoardClass: boolean;
 }
 
-const gradeMasterSchema = new Schema<GradeMasterDoc>(
+const classMasterSchema = new Schema<ClassMasterDoc>(
   {
     ...uuidPrimaryKey,
     canonicalCode: { type: String, required: true },
@@ -96,10 +96,10 @@ const gradeMasterSchema = new Schema<GradeMasterDoc>(
     sequenceNumber: { type: Number, required: true },
     educationStage: { type: String, enum: EDUCATION_STAGES, required: true },
     isPrePrimary: { type: Boolean, default: false },
-    isBoardGrade: { type: Boolean, default: false },
+    isBoardClass: { type: Boolean, default: false },
   },
-  baseSchemaOptions('grade_master'),
+  baseSchemaOptions('class_master'),
 );
-gradeMasterSchema.index({ canonicalCode: 1 }, { unique: true });
+classMasterSchema.index({ canonicalCode: 1 }, { unique: true });
 
-export const GradeMaster = model<GradeMasterDoc>('GradeMaster', gradeMasterSchema);
+export const ClassMaster = model<ClassMasterDoc>('ClassMaster', classMasterSchema);

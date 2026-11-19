@@ -11,7 +11,7 @@ async function sessions(page: Page) {
   return (await (await page.request.get('/api/v1/academic-sessions')).json()).data as { academicSessionId: string; code: string; status: string }[];
 }
 
-test('admin builds a session end to end: create → grades and sections → subjects and a choice group → terms → validate → publish → activate', async ({ page }) => {
+test('admin builds a session end to end: create → classes and sections → subjects and a choice group → terms → validate → publish → activate', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await page.goto('/academics');
   await expect(page.getByRole('heading', { name: 'Academic Setup' })).toBeVisible();
@@ -33,17 +33,17 @@ test('admin builds a session end to end: create → grades and sections → subj
   sessionId = page.url().split('/').pop()!;
   await expect(page.getByRole('heading', { name: new RegExp(NAME) })).toBeVisible();
 
-  // Grades and sections.
-  await page.getByRole('tab', { name: /grades & sections/i }).click();
-  await page.getByLabel('Grade 6', { exact: true }).check();
-  await page.getByRole('button', { name: /add 1 grade/i }).click();
-  await page.getByRole('button', { name: /show sections of grade 6/i }).click();
-  await page.getByLabel(/add sections to grade 6/i).fill('a, b');
+  // Classes and sections.
+  await page.getByRole('tab', { name: /classes & sections/i }).click();
+  await page.getByLabel('Class 6', { exact: true }).check();
+  await page.getByRole('button', { name: /add 1 class/i }).click();
+  await page.getByRole('button', { name: /show sections of class 6/i }).click();
+  await page.getByLabel(/add sections to class 6/i).fill('a, b');
   await page.getByRole('button', { name: /add sections/i }).click();
-  await expect(page.getByRole('list', { name: /sections of grade 6/i })).toContainText('6-A');
-  await expect(page.getByRole('list', { name: /sections of grade 6/i })).toContainText('6-B');
+  await expect(page.getByRole('list', { name: /sections of class 6/i })).toContainText('6-A');
+  await expect(page.getByRole('list', { name: /sections of class 6/i })).toContainText('6-B');
   // Section A again, in lower case: refused with a clear message.
-  await page.getByLabel(/add sections to grade 6/i).fill('a');
+  await page.getByLabel(/add sections to class 6/i).fill('a');
   await page.getByRole('button', { name: /add sections/i }).click();
   await expect(page.getByRole('alert').filter({ hasText: /already exists/i })).toBeVisible();
 
@@ -110,14 +110,14 @@ test('admin clones a session: the copy has the structure and the original is unt
   const cloneId = page.url().split('/').pop()!;
   expect(cloneId).not.toBe(sessionId);
   await expect(page.getByRole('heading', { name: /academic year 2029-30/i }).getByText('Draft')).toBeVisible();
-  await page.getByRole('tab', { name: /grades & sections/i }).click();
-  await expect(page.getByRole('list', { name: 'Grades' })).toContainText('Grade 6');
+  await page.getByRole('tab', { name: /classes & sections/i }).click();
+  await expect(page.getByRole('list', { name: 'Classes' })).toContainText('Class 6');
 
-  const grades = async (id: string) => (await (await page.request.get(`/api/v1/academic-sessions/${id}/grade-offerings`)).json()).data as { gradeOfferingId: string }[];
-  const [copy, original] = [await grades(cloneId), await grades(sessionId)];
+  const classes = async (id: string) => (await (await page.request.get(`/api/v1/academic-sessions/${id}/class-offerings`)).json()).data as { classOfferingId: string }[];
+  const [copy, original] = [await classes(cloneId), await classes(sessionId)];
   expect(copy).toHaveLength(1);
   expect(original).toHaveLength(1);
-  expect(copy[0]!.gradeOfferingId).not.toBe(original[0]!.gradeOfferingId);
+  expect(copy[0]!.classOfferingId).not.toBe(original[0]!.classOfferingId);
   expect((await sessions(page)).find((s) => s.academicSessionId === sessionId)?.status).toBe('ACTIVE');
 });
 
@@ -129,15 +129,15 @@ test('admin closes the session: it stays viewable but is no longer editable', as
   await page.getByRole('alertdialog').getByRole('button', { name: /^close session$/i }).click();
 
   await expect(page.getByText(/this session is closed/i)).toBeVisible();
-  await page.getByRole('tab', { name: /grades & sections/i }).click();
-  await expect(page.getByRole('list', { name: 'Grades' })).toContainText('Grade 6'); // still viewable
-  await expect(page.getByRole('heading', { name: 'Add grades' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /edit grade 6|delete grade 6|deactivate grade 6/i })).toHaveCount(0);
+  await page.getByRole('tab', { name: /classes & sections/i }).click();
+  await expect(page.getByRole('list', { name: 'Classes' })).toContainText('Class 6'); // still viewable
+  await expect(page.getByRole('heading', { name: 'Add classes' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /edit class 6|delete class 6|deactivate class 6/i })).toHaveCount(0);
 
-  const write = await page.request.post(`/api/v1/academic-sessions/${sessionId}/grade-offerings`, { data: { locationId: 'x', gradeIds: [] } });
+  const write = await page.request.post(`/api/v1/academic-sessions/${sessionId}/class-offerings`, { data: { locationId: 'x', classIds: [] } });
   expect([400, 409]).toContain(write.status());
-  const grade = (await (await page.request.get(`/api/v1/academic-sessions/${sessionId}/grade-offerings`)).json()).data[0];
-  const patch = await page.request.patch(`/api/v1/grade-offerings/${grade.gradeOfferingId}`, { data: { displayName: 'Hacked' } });
+  const schoolClass = (await (await page.request.get(`/api/v1/academic-sessions/${sessionId}/class-offerings`)).json()).data[0];
+  const patch = await page.request.patch(`/api/v1/class-offerings/${schoolClass.classOfferingId}`, { data: { displayName: 'Hacked' } });
   expect(patch.status()).toBe(409);
   expect((await patch.json()).error.code).toBe('SESSION_READ_ONLY');
 });
@@ -183,7 +183,7 @@ test('visual pass: dashboard, session tabs and subject master at 1280px and 390p
     await shot('dashboard');
 
     await page.goto(`/academics/sessions/${sessionId}`);
-    for (const tab of ['overview', 'grades & sections', 'subjects', 'choice rules', 'programmes', 'terms', 'history']) {
+    for (const tab of ['overview', 'classes & sections', 'subjects', 'choice rules', 'programmes', 'terms', 'history']) {
       await page.getByRole('tab', { name: new RegExp(`^${tab}$`, 'i') }).click();
       await page.waitForLoadState('networkidle');
       await noOverflow(`tab ${tab}`);

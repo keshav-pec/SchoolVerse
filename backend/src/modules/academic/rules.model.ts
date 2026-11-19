@@ -17,7 +17,7 @@ import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
 /** AS-08 — a group of subject offerings with a rule ("choose 1 of Punjabi, Hindi, Urdu"). All data, no board branches. */
 export interface SubjectChoiceGroupDoc extends BaseDoc, AuditFields {
   tenantId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   sessionId: string;
   locationId: string;
   name: string;
@@ -33,7 +33,7 @@ const subjectChoiceGroupSchema = new Schema<SubjectChoiceGroupDoc>(
   {
     ...uuidPrimaryKey,
     tenantId: { type: String, required: true, immutable: true },
-    gradeOfferingId: { type: String, required: true, immutable: true },
+    classOfferingId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
     name: { type: String, required: true, trim: true },
@@ -47,16 +47,16 @@ const subjectChoiceGroupSchema = new Schema<SubjectChoiceGroupDoc>(
   },
   baseSchemaOptions('subject_choice_groups'),
 );
-subjectChoiceGroupSchema.index({ tenantId: 1, gradeOfferingId: 1, sequence: 1 });
+subjectChoiceGroupSchema.index({ tenantId: 1, classOfferingId: 1, sequence: 1 });
 subjectChoiceGroupSchema.index({ tenantId: 1, sessionId: 1 });
 subjectChoiceGroupSchema.plugin(tenantScopePlugin);
 
 export const SubjectChoiceGroup = model<SubjectChoiceGroupDoc>('SubjectChoiceGroup', subjectChoiceGroupSchema);
 
-/** AS-09 — "A requires B" / "A excludes B" between two offerings of the same grade. */
+/** AS-09 — "A requires B" / "A excludes B" between two offerings of the same class. */
 export interface SubjectChoiceConstraintDoc extends BaseDoc, AuditFields {
   tenantId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   sessionId: string;
   locationId: string;
   type: ConstraintType;
@@ -68,7 +68,7 @@ const subjectChoiceConstraintSchema = new Schema<SubjectChoiceConstraintDoc>(
   {
     ...uuidPrimaryKey,
     tenantId: { type: String, required: true, immutable: true },
-    gradeOfferingId: { type: String, required: true, immutable: true },
+    classOfferingId: { type: String, required: true, immutable: true },
     sessionId: { type: String, required: true, immutable: true },
     locationId: { type: String, required: true, immutable: true },
     type: { type: String, enum: CONSTRAINT_TYPES, required: true, immutable: true },
@@ -78,13 +78,13 @@ const subjectChoiceConstraintSchema = new Schema<SubjectChoiceConstraintDoc>(
   },
   baseSchemaOptions('subject_choice_constraints'),
 );
-subjectChoiceConstraintSchema.index({ tenantId: 1, gradeOfferingId: 1, type: 1, subjectOfferingId: 1, otherSubjectOfferingId: 1 }, { unique: true });
+subjectChoiceConstraintSchema.index({ tenantId: 1, classOfferingId: 1, type: 1, subjectOfferingId: 1, otherSubjectOfferingId: 1 }, { unique: true });
 subjectChoiceConstraintSchema.index({ tenantId: 1, sessionId: 1 });
 subjectChoiceConstraintSchema.plugin(tenantScopePlugin);
 
 export const SubjectChoiceConstraint = model<SubjectChoiceConstraintDoc>('SubjectChoiceConstraint', subjectChoiceConstraintSchema);
 
-/** AS-10 / AS-11 — a stream (fixed subject rules) or a flexible combination (rules come from the grade's groups). */
+/** AS-10 / AS-11 — a stream (fixed subject rules) or a flexible combination (rules come from the class's groups). */
 export interface ProgrammeSubjectRule {
   subjectOfferingId: string;
   requirement: ProgrammeRequirement;
@@ -97,8 +97,8 @@ export interface AcademicProgrammeDoc extends BaseDoc, AuditFields {
   name: string;
   code: string;
   kind: ProgrammeKind;
-  gradeFromId: string;
-  gradeToId: string;
+  classFromId: string;
+  classToId: string;
   boardId: string | null;
   subjectRules: ProgrammeSubjectRule[];
   choiceMin: number | null;
@@ -123,8 +123,8 @@ const academicProgrammeSchema = new Schema<AcademicProgrammeDoc>(
     name: { type: String, required: true, trim: true },
     code: { type: String, required: true, uppercase: true, trim: true, immutable: true },
     kind: { type: String, enum: PROGRAMME_KINDS, required: true },
-    gradeFromId: { type: String, required: true },
-    gradeToId: { type: String, required: true },
+    classFromId: { type: String, required: true },
+    classToId: { type: String, required: true },
     boardId: { type: String, default: null },
     subjectRules: { type: [subjectRuleSchema], default: [] },
     choiceMin: { type: Number, default: null },

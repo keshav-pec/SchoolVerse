@@ -17,7 +17,7 @@ import { withTransaction } from '../../db/transaction';
 import { actorFrom, can, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
 import { diffFields, changedValues } from '../audit/diff';
-import { GradeOffering, SubjectOffering } from './offering.model';
+import { ClassOffering, SubjectOffering } from './offering.model';
 import { BoardRuleVersion, EducationBoard, visibleToTenant, type BoardRuleVersionDoc, type EducationBoardDoc } from './reference.model';
 import { AcademicSession } from './session.model';
 import { BoardSubjectDefinition, Subject, type BoardSubjectDefinitionDoc, type SubjectDoc } from './subject.model';
@@ -127,8 +127,8 @@ export async function listSubjects(ctx: ServiceContext, query: ListSubjectsQuery
     and.push({ _id: { $in: [...new Set(definitions.map((d) => d.subjectId))] } });
   }
 
-  if (query.gradeId) {
-    const offeringFilter: Record<string, unknown> = { tenantId: ctx.tenantId, gradeId: query.gradeId };
+  if (query.classId) {
+    const offeringFilter: Record<string, unknown> = { tenantId: ctx.tenantId, classId: query.classId };
     if (query.academicSessionId) offeringFilter.sessionId = query.academicSessionId;
     if (!can(ctx, 'academic:view_config')) {
       // Limited roles must not learn what a DRAFT session contains.
@@ -137,8 +137,8 @@ export async function listSubjects(ctx: ServiceContext, query: ListSubjectsQuery
         ? { $in: visible.map((s) => s._id).filter((id) => id === query.academicSessionId) }
         : { $in: visible.map((s) => s._id) };
     }
-    const gradeOfferings = await GradeOffering.find(offeringFilter).select('_id').lean<{ _id: string }[]>();
-    const subjectIds = await SubjectOffering.distinct('subjectId', { tenantId: ctx.tenantId, gradeOfferingId: { $in: gradeOfferings.map((g) => g._id) } });
+    const classOfferings = await ClassOffering.find(offeringFilter).select('_id').lean<{ _id: string }[]>();
+    const subjectIds = await SubjectOffering.distinct('subjectId', { tenantId: ctx.tenantId, classOfferingId: { $in: classOfferings.map((g) => g._id) } });
     and.push({ _id: { $in: subjectIds } });
   }
   if (and.length) filter.$and = and;

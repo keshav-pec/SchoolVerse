@@ -13,8 +13,8 @@ import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
 import { assertDeletable, assertEditable } from './guard';
-import { GradeOffering, SubjectOffering, type GradeOfferingDoc, type SubjectOfferingDoc } from './offering.model';
-import { GradeMaster, type GradeMasterDoc } from './reference.model';
+import { ClassOffering, SubjectOffering, type ClassOfferingDoc, type SubjectOfferingDoc } from './offering.model';
+import { ClassMaster, type ClassMasterDoc } from './reference.model';
 import { getBoardOrThrow } from './reference.service';
 import { AcademicProgramme, type AcademicProgrammeDoc, type ProgrammeSubjectRule } from './rules.model';
 import type { AcademicSessionDoc } from './session.model';
@@ -43,8 +43,8 @@ export async function toProgrammeDTOs(ctx: ServiceContext, docs: AcademicProgram
     name: d.name,
     code: d.code,
     kind: d.kind,
-    gradeFromId: d.gradeFromId,
-    gradeToId: d.gradeToId,
+    classFromId: d.classFromId,
+    classToId: d.classToId,
     boardId: d.boardId ?? null,
     subjectRules: d.subjectRules.map((r) => {
       const offering = offeringById.get(r.subjectOfferingId);
@@ -68,8 +68,8 @@ export async function toProgrammeDTOs(ctx: ServiceContext, docs: AcademicProgram
 
 interface ProgrammeShape {
   kind: AcademicProgrammeDoc['kind'];
-  gradeFromId: string;
-  gradeToId: string;
+  classFromId: string;
+  classToId: string;
   boardId: string | null;
   subjectRules: ProgrammeSubjectRule[];
   choiceMin: number | null;
@@ -78,7 +78,7 @@ interface ProgrammeShape {
 
 /**
  * Checks a programme against its session and returns the normalised choice bounds.
- * Subjects must be offerings at the programme's session + location and inside its grade range.
+ * Subjects must be offerings at the programme's session + location and inside its class range.
  */
 async function checkProgramme(
   ctx: ServiceContext,
@@ -89,16 +89,16 @@ async function checkProgramme(
 ): Promise<{ choiceMin: number | null; choiceMax: number | null }> {
   if (!session.locations.some((l) => l.locationId === locationId)) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId });
 
-  const grades = await GradeMaster.find({ _id: { $in: [shape.gradeFromId, shape.gradeToId] } }).session(db).lean<GradeMasterDoc[]>();
-  const from = grades.find((g) => g._id === shape.gradeFromId);
-  const to = grades.find((g) => g._id === shape.gradeToId);
-  if (!from || !to) throw AppError.notFound('Grade not found.');
-  if (from.sequenceNumber > to.sequenceNumber) throw AppError.validation({ gradeToId: 'The last grade cannot come before the first grade.' });
+  const classes = await ClassMaster.find({ _id: { $in: [shape.classFromId, shape.classToId] } }).session(db).lean<ClassMasterDoc[]>();
+  const from = classes.find((g) => g._id === shape.classFromId);
+  const to = classes.find((g) => g._id === shape.classToId);
+  if (!from || !to) throw AppError.notFound('Class not found.');
+  if (from.sequenceNumber > to.sequenceNumber) throw AppError.validation({ classToId: 'The last class cannot come before the first class.' });
   if (shape.boardId) await getBoardOrThrow(ctx.tenantId, shape.boardId, db);
 
   if (shape.kind === 'FLEXIBLE') {
     if (shape.subjectRules.length > 0) {
-      throw AppError.validation({ subjectRules: 'A flexible combination has no fixed subject list. Use the grade’s choice groups and rules.' });
+      throw AppError.validation({ subjectRules: 'A flexible combination has no fixed subject list. Use the class’s choice groups and rules.' });
     }
     return { choiceMin: null, choiceMax: null };
   }
@@ -109,20 +109,20 @@ async function checkProgramme(
 
   if (ids.length > 0) {
     const offerings = await SubjectOffering.find({ tenantId: ctx.tenantId, _id: { $in: ids }, sessionId: session._id, locationId }).session(db).lean<SubjectOfferingDoc[]>();
-    const gradeOfferings = await GradeOffering.find({ tenantId: ctx.tenantId, _id: { $in: [...new Set(offerings.map((o) => o.gradeOfferingId))] } })
+    const classOfferings = await ClassOffering.find({ tenantId: ctx.tenantId, _id: { $in: [...new Set(offerings.map((o) => o.classOfferingId))] } })
       .session(db)
-      .lean<GradeOfferingDoc[]>();
-    const masterGrades = await GradeMaster.find({ _id: { $in: [...new Set(gradeOfferings.map((g) => g.gradeId))] } }).session(db).lean<GradeMasterDoc[]>();
+      .lean<ClassOfferingDoc[]>();
+    const masterClasses = await ClassMaster.find({ _id: { $in: [...new Set(classOfferings.map((g) => g.classId))] } }).session(db).lean<ClassMasterDoc[]>();
     const sequenceOf = (offering: SubjectOfferingDoc) => {
-      const go = gradeOfferings.find((g) => g._id === offering.gradeOfferingId);
-      return masterGrades.find((m) => m._id === go?.gradeId)?.sequenceNumber;
+      const go = classOfferings.find((g) => g._id === offering.classOfferingId);
+      return masterClasses.find((m) => m._id === go?.classId)?.sequenceNumber;
     };
     for (const [i, id] of ids.entries()) {
       const offering = offerings.find((o) => o._id === id);
       if (!offering) throw AppError.validation({ [`subjectRules.${i}.subjectOfferingId`]: 'Choose a subject offered at this location in this session.' });
       const sequence = sequenceOf(offering);
       if (sequence === undefined || sequence < from.sequenceNumber || sequence > to.sequenceNumber) {
-        throw AppError.validation({ [`subjectRules.${i}.subjectOfferingId`]: 'This subject belongs to a grade outside the programme’s grade range.' });
+        throw AppError.validation({ [`subjectRules.${i}.subjectOfferingId`]: 'This subject belongs to a class outside the programme’s class range.' });
       }
     }
   }
@@ -168,8 +168,8 @@ export async function createProgramme(ctx: ServiceContext, data: CreateProgramme
     await assertEditable(session, {}, db);
     const shape: ProgrammeShape = {
       kind: data.kind,
-      gradeFromId: data.gradeFromId,
-      gradeToId: data.gradeToId,
+      classFromId: data.classFromId,
+      classToId: data.classToId,
       boardId: data.boardId ?? null,
       subjectRules: data.subjectRules,
       choiceMin: data.choiceMin ?? null,
@@ -221,7 +221,7 @@ export async function updateProgramme(ctx: ServiceContext, programmeId: string, 
       ctx,
       session,
       before.locationId,
-      { kind: merged.kind, gradeFromId: merged.gradeFromId, gradeToId: merged.gradeToId, boardId: merged.boardId ?? null, subjectRules: merged.subjectRules, choiceMin: merged.choiceMin, choiceMax: merged.choiceMax },
+      { kind: merged.kind, classFromId: merged.classFromId, classToId: merged.classToId, boardId: merged.boardId ?? null, subjectRules: merged.subjectRules, choiceMin: merged.choiceMin, choiceMax: merged.choiceMax },
       db,
     );
     merged.choiceMin = bounds.choiceMin;

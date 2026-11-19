@@ -1,5 +1,5 @@
 import type { ClientSession } from 'mongoose';
-import type { BoardDTO, BoardRuleVersionDTO, CreateBoardData, CreateRuleVersionData, GradeMasterDTO, RuleVersionStatus } from '@shared';
+import type { BoardDTO, BoardRuleVersionDTO, CreateBoardData, CreateRuleVersionData, ClassMasterDTO, RuleVersionStatus } from '@shared';
 import { AppError } from '../../core/errors';
 import { duplicateKeyFields, onDuplicate } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
@@ -8,14 +8,14 @@ import { recordAudit } from '../audit/audit.service';
 import {
   BoardRuleVersion,
   EducationBoard,
-  GradeMaster,
+  ClassMaster,
   visibleToTenant,
   type BoardRuleVersionDoc,
   type EducationBoardDoc,
-  type GradeMasterDoc,
+  type ClassMasterDoc,
 } from './reference.model';
 
-/** AS-01 / AS-03 — boards, rule versions and the grade master. System rows are read-only. */
+/** AS-01 / AS-03 — boards, rule versions and the class master. System rows are read-only. */
 
 // ───────────────────────────────────────────────────────────── mapping
 
@@ -44,16 +44,16 @@ export function toRuleVersionDTO(doc: BoardRuleVersionDoc): BoardRuleVersionDTO 
   };
 }
 
-export function toGradeDTO(doc: GradeMasterDoc): GradeMasterDTO {
+export function toClassDTO(doc: ClassMasterDoc): ClassMasterDTO {
   return {
-    gradeId: doc._id,
+    classId: doc._id,
     canonicalCode: doc.canonicalCode,
     canonicalName: doc.canonicalName,
     shortCode: doc.shortCode,
     sequenceNumber: doc.sequenceNumber,
     educationStage: doc.educationStage,
     isPrePrimary: doc.isPrePrimary,
-    isBoardGrade: doc.isBoardGrade,
+    isBoardClass: doc.isBoardClass,
   };
 }
 
@@ -84,13 +84,13 @@ export async function listRuleVersions(ctx: ServiceContext, boardId: string): Pr
   return rows.map(toRuleVersionDTO);
 }
 
-export async function listGrades(): Promise<GradeMasterDTO[]> {
-  const rows = await GradeMaster.find().sort({ sequenceNumber: 1 }).lean<GradeMasterDoc[]>();
-  return rows.map(toGradeDTO);
+export async function listClasses(): Promise<ClassMasterDTO[]> {
+  const rows = await ClassMaster.find().sort({ sequenceNumber: 1 }).lean<ClassMasterDoc[]>();
+  return rows.map(toClassDTO);
 }
 
-export async function getGradesByIds(gradeIds: string[], session?: ClientSession) {
-  return GradeMaster.find({ _id: { $in: gradeIds } }).session(session ?? null).lean<GradeMasterDoc[]>();
+export async function getClassesByIds(classIds: string[], session?: ClientSession) {
+  return ClassMaster.find({ _id: { $in: classIds } }).session(session ?? null).lean<ClassMasterDoc[]>();
 }
 
 /** The version a session pins for a location: it must belong to the board and be PUBLISHED. */

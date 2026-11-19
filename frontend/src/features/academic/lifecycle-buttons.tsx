@@ -122,7 +122,7 @@ export function LifecycleButtons({ session, validationErrors, only }: { session:
         open={dialog === 'clone'}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Clone this session"
-        description={`Creates a new draft with the grades, sections, subjects, rules, programmes and terms of ${session.name}. Students, staff and fees are never copied.`}
+        description={`Creates a new draft with the classes, sections, subjects, rules, programmes and terms of ${session.name}. Students, staff and fees are never copied.`}
         confirmLabel="Create draft"
         loadingLabel="Cloning…"
         icon={<Copy className="size-5" />}

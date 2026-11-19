@@ -1,7 +1,7 @@
 import {
   cloneSessionSchema,
   createChoiceGroupSchema,
-  createGradeOfferingsSchema,
+  createClassOfferingsSchema,
   createProgrammeSchema,
   createSectionsSchema,
   createSessionSchema,
@@ -13,9 +13,9 @@ import {
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { cloneSession } from './clone.service';
 import { changeSessionStatus } from './lifecycle.service';
-import { createSubjectOfferings, createGradeOfferings, createSections, listSubjectOfferings } from './offering.service';
+import { createSubjectOfferings, createClassOfferings, createSections, listSubjectOfferings } from './offering.service';
 import { createProgramme } from './programme.service';
-import { BoardRuleVersion, EducationBoard, GradeMaster } from './reference.model';
+import { BoardRuleVersion, EducationBoard, ClassMaster } from './reference.model';
 import { createChoiceGroup } from './rules.service';
 import { createSession } from './session.service';
 import { Subject } from './subject.model';
@@ -25,14 +25,14 @@ import { validateSession } from './validation.service';
 
 /**
  * The PRD §23 dataset for Greenfield: session 2026-27 (ACTIVE) with Mohali on a national board template and Chandigarh on a
- * state board test template; Nursery–XII at Mohali and Nursery–VIII at Chandigarh; sections VIII-A/B/C; a Grade VI language
- * choice group; Grade XI programmes (Science, Commerce, Humanities, Flexible Combination); two terms. A DRAFT 2027-28 session
+ * state board test template; Nursery–XII at Mohali and Nursery–VIII at Chandigarh; sections VIII-A/B/C; a Class VI language
+ * choice group; Class XI programmes (Science, Commerce, Humanities, Flexible Combination); two terms. A DRAFT 2027-28 session
  * is then created by cloning, so the clone path can be demoed.
  *
  * Everything goes through the real services, so the data follows every rule and has an audit trail.
  */
-const MOHALI_GRADES = ['NURSERY', 'KG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)];
-const CHANDIGARH_GRADES = ['NURSERY', 'KG', ...Array.from({ length: 8 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)];
+const MOHALI_CLASSES = ['NURSERY', 'KG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)];
+const CHANDIGARH_CLASSES = ['NURSERY', 'KG', ...Array.from({ length: 8 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)];
 
 /** Official CBSE codes for a few subjects, so the board-code mapping is visible in the demo. */
 const CBSE_CODES: Record<string, string> = {
@@ -42,9 +42,9 @@ const CBSE_CODES: Record<string, string> = {
 type Plan = { code: string; type: SubjectOfferingType }[];
 const plan = (codes: string, type: SubjectOfferingType = 'MANDATORY'): Plan => codes.split(' ').map((code) => ({ code, type }));
 
-function subjectPlan(gradeCode: string): Plan {
-  const n = Number(gradeCode.slice(1));
-  if (gradeCode === 'NURSERY' || gradeCode === 'KG') return [...plan('ENG HIN'), ...plan('ART', 'SKILL')];
+function subjectPlan(classCode: string): Plan {
+  const n = Number(classCode.slice(1));
+  if (classCode === 'NURSERY' || classCode === 'KG') return [...plan('ENG HIN'), ...plan('ART', 'SKILL')];
   if (n <= 5) return [...plan('ENG HIN MATH PE'), ...plan('ART', 'SKILL')];
   if (n <= 8) return [...plan('ENG HIN PUN URD', 'LANGUAGE'), ...plan('MATH SCI SST PE'), ...plan('ART', 'SKILL')];
   if (n <= 10) return [...plan('ENG HIN MATH SCI SST PE'), ...plan('CS', 'ELECTIVE')];
@@ -52,15 +52,15 @@ function subjectPlan(gradeCode: string): Plan {
 }
 
 export async function seedAcademicDemo(ctx: ServiceContext, locations: { mohaliId: string; chandigarhId: string }) {
-  const [boards, versions, grades, subjects] = await Promise.all([
+  const [boards, versions, classes, subjects] = await Promise.all([
     EducationBoard.find({ tenantId: null, boardCode: { $in: ['CBSE', 'STATE_TEST'] } }).lean(),
     BoardRuleVersion.find({ tenantId: null, name: '2026-27' }).lean(),
-    GradeMaster.find().lean(),
+    ClassMaster.find().lean(),
     Subject.find({ tenantId: ctx.tenantId }).lean(),
   ]);
   const board = (code: string) => boards.find((b) => b.boardCode === code)!;
   const version = (code: string) => versions.find((v) => v.boardId === board(code)._id)!;
-  const gradeId = (code: string) => grades.find((g) => g.canonicalCode === code)!._id;
+  const classId = (code: string) => classes.find((g) => g.canonicalCode === code)!._id;
   const subjectId = (code: string) => subjects.find((s) => s.subjectCode === code)!._id;
 
   // Board codes first, so subject offerings pick them up on their own.
@@ -83,42 +83,42 @@ export async function seedAcademicDemo(ctx: ServiceContext, locations: { mohaliI
   );
   const sessionId = session.academicSessionId;
 
-  const setUp = async (locationId: string, gradeCodes: string[]) => {
-    const offerings = await createGradeOfferings(ctx, sessionId, createGradeOfferingsSchema.parse({ locationId, gradeIds: gradeCodes.map(gradeId), medium: 'English' }));
+  const setUp = async (locationId: string, classCodes: string[]) => {
+    const offerings = await createClassOfferings(ctx, sessionId, createClassOfferingsSchema.parse({ locationId, classIds: classCodes.map(classId), medium: 'English' }));
     for (const offering of offerings) {
-      const code = grades.find((g) => g._id === offering.gradeId)!.canonicalCode;
-      await createSections(ctx, offering.gradeOfferingId, createSectionsSchema.parse({ codes: code === 'G08' ? ['A', 'B', 'C'] : ['A'] }));
+      const code = classes.find((g) => g._id === offering.classId)!.canonicalCode;
+      await createSections(ctx, offering.classOfferingId, createSectionsSchema.parse({ codes: code === 'G08' ? ['A', 'B', 'C'] : ['A'] }));
       for (const type of ['MANDATORY', 'ELECTIVE', 'LANGUAGE', 'SKILL'] as const) {
         const ids = subjectPlan(code).filter((p) => p.type === type).map((p) => subjectId(p.code));
-        if (ids.length) await createSubjectOfferings(ctx, offering.gradeOfferingId, createSubjectOfferingsSchema.parse({ subjectIds: ids, offeringType: type }));
+        if (ids.length) await createSubjectOfferings(ctx, offering.classOfferingId, createSubjectOfferingsSchema.parse({ subjectIds: ids, offeringType: type }));
       }
-      if (code === 'G06') await seedLanguageGroups(offering.gradeOfferingId);
+      if (code === 'G06') await seedLanguageGroups(offering.classOfferingId);
     }
     return offerings;
   };
 
-  /** Grade VI: a "Core" group, then Language 1 (Punjabi / Hindi / Urdu) and Language 2 — all data, no Punjab branch in the code. */
-  const seedLanguageGroups = async (gradeOfferingId: string) => {
-    const offerings = await listSubjectOfferings(ctx, gradeOfferingId);
+  /** Class VI: a "Core" group, then Language 1 (Punjabi / Hindi / Urdu) and Language 2 — all data, no Punjab branch in the code. */
+  const seedLanguageGroups = async (classOfferingId: string) => {
+    const offerings = await listSubjectOfferings(ctx, classOfferingId);
     const idOf = (code: string) => offerings.find((o) => o.subjectCode === code)!.subjectOfferingId;
     const group = (name: string, ruleType: string, codes: string[]) =>
-      createChoiceGroup(ctx, gradeOfferingId, createChoiceGroupSchema.parse({ name, ruleType, subjectOfferingIds: codes.map(idOf) }));
+      createChoiceGroup(ctx, classOfferingId, createChoiceGroupSchema.parse({ name, ruleType, subjectOfferingIds: codes.map(idOf) }));
     await group('Core', 'REQUIRED_ALL', ['MATH', 'SCI', 'SST', 'PE']);
     await group('Language 1', 'CHOOSE_ONE', ['PUN', 'HIN', 'URD']);
     await group('Language 2', 'REQUIRED_ALL', ['ENG']);
   };
 
-  const mohali = await setUp(locations.mohaliId, MOHALI_GRADES);
-  await setUp(locations.chandigarhId, CHANDIGARH_GRADES);
+  const mohali = await setUp(locations.mohaliId, MOHALI_CLASSES);
+  await setUp(locations.chandigarhId, CHANDIGARH_CLASSES);
 
-  // Grade XI programmes at Mohali.
-  const grade11 = mohali.find((o) => o.gradeId === gradeId('G11'))!;
-  const g11 = await listSubjectOfferings(ctx, grade11.gradeOfferingId);
+  // Class XI programmes at Mohali.
+  const class11 = mohali.find((o) => o.classId === classId('G11'))!;
+  const g11 = await listSubjectOfferings(ctx, class11.classOfferingId);
   const rule = (code: string, requirement: 'REQUIRED' | 'CHOICE' | 'OPTIONAL') => ({ subjectOfferingId: g11.find((o) => o.subjectCode === code)!.subjectOfferingId, requirement });
   const programme = (code: string, name: string, kind: 'STREAM' | 'FLEXIBLE', subjectRules: ReturnType<typeof rule>[], extra: Record<string, unknown> = {}) =>
     createProgramme(
       ctx,
-      createProgrammeSchema.parse({ academicSessionId: sessionId, locationId: locations.mohaliId, code, name, kind, gradeFromId: gradeId('G11'), gradeToId: gradeId('G11'), subjectRules, ...extra }),
+      createProgrammeSchema.parse({ academicSessionId: sessionId, locationId: locations.mohaliId, code, name, kind, classFromId: classId('G11'), classToId: classId('G11'), subjectRules, ...extra }),
     );
   await programme('SCI', 'Science', 'STREAM', [rule('ENG', 'REQUIRED'), rule('PHY', 'REQUIRED'), rule('CHEM', 'REQUIRED'), rule('MATH', 'CHOICE'), rule('BIO', 'CHOICE'), rule('CS', 'CHOICE')], { choiceMin: 1, choiceMax: 2 });
   await programme('COM', 'Commerce', 'STREAM', [rule('ENG', 'REQUIRED'), rule('ACC', 'REQUIRED'), rule('BST', 'REQUIRED'), rule('ECO', 'REQUIRED'), rule('MATH', 'OPTIONAL')]);

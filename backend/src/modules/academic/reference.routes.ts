@@ -23,7 +23,7 @@ const ruleVersionParams = z.object({ boardId: uuidSchema, ruleVersionId: uuidSch
 const subjectParams = z.object({ subjectId: uuidSchema });
 const boardCodeParams = z.object({ subjectId: uuidSchema, ruleVersionId: uuidSchema });
 
-/** /boards and /grades — reference data (AS-01, AS-03). */
+/** /boards and /classes — reference data (AS-01, AS-03). */
 export const boardRouter = Router();
 boardRouter.use(authenticate);
 
@@ -57,10 +57,10 @@ boardRouter.post(
   },
 );
 
-export const gradeRouter = Router();
-gradeRouter.use(authenticate);
-gradeRouter.get('/', requirePermission('academic:view'), async (_req, res) => {
-  ok(res, await reference.listGrades());
+export const classRouter = Router();
+classRouter.use(authenticate);
+classRouter.get('/', requirePermission('academic:view'), async (_req, res) => {
+  ok(res, await reference.listClasses());
 });
 
 /** /subjects — subject master and board subject codes (AS-05, AS-06). */

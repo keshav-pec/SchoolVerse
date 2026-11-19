@@ -1,6 +1,6 @@
 /** Which session tab shows the thing a validation issue is about. */
 export const TAB_FOR_ENTITY: Record<string, string> = {
-  grade_offering: 'grades',
+  class_offering: 'classes',
   academic_term: 'terms',
   subject_choice_group: 'rules',
   subject_choice_constraint: 'rules',
@@ -11,9 +11,9 @@ export const TAB_FOR_ENTITY: Record<string, string> = {
 
 export const TAB_LABELS: Record<string, string> = {
   overview: 'Overview',
-  grades: 'Grades & Sections',
+  classes: 'Classes & Sections',
   subjects: 'Subjects',
-  rules: 'Choice Rules',
+  rules: 'Subject Choice Rules',
   programmes: 'Programmes',
   terms: 'Terms',
 };

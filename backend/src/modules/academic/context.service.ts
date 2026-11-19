@@ -1,15 +1,15 @@
 import type {
   AcademicContextDTO,
-  AcademicContextGradesDTO,
+  AcademicContextClassesDTO,
   AcademicContextQuery,
   AcademicOverviewDTO,
   AcademicSessionDTO,
 } from '@shared';
 import { AppError } from '../../core/errors';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
-import { GradeOffering, SectionOffering, SubjectOffering, type GradeOfferingDoc } from './offering.model';
-import { listGradeOfferings, listSectionsFor, listSubjectOfferingsFor, toGradeOfferingDTOs } from './offering.service';
-import { GradeMaster, type GradeMasterDoc } from './reference.model';
+import { ClassOffering, SectionOffering, SubjectOffering, type ClassOfferingDoc } from './offering.model';
+import { listClassOfferings, listSectionsFor, listSubjectOfferingsFor, toClassOfferingDTOs } from './offering.service';
+import { ClassMaster, type ClassMasterDoc } from './reference.model';
 import { toProgrammeDTOs } from './programme.service';
 import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup, type AcademicProgrammeDoc } from './rules.model';
 import { listChoiceGroupsFor, listConstraintsFor } from './rules.service';
@@ -33,18 +33,18 @@ export async function getOverview(ctx: ServiceContext, academicSessionId: string
   const scope = { tenantId: ctx.tenantId, sessionId: academicSessionId };
   const active = { ...scope, status: 'ACTIVE' as const };
 
-  const [grades, sections, offerings, groups, programmes, terms, constraints] = await Promise.all([
-    GradeOffering.find(active).select('_id').lean<{ _id: string }[]>(),
-    SectionOffering.find(active).select('gradeOfferingId').lean<{ gradeOfferingId: string }[]>(),
-    SubjectOffering.find(active).select('gradeOfferingId subjectId').lean<{ gradeOfferingId: string; subjectId: string }[]>(),
+  const [classes, sections, offerings, groups, programmes, terms, constraints] = await Promise.all([
+    ClassOffering.find(active).select('_id').lean<{ _id: string }[]>(),
+    SectionOffering.find(active).select('classOfferingId').lean<{ classOfferingId: string }[]>(),
+    SubjectOffering.find(active).select('classOfferingId subjectId').lean<{ classOfferingId: string; subjectId: string }[]>(),
     SubjectChoiceGroup.countDocuments(active),
     AcademicProgramme.countDocuments(active),
     AcademicTerm.countDocuments(scope),
     SubjectChoiceConstraint.countDocuments({ tenantId: ctx.tenantId, sessionId: academicSessionId }),
   ]);
-  const gradesWith = (rows: { gradeOfferingId: string }[]) => grades.length > 0 && grades.every((g) => rows.some((r) => r.gradeOfferingId === g._id));
+  const classesWith = (rows: { classOfferingId: string }[]) => classes.length > 0 && classes.every((g) => rows.some((r) => r.classOfferingId === g._id));
   const validation = dto.lastValidation ?? null;
-  const missing = (rows: { gradeOfferingId: string }[]) => grades.filter((g) => !rows.some((r) => r.gradeOfferingId === g._id)).length;
+  const missing = (rows: { classOfferingId: string }[]) => classes.filter((g) => !rows.some((r) => r.classOfferingId === g._id)).length;
 
   const item = (
     key: AcademicOverviewDTO['checklist'][number]['key'],
@@ -58,7 +58,7 @@ export async function getOverview(ctx: ServiceContext, academicSessionId: string
     status: session.status,
     counts: {
       locations: session.locations.length,
-      grades: grades.length,
+      classes: classes.length,
       sections: sections.length,
       subjects: new Set(offerings.map((o) => o.subjectId)).size,
       programmes,
@@ -76,9 +76,9 @@ export async function getOverview(ctx: ServiceContext, academicSessionId: string
     checklist: [
       item('session', 'Session', session.startDate < session.endDate && session.locations.length > 0 ? 'completed' : 'pending', `${session.startDate} to ${session.endDate}`),
       item('board', 'Board', session.locations.length > 0 ? 'completed' : 'pending', session.locations.length ? `${session.locations.length} location${session.locations.length === 1 ? '' : 's'} with a board` : 'Add a location and its board'),
-      item('grades', 'Grades', grades.length > 0 ? 'completed' : 'pending', grades.length ? `${grades.length} grade${grades.length === 1 ? '' : 's'}` : 'Add grades'),
-      item('sections', 'Sections', gradesWith(sections) ? 'completed' : 'pending', gradesWith(sections) ? `${sections.length} sections` : `${grades.length ? missing(sections) : 0} grade(s) without sections`),
-      item('subjects', 'Subjects', gradesWith(offerings) ? 'completed' : 'pending', gradesWith(offerings) ? `${new Set(offerings.map((o) => o.subjectId)).size} subjects offered` : `${grades.length ? missing(offerings) : 0} grade(s) without subjects`),
+      item('classes', 'Classes', classes.length > 0 ? 'completed' : 'pending', classes.length ? `${classes.length} class${classes.length === 1 ? '' : 's'}` : 'Add classes'),
+      item('sections', 'Sections', classesWith(sections) ? 'completed' : 'pending', classesWith(sections) ? `${sections.length} sections` : `${classes.length ? missing(sections) : 0} class(s) without sections`),
+      item('subjects', 'Subjects', classesWith(offerings) ? 'completed' : 'pending', classesWith(offerings) ? `${new Set(offerings.map((o) => o.subjectId)).size} subjects offered` : `${classes.length ? missing(offerings) : 0} class(s) without subjects`),
       item('rules', 'Rules', groups + programmes + constraints > 0 ? 'completed' : 'optional', `${groups} choice group${groups === 1 ? '' : 's'}, ${programmes} programme${programmes === 1 ? '' : 's'}`),
       item('terms', 'Terms', terms > 0 ? 'completed' : 'optional', terms ? `${terms} term${terms === 1 ? '' : 's'}` : 'No terms yet'),
       item(
@@ -95,51 +95,51 @@ export async function getOverview(ctx: ServiceContext, academicSessionId: string
 // ───────────────────────────────────────────────────────────── academic context (AS-18)
 
 /**
- * Everything a downstream module needs to know about one grade at one location in one session
- * (or, without `gradeId`, the grades offered there). Faculty / Staff see PUBLISHED, ACTIVE and CLOSED sessions only.
+ * Everything a downstream module needs to know about one class at one location in one session
+ * (or, without `classId`, the classes offered there). Faculty / Staff see PUBLISHED, ACTIVE and CLOSED sessions only.
  */
-export async function getAcademicContext(ctx: ServiceContext, query: AcademicContextQuery): Promise<AcademicContextGradesDTO | AcademicContextDTO> {
+export async function getAcademicContext(ctx: ServiceContext, query: AcademicContextQuery): Promise<AcademicContextClassesDTO | AcademicContextDTO> {
   const session = await getSessionOrThrow(ctx, query.academicSessionId);
   const entry = session.locations.find((l) => l.locationId === query.locationId);
   if (!entry) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId: query.locationId });
 
   const sessionDto = await getSessionDTO(ctx, session._id);
   const location = sessionDto.locations.find((l) => l.locationId === query.locationId)!;
-  const grades = await listGradeOfferings(ctx, session._id, query.locationId);
-  const base: AcademicContextGradesDTO = {
+  const classes = await listClassOfferings(ctx, session._id, query.locationId);
+  const base: AcademicContextClassesDTO = {
     academicSessionId: session._id,
     locationId: query.locationId,
     sessionStatus: session.status,
     board: { boardId: entry.boardId, boardCode: location.boardCode, boardRuleVersionId: entry.boardRuleVersionId, ruleVersionName: location.ruleVersionName },
-    grades,
+    classes,
   };
-  if (!query.gradeId) return base;
+  if (!query.classId) return base;
 
-  const offering = await GradeOffering.findOne({ tenantId: ctx.tenantId, sessionId: session._id, locationId: query.locationId, gradeId: query.gradeId }).lean<GradeOfferingDoc>();
-  if (!offering) throw AppError.notFound('This grade is not offered at this location in this session.');
-  const gradeOffering = (await toGradeOfferingDTOs(ctx, [offering]))[0]!;
+  const offering = await ClassOffering.findOne({ tenantId: ctx.tenantId, sessionId: session._id, locationId: query.locationId, classId: query.classId }).lean<ClassOfferingDoc>();
+  if (!offering) throw AppError.notFound('This class is not offered at this location in this session.');
+  const classOffering = (await toClassOfferingDTOs(ctx, [offering]))[0]!;
 
-  const [sections, subjectOfferings, choiceGroups, constraints, terms, programmeDocs, masterGrades] = await Promise.all([
+  const [sections, subjectOfferings, choiceGroups, constraints, terms, programmeDocs, masterClasses] = await Promise.all([
     listSectionsFor(ctx, offering._id),
     listSubjectOfferingsFor(ctx, offering._id),
     listChoiceGroupsFor(ctx, offering._id),
     listConstraintsFor(ctx, offering._id),
     listTerms(ctx, session._id),
     AcademicProgramme.find({ tenantId: ctx.tenantId, sessionId: session._id, locationId: query.locationId }).sort({ code: 1 }).lean<AcademicProgrammeDoc[]>(),
-    GradeMaster.find({ _id: { $in: [query.gradeId] } }).lean<GradeMasterDoc[]>(),
+    ClassMaster.find({ _id: { $in: [query.classId] } }).lean<ClassMasterDoc[]>(),
   ]);
 
-  // Programmes whose grade range contains this grade.
-  const rangeGrades = programmeDocs.length
-    ? await GradeMaster.find({ _id: { $in: [...new Set(programmeDocs.flatMap((p) => [p.gradeFromId, p.gradeToId]))] } }).lean<GradeMasterDoc[]>()
+  // Programmes whose class range contains this class.
+  const rangeClasses = programmeDocs.length
+    ? await ClassMaster.find({ _id: { $in: [...new Set(programmeDocs.flatMap((p) => [p.classFromId, p.classToId]))] } }).lean<ClassMasterDoc[]>()
     : [];
-  const sequence = masterGrades[0]?.sequenceNumber ?? 0;
-  const seqOf = (id: string) => rangeGrades.find((g) => g._id === id)?.sequenceNumber ?? 0;
-  const applicable = programmeDocs.filter((p) => seqOf(p.gradeFromId) <= sequence && sequence <= seqOf(p.gradeToId));
+  const sequence = masterClasses[0]?.sequenceNumber ?? 0;
+  const seqOf = (id: string) => rangeClasses.find((g) => g._id === id)?.sequenceNumber ?? 0;
+  const applicable = programmeDocs.filter((p) => seqOf(p.classFromId) <= sequence && sequence <= seqOf(p.classToId));
 
   return {
     ...base,
-    gradeOffering,
+    classOffering,
     sections,
     subjectOfferings,
     choiceGroups,

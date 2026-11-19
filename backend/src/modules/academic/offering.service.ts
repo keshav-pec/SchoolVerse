@@ -1,15 +1,15 @@
 import type { ClientSession } from 'mongoose';
 import {
-  GRADE_OFFERING_EDITABLE_FIELDS,
+  CLASS_OFFERING_EDITABLE_FIELDS,
   SECTION_EDITABLE_FIELDS,
   SUBJECT_OFFERING_EDITABLE_FIELDS,
-  type CreateGradeOfferingsData,
+  type CreateClassOfferingsData,
   type CreateSectionsData,
   type CreateSubjectOfferingsData,
-  type GradeOfferingDTO,
+  type ClassOfferingDTO,
   type SectionOfferingDTO,
   type SubjectOfferingDTO,
-  type UpdateGradeOfferingData,
+  type UpdateClassOfferingData,
   type UpdateSectionData,
   type UpdateSubjectOfferingData,
 } from '@shared';
@@ -20,30 +20,30 @@ import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { diffFields, changedValues } from '../audit/diff';
 import { recordAcademicAudit } from './audit';
-import { removeRulesForGradeOffering, removeRulesForSubjectOfferings } from './cleanup';
+import { removeRulesForClassOffering, removeRulesForSubjectOfferings } from './cleanup';
 import { assertDeletable, assertEditable } from './guard';
 import {
-  GradeOffering,
+  ClassOffering,
   SectionOffering,
   SubjectOffering,
-  type GradeOfferingDoc,
+  type ClassOfferingDoc,
   type SectionOfferingDoc,
   type SubjectOfferingDoc,
 } from './offering.model';
-import { GradeMaster, type GradeMasterDoc } from './reference.model';
-import { getGradesByIds } from './reference.service';
+import { ClassMaster, type ClassMasterDoc } from './reference.model';
+import { getClassesByIds } from './reference.service';
 import { getSessionOrThrow } from './session.service';
 import type { AcademicSessionDoc } from './session.model';
 import { BoardSubjectDefinition, Subject, type BoardSubjectDefinitionDoc, type SubjectDoc } from './subject.model';
 
-/** AS-03 / AS-04 / AS-07 — grade offerings, sections and subject offerings. */
+/** AS-03 / AS-04 / AS-07 — class offerings, sections and subject offerings. */
 
 // ───────────────────────────────────────────────────────────── loading helpers (visibility + tenant isolation)
 
-/** A grade offering plus its session. Offerings of a session the caller can't see are 404s. */
-export async function getGradeOfferingOrThrow(ctx: ServiceContext, gradeOfferingId: string, db?: ClientSession) {
-  const offering = await GradeOffering.findOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }).session(db ?? null).lean<GradeOfferingDoc>();
-  if (!offering) throw AppError.notFound('Grade not found.');
+/** A class offering plus its session. Offerings of a session the caller can't see are 404s. */
+export async function getClassOfferingOrThrow(ctx: ServiceContext, classOfferingId: string, db?: ClientSession) {
+  const offering = await ClassOffering.findOne({ _id: classOfferingId, tenantId: ctx.tenantId }).session(db ?? null).lean<ClassOfferingDoc>();
+  if (!offering) throw AppError.notFound('Class not found.');
   const session = await getSessionOrThrow(ctx, offering.sessionId, db);
   return { offering, session };
 }
@@ -66,15 +66,15 @@ function pinnedRuleVersionId(session: AcademicSessionDoc, locationId: string): s
   return session.locations.find((l) => l.locationId === locationId)?.boardRuleVersionId ?? null;
 }
 
-// ───────────────────────────────────────────────────────────── grade offerings
+// ───────────────────────────────────────────────────────────── class offerings
 
-function toGradeOfferingDTO(doc: GradeOfferingDoc, grade: GradeMasterDoc | undefined, counts: { sections: number; subjects: number }): GradeOfferingDTO {
+function toClassOfferingDTO(doc: ClassOfferingDoc, schoolClass: ClassMasterDoc | undefined, counts: { sections: number; subjects: number }): ClassOfferingDTO {
   return {
-    gradeOfferingId: doc._id,
+    classOfferingId: doc._id,
     academicSessionId: doc.sessionId,
     locationId: doc.locationId,
-    gradeId: doc.gradeId,
-    canonicalCode: grade?.canonicalCode ?? '',
+    classId: doc.classId,
+    canonicalCode: schoolClass?.canonicalCode ?? '',
     displayName: doc.displayName,
     displayCode: doc.displayCode,
     medium: doc.medium ?? null,
@@ -86,78 +86,78 @@ function toGradeOfferingDTO(doc: GradeOfferingDoc, grade: GradeMasterDoc | undef
   };
 }
 
-async function countBy(model: typeof SectionOffering | typeof SubjectOffering, tenantId: string, gradeOfferingIds: string[], db?: ClientSession) {
+async function countBy(model: typeof SectionOffering | typeof SubjectOffering, tenantId: string, classOfferingIds: string[], db?: ClientSession) {
   const rows = await model
-    .aggregate<{ _id: string; n: number }>([{ $match: { tenantId, gradeOfferingId: { $in: gradeOfferingIds } } }, { $group: { _id: '$gradeOfferingId', n: { $sum: 1 } } }])
+    .aggregate<{ _id: string; n: number }>([{ $match: { tenantId, classOfferingId: { $in: classOfferingIds } } }, { $group: { _id: '$classOfferingId', n: { $sum: 1 } } }])
     .session(db ?? null);
   return new Map(rows.map((r) => [r._id, r.n]));
 }
 
-export async function toGradeOfferingDTOs(ctx: ServiceContext, docs: GradeOfferingDoc[], db?: ClientSession): Promise<GradeOfferingDTO[]> {
+export async function toClassOfferingDTOs(ctx: ServiceContext, docs: ClassOfferingDoc[], db?: ClientSession): Promise<ClassOfferingDTO[]> {
   if (docs.length === 0) return [];
   const ids = docs.map((d) => d._id);
-  const [grades, sections, subjects] = await Promise.all([
-    GradeMaster.find({ _id: { $in: [...new Set(docs.map((d) => d.gradeId))] } }).session(db ?? null).lean<GradeMasterDoc[]>(),
+  const [classes, sections, subjects] = await Promise.all([
+    ClassMaster.find({ _id: { $in: [...new Set(docs.map((d) => d.classId))] } }).session(db ?? null).lean<ClassMasterDoc[]>(),
     countBy(SectionOffering, ctx.tenantId, ids, db),
     countBy(SubjectOffering, ctx.tenantId, ids, db),
   ]);
-  const gradeById = new Map(grades.map((g) => [g._id, g]));
-  return docs.map((d) => toGradeOfferingDTO(d, gradeById.get(d.gradeId), { sections: sections.get(d._id) ?? 0, subjects: subjects.get(d._id) ?? 0 }));
+  const classById = new Map(classes.map((g) => [g._id, g]));
+  return docs.map((d) => toClassOfferingDTO(d, classById.get(d.classId), { sections: sections.get(d._id) ?? 0, subjects: subjects.get(d._id) ?? 0 }));
 }
 
-export async function getGradeOfferingDTO(ctx: ServiceContext, gradeOfferingId: string, db?: ClientSession) {
-  const { offering } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
-  return (await toGradeOfferingDTOs(ctx, [offering], db))[0]!;
+export async function getClassOfferingDTO(ctx: ServiceContext, classOfferingId: string, db?: ClientSession) {
+  const { offering } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
+  return (await toClassOfferingDTOs(ctx, [offering], db))[0]!;
 }
 
-export async function listGradeOfferings(ctx: ServiceContext, academicSessionId: string, locationId?: string): Promise<GradeOfferingDTO[]> {
+export async function listClassOfferings(ctx: ServiceContext, academicSessionId: string, locationId?: string): Promise<ClassOfferingDTO[]> {
   await getSessionOrThrow(ctx, academicSessionId);
-  const docs = await GradeOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, ...(locationId ? { locationId } : {}) })
+  const docs = await ClassOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, ...(locationId ? { locationId } : {}) })
     .sort({ locationId: 1, sequenceOrder: 1, _id: 1 })
-    .lean<GradeOfferingDoc[]>();
-  return toGradeOfferingDTOs(ctx, docs);
+    .lean<ClassOfferingDoc[]>();
+  return toClassOfferingDTOs(ctx, docs);
 }
 
 function exists(): never {
-  throw new AppError('GRADE_OFFERING_EXISTS');
+  throw new AppError('CLASS_OFFERING_EXISTS');
 }
 
-export async function createGradeOfferings(ctx: ServiceContext, academicSessionId: string, data: CreateGradeOfferingsData): Promise<GradeOfferingDTO[]> {
-  const gradeIds = [...new Set(data.gradeIds)];
+export async function createClassOfferings(ctx: ServiceContext, academicSessionId: string, data: CreateClassOfferingsData): Promise<ClassOfferingDTO[]> {
+  const classIds = [...new Set(data.classIds)];
   return withTransaction(async (db) => {
     const session = await getSessionOrThrow(ctx, academicSessionId, db);
     await assertEditable(session, {}, db);
     if (!pinnedRuleVersionId(session, data.locationId)) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId: data.locationId });
 
-    const grades = await getGradesByIds(gradeIds, db);
-    if (grades.length !== gradeIds.length) throw AppError.notFound('One or more grades were not found.');
+    const classes = await getClassesByIds(classIds, db);
+    if (classes.length !== classIds.length) throw AppError.notFound('One or more classes were not found.');
 
-    const already = await GradeOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId: data.locationId, gradeId: { $in: gradeIds } })
-      .select('gradeId')
+    const already = await ClassOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId: data.locationId, classId: { $in: classIds } })
+      .select('classId')
       .session(db)
-      .lean<{ gradeId: string }[]>();
+      .lean<{ classId: string }[]>();
     if (already.length > 0) {
-      const names = grades.filter((g) => already.some((a) => a.gradeId === g._id)).map((g) => g.canonicalName);
-      throw new AppError('GRADE_OFFERING_EXISTS', `Already set up for this location: ${names.join(', ')}.`, {
-        gradeIds: already.map((a) => a.gradeId),
-        fields: { gradeIds: `Already set up: ${names.join(', ')}.` },
+      const names = classes.filter((g) => already.some((a) => a.classId === g._id)).map((g) => g.canonicalName);
+      throw new AppError('CLASS_OFFERING_EXISTS', `Already set up for this location: ${names.join(', ')}.`, {
+        classIds: already.map((a) => a.classId),
+        fields: { classIds: `Already set up: ${names.join(', ')}.` },
       });
     }
 
-    const ordered = [...grades].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
-    const created: GradeOfferingDoc[] = [];
-    for (const grade of ordered) {
-      const [doc] = await GradeOffering.create(
+    const ordered = [...classes].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+    const created: ClassOfferingDoc[] = [];
+    for (const schoolClass of ordered) {
+      const [doc] = await ClassOffering.create(
         [
           {
             tenantId: ctx.tenantId,
             sessionId: academicSessionId,
             locationId: data.locationId,
-            gradeId: grade._id,
-            displayName: grade.canonicalName,
-            displayCode: grade.shortCode,
+            classId: schoolClass._id,
+            displayName: schoolClass.canonicalName,
+            displayCode: schoolClass.shortCode,
             medium: data.medium ?? null,
-            sequenceOrder: grade.sequenceNumber,
+            sequenceOrder: schoolClass.sequenceNumber,
             status: 'ACTIVE',
             createdBy: ctx.userId,
             updatedBy: ctx.userId,
@@ -165,69 +165,69 @@ export async function createGradeOfferings(ctx: ServiceContext, academicSessionI
         ],
         { session: db },
       );
-      const offering = doc!.toObject() as GradeOfferingDoc;
+      const offering = doc!.toObject() as ClassOfferingDoc;
       created.push(offering);
       await recordAcademicAudit(ctx, db, {
-        entityType: 'grade_offering',
+        entityType: 'class_offering',
         entityId: offering._id,
-        action: 'grade_offering.created',
-        changes: diffFields({}, offering, GRADE_OFFERING_EDITABLE_FIELDS),
+        action: 'class_offering.created',
+        changes: diffFields({}, offering, CLASS_OFFERING_EDITABLE_FIELDS),
         academicSessionId,
-        metadata: { locationId: data.locationId, gradeId: grade._id, canonicalCode: grade.canonicalCode },
+        metadata: { locationId: data.locationId, classId: schoolClass._id, canonicalCode: schoolClass.canonicalCode },
       });
     }
-    return toGradeOfferingDTOs(ctx, created, db);
-  }).catch(onDuplicate('gradeId', exists));
+    return toClassOfferingDTOs(ctx, created, db);
+  }).catch(onDuplicate('classId', exists));
 }
 
-export async function updateGradeOffering(ctx: ServiceContext, gradeOfferingId: string, patch: UpdateGradeOfferingData): Promise<GradeOfferingDTO> {
+export async function updateClassOffering(ctx: ServiceContext, classOfferingId: string, patch: UpdateClassOfferingData): Promise<ClassOfferingDTO> {
   return withTransaction(async (db) => {
-    const { offering: before, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering: before, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     const deactivating = patch.status === 'INACTIVE' && before.status === 'ACTIVE';
-    await assertEditable(session, deactivating ? { structural: { entityType: 'grade_offering', entityId: gradeOfferingId } } : {}, db);
+    await assertEditable(session, deactivating ? { structural: { entityType: 'class_offering', entityId: classOfferingId } } : {}, db);
 
-    const merged = { ...before, ...pickDefined(patch) } as GradeOfferingDoc;
-    const changes = diffFields(before, merged, GRADE_OFFERING_EDITABLE_FIELDS);
+    const merged = { ...before, ...pickDefined(patch) } as ClassOfferingDoc;
+    const changes = diffFields(before, merged, CLASS_OFFERING_EDITABLE_FIELDS);
     if (changes.length > 0) {
-      await GradeOffering.updateOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
+      await ClassOffering.updateOne({ _id: classOfferingId, tenantId: ctx.tenantId }, { $set: changedValues(merged, changes, ctx.userId) }, { session: db });
       await recordAcademicAudit(ctx, db, {
-        entityType: 'grade_offering',
-        entityId: gradeOfferingId,
-        action: 'grade_offering.updated',
+        entityType: 'class_offering',
+        entityId: classOfferingId,
+        action: 'class_offering.updated',
         changes,
         academicSessionId: before.sessionId,
         metadata: { locationId: before.locationId, status: session.status },
       });
     }
-    return getGradeOfferingDTO(ctx, gradeOfferingId, db);
+    return getClassOfferingDTO(ctx, classOfferingId, db);
   });
 }
 
-/** Deletes a grade offering and what hangs under it: sections, subject offerings, choice groups, constraints and programme rules. */
-export async function deleteGradeOfferingContents(tenantId: string, gradeOfferingId: string, db: ClientSession) {
-  const offeringIds = (await SubjectOffering.find({ tenantId, gradeOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((o) => o._id);
-  const rules = await removeRulesForGradeOffering(tenantId, gradeOfferingId, db);
+/** Deletes a class offering and what hangs under it: sections, subject offerings, choice groups, constraints and programme rules. */
+export async function deleteClassOfferingContents(tenantId: string, classOfferingId: string, db: ClientSession) {
+  const offeringIds = (await SubjectOffering.find({ tenantId, classOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((o) => o._id);
+  const rules = await removeRulesForClassOffering(tenantId, classOfferingId, db);
   await removeRulesForSubjectOfferings(tenantId, offeringIds, db);
   const [sections, subjectOfferings] = await Promise.all([
-    SectionOffering.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
-    SubjectOffering.deleteMany({ tenantId, gradeOfferingId }, { session: db }),
+    SectionOffering.deleteMany({ tenantId, classOfferingId }, { session: db }),
+    SubjectOffering.deleteMany({ tenantId, classOfferingId }, { session: db }),
   ]);
   return { sections: sections.deletedCount, subjectOfferings: subjectOfferings.deletedCount, ...rules };
 }
 
-export async function deleteGradeOffering(ctx: ServiceContext, gradeOfferingId: string): Promise<void> {
+export async function deleteClassOffering(ctx: ServiceContext, classOfferingId: string): Promise<void> {
   await withTransaction(async (db) => {
-    const { offering: before, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering: before, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     assertDeletable(session);
-    const removed = await deleteGradeOfferingContents(ctx.tenantId, gradeOfferingId, db);
-    await GradeOffering.deleteOne({ _id: gradeOfferingId, tenantId: ctx.tenantId }, { session: db });
+    const removed = await deleteClassOfferingContents(ctx.tenantId, classOfferingId, db);
+    await ClassOffering.deleteOne({ _id: classOfferingId, tenantId: ctx.tenantId }, { session: db });
     await recordAcademicAudit(ctx, db, {
-      entityType: 'grade_offering',
-      entityId: gradeOfferingId,
-      action: 'grade_offering.deleted',
+      entityType: 'class_offering',
+      entityId: classOfferingId,
+      action: 'class_offering.deleted',
       changes: diffFields(before, {}, ['displayName', 'displayCode', 'status']),
       academicSessionId: before.sessionId,
-      metadata: { locationId: before.locationId, gradeId: before.gradeId, removed },
+      metadata: { locationId: before.locationId, classId: before.classId, removed },
     });
   });
 }
@@ -237,7 +237,7 @@ export async function deleteGradeOffering(ctx: ServiceContext, gradeOfferingId: 
 function toSectionDTO(doc: SectionOfferingDoc): SectionOfferingDTO {
   return {
     sectionOfferingId: doc._id,
-    gradeOfferingId: doc.gradeOfferingId,
+    classOfferingId: doc.classOfferingId,
     academicSessionId: doc.sessionId,
     locationId: doc.locationId,
     sectionCode: doc.sectionCode,
@@ -248,33 +248,33 @@ function toSectionDTO(doc: SectionOfferingDoc): SectionOfferingDTO {
   };
 }
 
-export async function listSections(ctx: ServiceContext, gradeOfferingId: string): Promise<SectionOfferingDTO[]> {
-  await getGradeOfferingOrThrow(ctx, gradeOfferingId);
-  return listSectionsFor(ctx, gradeOfferingId);
+export async function listSections(ctx: ServiceContext, classOfferingId: string): Promise<SectionOfferingDTO[]> {
+  await getClassOfferingOrThrow(ctx, classOfferingId);
+  return listSectionsFor(ctx, classOfferingId);
 }
 
-/** Same as `listSections` for a grade offering the caller has already been allowed to see. */
-export async function listSectionsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<SectionOfferingDTO[]> {
-  const docs = await SectionOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).sort({ sequenceOrder: 1, sectionCode: 1 }).lean<SectionOfferingDoc[]>();
+/** Same as `listSections` for a class offering the caller has already been allowed to see. */
+export async function listSectionsFor(ctx: ServiceContext, classOfferingId: string): Promise<SectionOfferingDTO[]> {
+  const docs = await SectionOffering.find({ tenantId: ctx.tenantId, classOfferingId }).sort({ sequenceOrder: 1, sectionCode: 1 }).lean<SectionOfferingDoc[]>();
   return docs.map(toSectionDTO);
 }
 
 function sectionCodeTaken(codes: string[]) {
-  return new AppError('SECTION_CODE_TAKEN', `Section ${codes.join(', ')} already exists for this grade.`, {
+  return new AppError('SECTION_CODE_TAKEN', `Section ${codes.join(', ')} already exists for this class.`, {
     codes,
     fields: { codes: `Already exists: ${codes.join(', ')}.` },
   });
 }
 
-export async function createSections(ctx: ServiceContext, gradeOfferingId: string, data: CreateSectionsData): Promise<SectionOfferingDTO[]> {
+export async function createSections(ctx: ServiceContext, classOfferingId: string, data: CreateSectionsData): Promise<SectionOfferingDTO[]> {
   const repeated = data.codes.filter((c, i) => data.codes.indexOf(c) !== i);
   if (repeated.length > 0) throw sectionCodeTaken([...new Set(repeated)]);
 
   return withTransaction(async (db) => {
-    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     await assertEditable(session, {}, db);
 
-    const existing = await SectionOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).select('sectionCode sequenceOrder').session(db).lean<SectionOfferingDoc[]>();
+    const existing = await SectionOffering.find({ tenantId: ctx.tenantId, classOfferingId }).select('sectionCode sequenceOrder').session(db).lean<SectionOfferingDoc[]>();
     const taken = data.codes.filter((c) => existing.some((e) => e.sectionCode === c));
     if (taken.length > 0) throw sectionCodeTaken(taken);
 
@@ -286,7 +286,7 @@ export async function createSections(ctx: ServiceContext, gradeOfferingId: strin
         [
           {
             tenantId: ctx.tenantId,
-            gradeOfferingId,
+            classOfferingId,
             sessionId: offering.sessionId,
             locationId: offering.locationId,
             sectionCode: code,
@@ -308,7 +308,7 @@ export async function createSections(ctx: ServiceContext, gradeOfferingId: strin
         action: 'section.created',
         changes: [{ field: 'sectionCode', from: null, to: section.sectionCode }, ...diffFields({}, section, ['capacity'])],
         academicSessionId: offering.sessionId,
-        metadata: { gradeOfferingId, locationId: offering.locationId },
+        metadata: { classOfferingId, locationId: offering.locationId },
       });
     }
     return created.map(toSectionDTO);
@@ -331,7 +331,7 @@ export async function updateSection(ctx: ServiceContext, sectionId: string, patc
         action: 'section.updated',
         changes,
         academicSessionId: before.sessionId,
-        metadata: { gradeOfferingId: before.gradeOfferingId, sectionCode: before.sectionCode, status: session.status },
+        metadata: { classOfferingId: before.classOfferingId, sectionCode: before.sectionCode, status: session.status },
       });
     }
     return toSectionDTO({ ...merged, updatedBy: ctx.userId });
@@ -349,7 +349,7 @@ export async function deleteSection(ctx: ServiceContext, sectionId: string): Pro
       action: 'section.deleted',
       changes: diffFields(before, {}, ['sectionCode', 'displayName', 'status']),
       academicSessionId: before.sessionId,
-      metadata: { gradeOfferingId: before.gradeOfferingId },
+      metadata: { classOfferingId: before.classOfferingId },
     });
   });
 }
@@ -371,7 +371,7 @@ async function toSubjectOfferingDTOs(ctx: ServiceContext, docs: SubjectOfferingD
     const definition = d.boardSubjectDefinitionId ? definitionById.get(d.boardSubjectDefinitionId) : undefined;
     return {
       subjectOfferingId: d._id,
-      gradeOfferingId: d.gradeOfferingId,
+      classOfferingId: d.classOfferingId,
       academicSessionId: d.sessionId,
       locationId: d.locationId,
       subjectId: d.subjectId,
@@ -387,13 +387,13 @@ async function toSubjectOfferingDTOs(ctx: ServiceContext, docs: SubjectOfferingD
   });
 }
 
-export async function listSubjectOfferings(ctx: ServiceContext, gradeOfferingId: string): Promise<SubjectOfferingDTO[]> {
-  await getGradeOfferingOrThrow(ctx, gradeOfferingId);
-  return listSubjectOfferingsFor(ctx, gradeOfferingId);
+export async function listSubjectOfferings(ctx: ServiceContext, classOfferingId: string): Promise<SubjectOfferingDTO[]> {
+  await getClassOfferingOrThrow(ctx, classOfferingId);
+  return listSubjectOfferingsFor(ctx, classOfferingId);
 }
 
-export async function listSubjectOfferingsFor(ctx: ServiceContext, gradeOfferingId: string): Promise<SubjectOfferingDTO[]> {
-  const docs = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).lean<SubjectOfferingDoc[]>();
+export async function listSubjectOfferingsFor(ctx: ServiceContext, classOfferingId: string): Promise<SubjectOfferingDTO[]> {
+  const docs = await SubjectOffering.find({ tenantId: ctx.tenantId, classOfferingId }).lean<SubjectOfferingDoc[]>();
   const dtos = await toSubjectOfferingDTOs(ctx, docs);
   return dtos.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 }
@@ -411,7 +411,7 @@ async function boardDefinitionsFor(ctx: ServiceContext, session: AcademicSession
 async function insertSubjectOfferings(
   ctx: ServiceContext,
   db: ClientSession,
-  target: GradeOfferingDoc,
+  target: ClassOfferingDoc,
   session: AcademicSessionDoc,
   items: { subjectId: string; offeringType: SubjectOfferingDoc['offeringType'] }[],
   auditMetadata: Record<string, unknown> = {},
@@ -423,7 +423,7 @@ async function insertSubjectOfferings(
       [
         {
           tenantId: ctx.tenantId,
-          gradeOfferingId: target._id,
+          classOfferingId: target._id,
           sessionId: target.sessionId,
           locationId: target.locationId,
           subjectId: item.subjectId,
@@ -444,20 +444,20 @@ async function insertSubjectOfferings(
       action: 'subject_offering.created',
       changes: [{ field: 'subjectId', from: null, to: offering.subjectId }, ...diffFields({}, offering, SUBJECT_OFFERING_EDITABLE_FIELDS)],
       academicSessionId: target.sessionId,
-      metadata: { gradeOfferingId: target._id, locationId: target.locationId, ...auditMetadata },
+      metadata: { classOfferingId: target._id, locationId: target.locationId, ...auditMetadata },
     });
   }
   return created;
 }
 
 function alreadyOffered(names: string[]) {
-  return new AppError('SUBJECT_ALREADY_OFFERED', `Already offered for this grade: ${names.join(', ')}.`, { fields: { subjectIds: `Already offered: ${names.join(', ')}.` } });
+  return new AppError('SUBJECT_ALREADY_OFFERED', `Already offered for this class: ${names.join(', ')}.`, { fields: { subjectIds: `Already offered: ${names.join(', ')}.` } });
 }
 
-export async function createSubjectOfferings(ctx: ServiceContext, gradeOfferingId: string, data: CreateSubjectOfferingsData): Promise<SubjectOfferingDTO[]> {
+export async function createSubjectOfferings(ctx: ServiceContext, classOfferingId: string, data: CreateSubjectOfferingsData): Promise<SubjectOfferingDTO[]> {
   const subjectIds = [...new Set(data.subjectIds)];
   return withTransaction(async (db) => {
-    const { offering, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
+    const { offering, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
     await assertEditable(session, {}, db);
 
     const subjects = await Subject.find({ tenantId: ctx.tenantId, _id: { $in: subjectIds } }).session(db).lean<SubjectDoc[]>();
@@ -468,7 +468,7 @@ export async function createSubjectOfferings(ctx: ServiceContext, gradeOfferingI
         fields: { subjectIds: `Inactive: ${inactive.map((s) => s.name).join(', ')}.` },
       });
     }
-    const existing = await SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId, subjectId: { $in: subjectIds } }).select('subjectId').session(db).lean<{ subjectId: string }[]>();
+    const existing = await SubjectOffering.find({ tenantId: ctx.tenantId, classOfferingId, subjectId: { $in: subjectIds } }).select('subjectId').session(db).lean<{ subjectId: string }[]>();
     if (existing.length > 0) throw alreadyOffered(subjects.filter((s) => existing.some((e) => e.subjectId === s._id)).map((s) => s.name));
 
     const created = await insertSubjectOfferings(ctx, db, offering, session, subjectIds.map((subjectId) => ({ subjectId, offeringType: data.offeringType })));
@@ -476,22 +476,22 @@ export async function createSubjectOfferings(ctx: ServiceContext, gradeOfferingI
   }).catch(onDuplicate('subjectId', () => alreadyOffered([])));
 }
 
-/** Copies a subject list from another grade of the SAME session, only when the admin asks for it. */
+/** Copies a subject list from another class of the SAME session, only when the admin asks for it. */
 export async function copySubjectOfferings(
   ctx: ServiceContext,
-  gradeOfferingId: string,
-  sourceGradeOfferingId: string,
+  classOfferingId: string,
+  sourceClassOfferingId: string,
 ): Promise<{ created: SubjectOfferingDTO[]; skipped: number }> {
-  if (gradeOfferingId === sourceGradeOfferingId) throw AppError.validation({ sourceGradeOfferingId: 'Choose a different grade to copy from.' });
+  if (classOfferingId === sourceClassOfferingId) throw AppError.validation({ sourceClassOfferingId: 'Choose a different class to copy from.' });
   return withTransaction(async (db) => {
-    const { offering: target, session } = await getGradeOfferingOrThrow(ctx, gradeOfferingId, db);
-    const { offering: source } = await getGradeOfferingOrThrow(ctx, sourceGradeOfferingId, db);
-    if (source.sessionId !== target.sessionId) throw AppError.validation({ sourceGradeOfferingId: 'Choose a grade from the same session.' });
+    const { offering: target, session } = await getClassOfferingOrThrow(ctx, classOfferingId, db);
+    const { offering: source } = await getClassOfferingOrThrow(ctx, sourceClassOfferingId, db);
+    if (source.sessionId !== target.sessionId) throw AppError.validation({ sourceClassOfferingId: 'Choose a class from the same session.' });
     await assertEditable(session, {}, db);
 
     const [sourceOfferings, present] = await Promise.all([
-      SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId: sourceGradeOfferingId, status: 'ACTIVE' }).session(db).lean<SubjectOfferingDoc[]>(),
-      SubjectOffering.find({ tenantId: ctx.tenantId, gradeOfferingId }).select('subjectId').session(db).lean<{ subjectId: string }[]>(),
+      SubjectOffering.find({ tenantId: ctx.tenantId, classOfferingId: sourceClassOfferingId, status: 'ACTIVE' }).session(db).lean<SubjectOfferingDoc[]>(),
+      SubjectOffering.find({ tenantId: ctx.tenantId, classOfferingId }).select('subjectId').session(db).lean<{ subjectId: string }[]>(),
     ]);
     const activeSubjects = new Set(
       (await Subject.find({ tenantId: ctx.tenantId, _id: { $in: sourceOfferings.map((o) => o.subjectId) }, status: 'ACTIVE' }).select('_id').session(db).lean<{ _id: string }[]>()).map((s) => s._id),
@@ -499,7 +499,7 @@ export async function copySubjectOfferings(
     const have = new Set(present.map((p) => p.subjectId));
     const items = sourceOfferings.filter((o) => activeSubjects.has(o.subjectId) && !have.has(o.subjectId)).map((o) => ({ subjectId: o.subjectId, offeringType: o.offeringType }));
 
-    const created = await insertSubjectOfferings(ctx, db, target, session, items, { copiedFromGradeOfferingId: sourceGradeOfferingId });
+    const created = await insertSubjectOfferings(ctx, db, target, session, items, { copiedFromClassOfferingId: sourceClassOfferingId });
     return { created: await toSubjectOfferingDTOs(ctx, created, db), skipped: sourceOfferings.length - items.length };
   });
 }
@@ -528,7 +528,7 @@ export async function updateSubjectOffering(ctx: ServiceContext, subjectOffering
         action: 'subject_offering.updated',
         changes,
         academicSessionId: before.sessionId,
-        metadata: { gradeOfferingId: before.gradeOfferingId, subjectId: before.subjectId, status: session.status },
+        metadata: { classOfferingId: before.classOfferingId, subjectId: before.subjectId, status: session.status },
       });
     }
     return (await toSubjectOfferingDTOs(ctx, [merged], db))[0]!;
@@ -547,7 +547,7 @@ export async function deleteSubjectOffering(ctx: ServiceContext, subjectOffering
       action: 'subject_offering.deleted',
       changes: diffFields(before, {}, ['subjectId', 'offeringType', 'status']),
       academicSessionId: before.sessionId,
-      metadata: { gradeOfferingId: before.gradeOfferingId },
+      metadata: { classOfferingId: before.classOfferingId },
     });
   });
 }

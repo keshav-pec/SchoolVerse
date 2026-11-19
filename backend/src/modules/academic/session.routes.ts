@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  createGradeOfferingsSchema,
+  createClassOfferingsSchema,
   createSessionSchema,
   cloneSessionSchema,
   createTermSchema,
@@ -63,23 +63,23 @@ sessionRouter.delete('/:academicSessionId', requirePermission('academic:manage')
   noContent(res);
 });
 
-// ── grade offerings (AS-03)
+// ── class offerings (AS-03)
 sessionRouter.get(
-  '/:academicSessionId/grade-offerings',
+  '/:academicSessionId/class-offerings',
   requirePermission('academic:view'),
   validate({ params: sessionParams, query: locationQuery }),
   async (req, res) => {
     const { locationId } = res.locals.query as z.output<typeof locationQuery>;
-    ok(res, await offerings.listGradeOfferings(contextOf(req), req.params.academicSessionId as string, locationId));
+    ok(res, await offerings.listClassOfferings(contextOf(req), req.params.academicSessionId as string, locationId));
   },
 );
 
 sessionRouter.post(
-  '/:academicSessionId/grade-offerings',
+  '/:academicSessionId/class-offerings',
   requirePermission('academic:manage'),
-  validate({ params: sessionParams, body: createGradeOfferingsSchema }),
+  validate({ params: sessionParams, body: createClassOfferingsSchema }),
   async (req, res) => {
-    created(res, await offerings.createGradeOfferings(contextOf(req), req.params.academicSessionId as string, req.body));
+    created(res, await offerings.createClassOfferings(contextOf(req), req.params.academicSessionId as string, req.body));
   },
 );
 

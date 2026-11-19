@@ -4,15 +4,17 @@ import { TERM_TYPES, TERM_TYPE_LABELS, type AcademicSessionDTO, type AcademicTer
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InfoTip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
 import { formatDateOnly } from '@/lib/format';
 import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useTerms } from '../api';
+import { HelpHeading, TabIntro } from '../help';
 
 const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
 
@@ -53,6 +55,12 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
 
   return (
     <div className="space-y-6">
+      <TabIntro title="Terms" need="optional">
+        <p>
+          A <b>term</b> is a part of the school year, such as Term 1 (April to September) and Term 2 (October to March). Exams and report cards are usually planned by term.
+        </p>
+        <p>Skip this tab if you don’t split the year. You can add terms later.</p>
+      </TabIntro>
       {list.length === 0 ? (
         <Card>
           <EmptyState title="No terms yet" description="Terms are optional. Add them if you plan by term, semester or quarter." />
@@ -83,15 +91,37 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Add a term</CardTitle>
-              <CardDescription>Dates must sit inside the session and can’t overlap another term in the same scope.</CardDescription>
+              <HelpHeading
+                title="Add a term"
+                helpLabel="How to add a term"
+                help={
+                  <>
+                    <p>Give the term a name and a short code, choose its type, and set its start and end dates.</p>
+                    <p>The dates must fall inside this session, and two terms can’t overlap.</p>
+                    <p>Blue bars on the timeline apply to every location; green bars to one location only.</p>
+                  </>
+                }
+              />
+              <CardDescription>Dates must fall inside this session and can’t overlap another term.</CardDescription>
             </div>
           </CardHeader>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Term 1" />
-            <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="T1" />
+            <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="T1" hint="Short label shown on the timeline." />
             <ComboboxField
               label="Type"
+              labelAside={
+                <InfoTip label="About term types">
+                  <ul>
+                    <li><b>Term</b>: the year in 2 or 3 parts.</li>
+                    <li><b>Semester</b>: the year in 2 halves.</li>
+                    <li><b>Quarter</b>: the year in 4 parts.</li>
+                    <li><b>Annual</b>: one part covering the whole year.</li>
+                    <li><b>Custom</b>: any other split your school uses.</li>
+                  </ul>
+                  <p>The type is a label only; it doesn’t change how anything works.</p>
+                </InfoTip>
+              }
               value={form.type}
               onChange={(v) => setForm({ ...form, type: v as TermType })}
               options={TERM_TYPES.map((t) => ({ value: t, label: TERM_TYPE_LABELS[t] }))}
@@ -101,6 +131,7 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
             <TextField type="date" label="End date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
             <ComboboxField
               label="Applies to"
+              labelAside={<InfoTip label="About applies to">Keep “All locations” unless one campus has different term dates from the others.</InfoTip>}
               value={form.locationId}
               onChange={(v) => setForm({ ...form, locationId: v })}
               options={[{ value: '', label: 'All locations' }, ...session.locations.map((l) => ({ value: l.locationId, label: `${l.locationName} only` }))]}

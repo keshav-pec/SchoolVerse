@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
-  AcademicSessionDTO, AcademicTermDTO, BoardDTO, BoardRuleVersionDTO, GradeMasterDTO, SubjectDTO,
+  AcademicSessionDTO, AcademicTermDTO, BoardDTO, BoardRuleVersionDTO, ClassMasterDTO, SubjectDTO,
   SubjectOfferingDTO, ChoiceGroupDTO, ConstraintDTO, ProgrammeDTO, ValidationIssueDTO,
-  ValidationResultDTO, AcademicContextDTO, AcademicContextGradesDTO, AcademicOverviewDTO,
+  ValidationResultDTO, AcademicContextDTO, AcademicContextClassesDTO, AcademicOverviewDTO,
 } from '@shared';
 import { registerAcademicDependency, unregisterAcademicDependency } from '../src/modules/academic/dependencies';
-import { GradeOffering, SectionOffering, SubjectOffering } from '../src/modules/academic/offering.model';
+import { ClassOffering, SectionOffering, SubjectOffering } from '../src/modules/academic/offering.model';
 import { AcademicTerm, AcademicSession } from '../src/modules/academic/session.model';
 import {
-  academicSchool, addGrades, API, auditForSession, createSession, createStarterSubjects,
+  academicSchool, addClasses, API, auditForSession, createSession, createStarterSubjects,
   createUserAndLogin, draftSession, expectError, forceStatus, loadReference, setupSchool,
   useTestDatabase, createMoreSubjects, offer, type DraftSession, app, get, makePublishable,
   serviceContextFor,
@@ -26,20 +26,20 @@ beforeEach(async () => {
 });
 
 describe('reference data (AS-01, AS-03)', () => {
-  it('seeded grades and boards are visible to every tenant and read-only', async () => {
+  it('seeded classes and boards are visible to every tenant and read-only', async () => {
     const a = await academicSchool('School A');
     const b = await setupSchool({ workspace: 'School B' });
 
     for (const agent of [a.agent, b.agent]) {
-      const grades = (await agent.get(`${API}/grades`).expect(200)).body.data as GradeMasterDTO[];
-      expect(grades).toHaveLength(15);
-      expect(grades.map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)]);
-      const stage = (code: string) => grades.find((g) => g.canonicalCode === code)!.educationStage;
+      const classes = (await agent.get(`${API}/classes`).expect(200)).body.data as ClassMasterDTO[];
+      expect(classes).toHaveLength(15);
+      expect(classes.map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)]);
+      const stage = (code: string) => classes.find((g) => g.canonicalCode === code)!.educationStage;
       expect([stage('KG'), stage('G02'), stage('G03'), stage('G05'), stage('G06'), stage('G08'), stage('G09'), stage('G12')]).toEqual([
         'FOUNDATIONAL', 'FOUNDATIONAL', 'PREPARATORY', 'PREPARATORY', 'MIDDLE', 'MIDDLE', 'SECONDARY', 'SECONDARY',
       ]);
-      expect(grades.filter((g) => g.isBoardGrade).map((g) => g.canonicalCode)).toEqual(['G10', 'G12']);
-      expect(grades.filter((g) => g.isPrePrimary).map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG']);
+      expect(classes.filter((g) => g.isBoardClass).map((g) => g.canonicalCode)).toEqual(['G10', 'G12']);
+      expect(classes.filter((g) => g.isPrePrimary).map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG']);
 
       const boards = (await agent.get(`${API}/boards`).expect(200)).body.data as BoardDTO[];
       expect(boards.map((x) => x.boardCode).sort()).toEqual(['CBSE', 'CISCE', 'CUSTOM', 'PSEB', 'STATE_TEST']);
@@ -50,8 +50,8 @@ describe('reference data (AS-01, AS-03)', () => {
       }
     }
 
-    // Read-only: no write routes exist for grades, and built-in boards refuse rule versions.
-    expectError(await a.agent.post(`${API}/grades`).send({ canonicalCode: 'X' }), 404, 'ROUTE_NOT_FOUND');
+    // Read-only: no write routes exist for classes, and built-in boards refuse rule versions.
+    expectError(await a.agent.post(`${API}/classes`).send({ canonicalCode: 'X' }), 404, 'ROUTE_NOT_FOUND');
     const cbse = a.ref.boardId.CBSE!;
     expectError(await a.agent.post(`${API}/boards/${cbse}/rule-versions`).send({ name: '2027-28' }), 403, 'BOARD_READ_ONLY');
     expectError(await a.agent.post(`${API}/boards/${cbse}/rule-versions/${a.ref.ruleVersionId('CBSE')}/publish`), 403, 'BOARD_READ_ONLY');
@@ -113,7 +113,7 @@ describe('subject master and board codes (AS-05, AS-06)', () => {
     expect(inactive).toMatchObject({ status: 'INACTIVE', name: 'Maths', subjectId: created.subjectId });
   });
 
-  it('filters by name or code, category, language, status, board code and grade', async () => {
+  it('filters by name or code, category, language, status, board code and class', async () => {
     const { agent, ref, moh } = await academicSchool();
     const ids = await createStarterSubjects(agent);
     await agent.patch(`${API}/subjects/${ids.SCI}`).send({ status: 'INACTIVE' }).expect(200);
@@ -134,10 +134,10 @@ describe('subject master and board codes (AS-05, AS-06)', () => {
     expect(await list({ boardCode: 'PSEB' })).toEqual([]);
 
     const session = await createSession(agent, [ref.pin(moh.locationId)]);
-    const [g6] = await addGrades(agent, session.academicSessionId, moh.locationId, [ref.gradeId.G06!]);
-    await agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [ids.ENG, ids.MATH], offeringType: 'MANDATORY' }).expect(201);
-    expect(await list({ gradeId: ref.gradeId.G06! })).toEqual(['ENG', 'MATH']);
-    expect(await list({ gradeId: ref.gradeId.G07! })).toEqual([]);
+    const [g6] = await addClasses(agent, session.academicSessionId, moh.locationId, [ref.classId.G06!]);
+    await agent.post(`${API}/class-offerings/${g6!.classOfferingId}/subjects`).send({ subjectIds: [ids.ENG, ids.MATH], offeringType: 'MANDATORY' }).expect(201);
+    expect(await list({ classId: ref.classId.G06! })).toEqual(['ENG', 'MATH']);
+    expect(await list({ classId: ref.classId.G07! })).toEqual([]);
 
     const page = await agent.get(`${API}/subjects`).query({ pageSize: '2', page: '2' }).expect(200);
     expect(page.body.data).toMatchObject({ total: 4, page: 2, pageSize: 2 });
@@ -216,14 +216,14 @@ describe('academic sessions (AS-02)', () => {
     expect(clear.warnings).toEqual([]);
   });
 
-  it('a location cannot be removed once grades or terms exist for it, nor change rule version under linked board codes', async () => {
+  it('a location cannot be removed once classes or terms exist for it, nor change rule version under linked board codes', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G08!]);
+    const [g] = await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G08!]);
     const keepMoh = [t.ref.pin(t.moh.locationId, 'CBSE')];
 
     const blocked = expectError(await t.agent.patch(t.sessionUrl).send({ locations: keepMoh }), 409, 'ACADEMIC_HAS_DEPENDENCIES');
-    expect(blocked.details.dependencies).toMatchObject([{ key: 'academic.grade_offerings', count: 1 }]);
-    await t.agent.delete(`${API}/grade-offerings/${g!.gradeOfferingId}`).expect(204);
+    expect(blocked.details.dependencies).toMatchObject([{ key: 'academic.class_offerings', count: 1 }]);
+    await t.agent.delete(`${API}/class-offerings/${g!.classOfferingId}`).expect(204);
 
     await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'CHD term', code: 'C1', locationId: t.chd.locationId, startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201);
     expect(expectError(await t.agent.patch(t.sessionUrl).send({ locations: keepMoh }), 409, 'ACADEMIC_HAS_DEPENDENCIES').details.dependencies).toMatchObject([{ key: 'academic.terms' }]);
@@ -233,8 +233,8 @@ describe('academic sessions (AS-02)', () => {
 
     // Linked board codes pin the rule version.
     await t.agent.put(`${API}/subjects/${t.subjects.MATH}/board-codes`).send({ boardRuleVersionId: t.ref.ruleVersionId('CBSE'), boardSubjectCode: '041' }).expect(200);
-    const [g6] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    await t.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201);
+    const [g6] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    await t.agent.post(`${API}/class-offerings/${g6!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201);
     const switchBoard = [t.ref.pin(t.moh.locationId, 'CISCE')];
     expectError(await t.agent.patch(t.sessionUrl).send({ locations: switchBoard }), 409, 'ACADEMIC_HAS_DEPENDENCIES');
   });
@@ -249,9 +249,9 @@ describe('academic sessions (AS-02)', () => {
 
   it('can only be deleted while DRAFT, and deleting takes its contents with it', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201);
-    await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.ENG], offeringType: 'MANDATORY' }).expect(201);
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/sections`).send({ codes: ['A'] }).expect(201);
+    await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.ENG], offeringType: 'MANDATORY' }).expect(201);
     await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201);
 
     for (const status of ['PUBLISHED', 'ACTIVE', 'CLOSED', 'ARCHIVED'] as const) {
@@ -261,92 +261,92 @@ describe('academic sessions (AS-02)', () => {
     await forceStatus(t.tenantId, t.id, 'DRAFT');
     await t.agent.delete(t.sessionUrl).expect(204);
     expectError(await t.agent.get(t.sessionUrl), 404, 'NOT_FOUND');
-    const left = await Promise.all([GradeOffering, SectionOffering, SubjectOffering, AcademicTerm].map((m) => (m as typeof GradeOffering).countDocuments({ tenantId: t.tenantId })));
+    const left = await Promise.all([ClassOffering, SectionOffering, SubjectOffering, AcademicTerm].map((m) => (m as typeof ClassOffering).countDocuments({ tenantId: t.tenantId })));
     expect(left).toEqual([0, 0, 0, 0]);
     // The code is free again.
     await createSession(t.agent, []);
   });
 });
 
-describe('grade offerings and sections (AS-03, AS-04)', () => {
-  it('QA 5: adds grades in bulk with default labels, then sections in bulk', async () => {
+describe('class offerings and sections (AS-03, AS-04)', () => {
+  it('QA 5: adds classes in bulk with default labels, then sections in bulk', async () => {
     const t = await draftSession();
-    const grades = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G03!, t.ref.gradeId.NURSERY!, t.ref.gradeId.G02!]);
-    expect(grades.map((g) => g.displayName)).toEqual(['Nursery', 'Grade 2', 'Grade 3']); // master order, default labels
+    const classes = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G03!, t.ref.classId.NURSERY!, t.ref.classId.G02!]);
+    expect(classes.map((g) => g.displayName)).toEqual(['Nursery', 'Class 2', 'Class 3']); // master order, default labels
 
-    const list = (await t.agent.get(`${t.sessionUrl}/grade-offerings`).query({ locationId: t.moh.locationId }).expect(200)).body.data;
+    const list = (await t.agent.get(`${t.sessionUrl}/class-offerings`).query({ locationId: t.moh.locationId }).expect(200)).body.data;
     expect(list).toMatchObject([
       { displayName: 'Nursery', displayCode: 'N', canonicalCode: 'NURSERY', status: 'ACTIVE', sectionCount: 0 },
-      { displayName: 'Grade 2', displayCode: '2' },
-      { displayName: 'Grade 3', displayCode: '3' },
+      { displayName: 'Class 2', displayCode: '2' },
+      { displayName: 'Class 3', displayCode: '3' },
     ]);
 
-    const g3 = grades[2]!.gradeOfferingId;
-    const renamed = (await t.agent.patch(`${API}/grade-offerings/${g3}`).send({ displayName: 'Class III', displayCode: 'III', medium: 'English', capacity: 120 }).expect(200)).body.data;
+    const g3 = classes[2]!.classOfferingId;
+    const renamed = (await t.agent.patch(`${API}/class-offerings/${g3}`).send({ displayName: 'Class III', displayCode: 'III', medium: 'English', capacity: 120 }).expect(200)).body.data;
     expect(renamed).toMatchObject({ displayName: 'Class III', displayCode: 'III', medium: 'English', capacity: 120 });
     expect(renamed.canonicalCode).toBe('G03'); // the master identity is untouched
 
-    const sections = (await t.agent.post(`${API}/grade-offerings/${g3}/sections`).send({ codes: ['A', 'B', 'C'], capacity: 40 }).expect(201)).body.data;
+    const sections = (await t.agent.post(`${API}/class-offerings/${g3}/sections`).send({ codes: ['A', 'B', 'C'], capacity: 40 }).expect(201)).body.data;
     expect(sections.map((s: { sectionCode: string; sequenceOrder: number }) => [s.sectionCode, s.sequenceOrder])).toEqual([['A', 1], ['B', 2], ['C', 3]]);
-    const more = (await t.agent.post(`${API}/grade-offerings/${g3}/sections`).send({ codes: ['d'] }).expect(201)).body.data;
+    const more = (await t.agent.post(`${API}/class-offerings/${g3}/sections`).send({ codes: ['d'] }).expect(201)).body.data;
     expect(more[0]).toMatchObject({ sectionCode: 'D', sequenceOrder: 4 });
 
-    const read = (await t.agent.get(`${API}/grade-offerings/${g3}/sections`).expect(200)).body.data;
+    const read = (await t.agent.get(`${API}/class-offerings/${g3}/sections`).expect(200)).body.data;
     expect(read.map((s: { sectionCode: string }) => s.sectionCode)).toEqual(['A', 'B', 'C', 'D']);
-    expect((await t.agent.get(`${API}/grade-offerings/${g3}`).expect(200)).body.data.sectionCount).toBe(4);
+    expect((await t.agent.get(`${API}/class-offerings/${g3}`).expect(200)).body.data.sectionCount).toBe(4);
 
     const section = read[0];
     const patched = (await t.agent.patch(`${API}/sections/${section.sectionOfferingId}`).send({ displayName: 'Rose', capacity: 35 }).expect(200)).body.data;
     expect(patched).toMatchObject({ displayName: 'Rose', capacity: 35, sectionCode: 'A' });
   });
 
-  it('QA 4: the same grade can be set up differently at two locations', async () => {
+  it('QA 4: the same class can be set up differently at two locations', async () => {
     const t = await draftSession();
-    const [moh] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G08!], { medium: 'English' });
-    const [chd] = await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G08!], { medium: 'Punjabi' });
-    expect(moh!.gradeOfferingId).not.toBe(chd!.gradeOfferingId);
-    await t.agent.patch(`${API}/grade-offerings/${chd!.gradeOfferingId}`).send({ displayName: 'Standard 8', capacity: 30 }).expect(200);
+    const [moh] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G08!], { medium: 'English' });
+    const [chd] = await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G08!], { medium: 'Punjabi' });
+    expect(moh!.classOfferingId).not.toBe(chd!.classOfferingId);
+    await t.agent.patch(`${API}/class-offerings/${chd!.classOfferingId}`).send({ displayName: 'Standard 8', capacity: 30 }).expect(200);
 
-    const all = (await t.agent.get(`${t.sessionUrl}/grade-offerings`).expect(200)).body.data as { locationId: string; displayName: string; medium: string; capacity: number | null }[];
-    expect(all.find((g) => g.locationId === t.moh.locationId)).toMatchObject({ displayName: 'Grade 8', medium: 'English', capacity: null });
+    const all = (await t.agent.get(`${t.sessionUrl}/class-offerings`).expect(200)).body.data as { locationId: string; displayName: string; medium: string; capacity: number | null }[];
+    expect(all.find((g) => g.locationId === t.moh.locationId)).toMatchObject({ displayName: 'Class 8', medium: 'English', capacity: null });
     expect(all.find((g) => g.locationId === t.chd.locationId)).toMatchObject({ displayName: 'Standard 8', medium: 'Punjabi', capacity: 30 });
 
-    // …but the same grade cannot be added twice at one location, and the location must be in the session.
+    // …but the same class cannot be added twice at one location, and the location must be in the session.
     const dup = expectError(
-      await t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.moh.locationId, gradeIds: [t.ref.gradeId.G07!, t.ref.gradeId.G08!] }),
+      await t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.moh.locationId, classIds: [t.ref.classId.G07!, t.ref.classId.G08!] }),
       409,
-      'GRADE_OFFERING_EXISTS',
+      'CLASS_OFFERING_EXISTS',
     );
-    expect(dup.details.gradeIds).toEqual([t.ref.gradeId.G08]);
-    expect(await GradeOffering.countDocuments({ tenantId: t.tenantId, locationId: t.moh.locationId })).toBe(1); // G07 not added either
-    expectError(await t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.pkl.locationId, gradeIds: [t.ref.gradeId.G08!] }), 409, 'LOCATION_NOT_IN_SESSION');
-    expectError(await t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.moh.locationId, gradeIds: [] }), 400, 'VALIDATION_FAILED');
+    expect(dup.details.classIds).toEqual([t.ref.classId.G08]);
+    expect(await ClassOffering.countDocuments({ tenantId: t.tenantId, locationId: t.moh.locationId })).toBe(1); // G07 not added either
+    expectError(await t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.pkl.locationId, classIds: [t.ref.classId.G08!] }), 409, 'LOCATION_NOT_IN_SESSION');
+    expectError(await t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.moh.locationId, classIds: [] }), 400, 'VALIDATION_FAILED');
   });
 
-  it('QA 6: a duplicate section is blocked, in any letter case, but other grades may reuse the code', async () => {
+  it('QA 6: a duplicate section is blocked, in any letter case, but other classes may reuse the code', async () => {
     const t = await draftSession();
-    const [moh] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G08!]);
-    const [chd] = await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G08!]);
-    const url = (id: string) => `${API}/grade-offerings/${id}/sections`;
+    const [moh] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G08!]);
+    const [chd] = await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G08!]);
+    const url = (id: string) => `${API}/class-offerings/${id}/sections`;
 
-    await t.agent.post(url(moh!.gradeOfferingId)).send({ codes: ['A', 'B'] }).expect(201);
-    expectError(await t.agent.post(url(moh!.gradeOfferingId)).send({ codes: ['a'] }), 409, 'SECTION_CODE_TAKEN');
-    const clash = expectError(await t.agent.post(url(moh!.gradeOfferingId)).send({ codes: ['C', 'b'] }), 409, 'SECTION_CODE_TAKEN');
+    await t.agent.post(url(moh!.classOfferingId)).send({ codes: ['A', 'B'] }).expect(201);
+    expectError(await t.agent.post(url(moh!.classOfferingId)).send({ codes: ['a'] }), 409, 'SECTION_CODE_TAKEN');
+    const clash = expectError(await t.agent.post(url(moh!.classOfferingId)).send({ codes: ['C', 'b'] }), 409, 'SECTION_CODE_TAKEN');
     expect(clash.details.codes).toEqual(['B']);
-    expectError(await t.agent.post(url(moh!.gradeOfferingId)).send({ codes: ['X', 'x'] }), 409, 'SECTION_CODE_TAKEN'); // repeated in the request
-    expect((await t.agent.get(url(moh!.gradeOfferingId)).expect(200)).body.data).toHaveLength(2); // the failed requests added nothing
+    expectError(await t.agent.post(url(moh!.classOfferingId)).send({ codes: ['X', 'x'] }), 409, 'SECTION_CODE_TAKEN'); // repeated in the request
+    expect((await t.agent.get(url(moh!.classOfferingId)).expect(200)).body.data).toHaveLength(2); // the failed requests added nothing
 
     // Mohali VIII-A and Chandigarh VIII-A never collide.
-    await t.agent.post(url(chd!.gradeOfferingId)).send({ codes: ['A'] }).expect(201);
-    expect(expectError(await t.agent.post(url(moh!.gradeOfferingId)).send({ codes: ['??'] }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('codes.0');
+    await t.agent.post(url(chd!.classOfferingId)).send({ codes: ['A'] }).expect(201);
+    expect(expectError(await t.agent.post(url(moh!.classOfferingId)).send({ codes: ['??'] }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('codes.0');
   });
 });
 
 describe('subject offerings (AS-07)', () => {
   it('QA 8: offers mandatory and elective subjects, once each, and only active subjects', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    const url = `${API}/grade-offerings/${g!.gradeOfferingId}/subjects`;
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    const url = `${API}/class-offerings/${g!.classOfferingId}/subjects`;
 
     const core = (await t.agent.post(url).send({ subjectIds: [t.subjects.MATH, t.subjects.SCI], offeringType: 'MANDATORY' }).expect(201)).body.data as SubjectOfferingDTO[];
     expect(core.map((o) => o.subjectCode).sort()).toEqual(['MATH', 'SCI']);
@@ -355,7 +355,7 @@ describe('subject offerings (AS-07)', () => {
 
     const listed = (await t.agent.get(url).expect(200)).body.data as SubjectOfferingDTO[];
     expect(listed.map((o) => `${o.subjectCode}:${o.offeringType}`)).toEqual(['HIN:ELECTIVE', 'MATH:MANDATORY', 'SCI:MANDATORY']);
-    expect((await t.agent.get(`${API}/grade-offerings/${g!.gradeOfferingId}`).expect(200)).body.data.subjectCount).toBe(3);
+    expect((await t.agent.get(`${API}/class-offerings/${g!.classOfferingId}`).expect(200)).body.data.subjectCount).toBe(3);
 
     expectError(await t.agent.post(url).send({ subjectIds: [t.subjects.ENG, t.subjects.MATH], offeringType: 'MANDATORY' }), 409, 'SUBJECT_ALREADY_OFFERED');
     expect(await SubjectOffering.countDocuments({ tenantId: t.tenantId })).toBe(3); // ENG was not added by the failed request
@@ -376,8 +376,8 @@ describe('subject offerings (AS-07)', () => {
     const withPseb = (await code(t.subjects.MATH!, 'PSEB', 'M-1')).body.data as SubjectDTO;
     await code(t.subjects.SCI!, 'CBSE', '086');
 
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]); // MOH follows CBSE
-    const url = `${API}/grade-offerings/${g!.gradeOfferingId}/subjects`;
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]); // MOH follows CBSE
+    const url = `${API}/class-offerings/${g!.classOfferingId}/subjects`;
     const [math, hin] = (await t.agent.post(url).send({ subjectIds: [t.subjects.MATH, t.subjects.HIN], offeringType: 'MANDATORY' }).expect(201)).body.data.sort((a: SubjectOfferingDTO) => (a.subjectCode === 'MATH' ? -1 : 1)) as SubjectOfferingDTO[];
     expect(math).toMatchObject({ subjectCode: 'MATH', boardSubjectCode: '041' }); // linked on its own
     expect(hin).toMatchObject({ subjectCode: 'HIN', boardSubjectCode: null });
@@ -400,25 +400,25 @@ describe('subject offerings (AS-07)', () => {
 
   it('copies a subject list only when asked, skipping what is already there', async () => {
     const t = await draftSession();
-    const [g6, g7] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!, t.ref.gradeId.G07!]);
-    const [chd8] = await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G08!]);
-    await t.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH, t.subjects.SCI], offeringType: 'MANDATORY' }).expect(201);
-    await t.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.HIN], offeringType: 'ELECTIVE' }).expect(201);
-    expect((await t.agent.get(`${API}/grade-offerings/${g7!.gradeOfferingId}/subjects`).expect(200)).body.data).toEqual([]); // nothing is copied automatically
+    const [g6, g7] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!, t.ref.classId.G07!]);
+    const [chd8] = await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G08!]);
+    await t.agent.post(`${API}/class-offerings/${g6!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH, t.subjects.SCI], offeringType: 'MANDATORY' }).expect(201);
+    await t.agent.post(`${API}/class-offerings/${g6!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.HIN], offeringType: 'ELECTIVE' }).expect(201);
+    expect((await t.agent.get(`${API}/class-offerings/${g7!.classOfferingId}/subjects`).expect(200)).body.data).toEqual([]); // nothing is copied automatically
 
-    const copyUrl = (to: string, from: string) => `${API}/grade-offerings/${to}/subjects/copy-from/${from}`;
-    await t.agent.post(`${API}/grade-offerings/${g7!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.SCI], offeringType: 'MANDATORY' }).expect(201);
-    const first = (await t.agent.post(copyUrl(g7!.gradeOfferingId, g6!.gradeOfferingId)).expect(201)).body.data;
+    const copyUrl = (to: string, from: string) => `${API}/class-offerings/${to}/subjects/copy-from/${from}`;
+    await t.agent.post(`${API}/class-offerings/${g7!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.SCI], offeringType: 'MANDATORY' }).expect(201);
+    const first = (await t.agent.post(copyUrl(g7!.classOfferingId, g6!.classOfferingId)).expect(201)).body.data;
     expect(first.created.map((o: SubjectOfferingDTO) => `${o.subjectCode}:${o.offeringType}`).sort()).toEqual(['HIN:ELECTIVE', 'MATH:MANDATORY']);
     expect(first.skipped).toBe(1);
-    expect((await t.agent.post(copyUrl(g7!.gradeOfferingId, g6!.gradeOfferingId)).expect(201)).body.data).toMatchObject({ created: [], skipped: 3 });
+    expect((await t.agent.post(copyUrl(g7!.classOfferingId, g6!.classOfferingId)).expect(201)).body.data).toMatchObject({ created: [], skipped: 3 });
 
-    expect(expectError(await t.agent.post(copyUrl(g7!.gradeOfferingId, g7!.gradeOfferingId)), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('sourceGradeOfferingId');
-    // Another session's grade is out of reach.
+    expect(expectError(await t.agent.post(copyUrl(g7!.classOfferingId, g7!.classOfferingId)), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('sourceClassOfferingId');
+    // Another session's class is out of reach.
     const other = await createSession(t.agent, [t.ref.pin(t.moh.locationId)], { code: 'NEXT', startDate: '2027-04-01', endDate: '2028-03-31' });
-    const [otherG] = await addGrades(t.agent, other.academicSessionId, t.moh.locationId, [t.ref.gradeId.G06!]);
-    expect(expectError(await t.agent.post(copyUrl(g7!.gradeOfferingId, otherG!.gradeOfferingId)), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('sourceGradeOfferingId');
-    expect((await t.agent.post(copyUrl(chd8!.gradeOfferingId, g6!.gradeOfferingId)).expect(201)).body.data.created).toHaveLength(3); // other location, same session: fine
+    const [otherG] = await addClasses(t.agent, other.academicSessionId, t.moh.locationId, [t.ref.classId.G06!]);
+    expect(expectError(await t.agent.post(copyUrl(g7!.classOfferingId, otherG!.classOfferingId)), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('sourceClassOfferingId');
+    expect((await t.agent.post(copyUrl(chd8!.classOfferingId, g6!.classOfferingId)).expect(201)).body.data.created).toHaveLength(3); // other location, same session: fine
   });
 });
 
@@ -475,25 +475,25 @@ describe('terms (AS-12)', () => {
 describe('session status rules (edit guard)', () => {
   it('ACTIVE allows additive changes; removing structure is blocked only when something depends on it and never deletes', async () => {
     const t = await draftSession();
-    const [g6] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    const [section] = (await t.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
+    const [g6] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    const [section] = (await t.agent.post(`${API}/class-offerings/${g6!.classOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
     await forceStatus(t.tenantId, t.id, 'ACTIVE');
 
     // Additive and display edits are fine.
-    await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G07!]);
-    await t.agent.post(`${API}/grade-offerings/${g6!.gradeOfferingId}/sections`).send({ codes: ['B'] }).expect(201);
-    await t.agent.patch(`${API}/grade-offerings/${g6!.gradeOfferingId}`).send({ displayName: 'Class VI' }).expect(200);
+    await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G07!]);
+    await t.agent.post(`${API}/class-offerings/${g6!.classOfferingId}/sections`).send({ codes: ['B'] }).expect(201);
+    await t.agent.patch(`${API}/class-offerings/${g6!.classOfferingId}`).send({ displayName: 'Class VI' }).expect(200);
     await t.agent.patch(t.sessionUrl).send({ name: 'Renamed while active' }).expect(200);
 
     // Hard delete is never offered once the session is past DRAFT.
     expectError(await t.agent.delete(`${API}/sections/${section.sectionOfferingId}`), 409, 'USE_DEACTIVATE_INSTEAD');
-    expectError(await t.agent.delete(`${API}/grade-offerings/${g6!.gradeOfferingId}`), 409, 'USE_DEACTIVATE_INSTEAD');
+    expectError(await t.agent.delete(`${API}/class-offerings/${g6!.classOfferingId}`), 409, 'USE_DEACTIVATE_INSTEAD');
 
     // A downstream module (here a stub) says the section is in use → deactivating it is refused.
     registerAcademicDependency({
       key: 'test.faculty-assignments',
       label: 'Faculty assignments',
-      entityTypes: ['section_offering', 'grade_offering'],
+      entityTypes: ['section_offering', 'class_offering'],
       count: async ({ entityId }) => (entityId === section.sectionOfferingId ? 2 : 0),
       message: (n) => `${n} faculty assignments use this section.`,
     });
@@ -505,38 +505,38 @@ describe('session status rules (edit guard)', () => {
       unregisterAcademicDependency('test.faculty-assignments');
     }
     expect((await t.agent.patch(`${API}/sections/${section.sectionOfferingId}`).send({ status: 'INACTIVE' }).expect(200)).body.data.status).toBe('INACTIVE');
-    expect((await t.agent.patch(`${API}/grade-offerings/${g6!.gradeOfferingId}`).send({ status: 'INACTIVE' }).expect(200)).body.data.status).toBe('INACTIVE');
+    expect((await t.agent.patch(`${API}/class-offerings/${g6!.classOfferingId}`).send({ status: 'INACTIVE' }).expect(200)).body.data.status).toBe('INACTIVE');
   });
 
   it('PUBLISHED can still be reshaped, including deletes of offerings, since nobody has used it', async () => {
     const t = await draftSession();
     await forceStatus(t.tenantId, t.id, 'PUBLISHED');
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
     // Delete policy: hard delete only while DRAFT; a published session deactivates instead.
-    expectError(await t.agent.delete(`${API}/grade-offerings/${g!.gradeOfferingId}`), 409, 'USE_DEACTIVATE_INSTEAD');
-    await t.agent.patch(`${API}/grade-offerings/${g!.gradeOfferingId}`).send({ status: 'INACTIVE' }).expect(200);
+    expectError(await t.agent.delete(`${API}/class-offerings/${g!.classOfferingId}`), 409, 'USE_DEACTIVATE_INSTEAD');
+    await t.agent.patch(`${API}/class-offerings/${g!.classOfferingId}`).send({ status: 'INACTIVE' }).expect(200);
     const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'T', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
     await t.agent.delete(`${API}/terms/${term.termId}`).expect(204);
   });
 
   it('QA 18 (part): CLOSED and ARCHIVED sessions stay readable but every change is refused', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    const [section] = (await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
-    const [offering] = (await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.ENG], offeringType: 'MANDATORY' }).expect(201)).body.data;
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    const [section] = (await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
+    const [offering] = (await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.ENG], offeringType: 'MANDATORY' }).expect(201)).body.data;
     const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'T', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
 
     for (const status of ['CLOSED', 'ARCHIVED'] as const) {
       await forceStatus(t.tenantId, t.id, status);
       const refused = [
         t.agent.patch(t.sessionUrl).send({ name: 'x' }),
-        t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.moh.locationId, gradeIds: [t.ref.gradeId.G07!] }),
-        t.agent.patch(`${API}/grade-offerings/${g!.gradeOfferingId}`).send({ displayName: 'x' }),
-        t.agent.delete(`${API}/grade-offerings/${g!.gradeOfferingId}`),
-        t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/sections`).send({ codes: ['Z'] }),
+        t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.moh.locationId, classIds: [t.ref.classId.G07!] }),
+        t.agent.patch(`${API}/class-offerings/${g!.classOfferingId}`).send({ displayName: 'x' }),
+        t.agent.delete(`${API}/class-offerings/${g!.classOfferingId}`),
+        t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/sections`).send({ codes: ['Z'] }),
         t.agent.patch(`${API}/sections/${section.sectionOfferingId}`).send({ displayName: 'x' }),
         t.agent.delete(`${API}/sections/${section.sectionOfferingId}`),
-        t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.HIN], offeringType: 'MANDATORY' }),
+        t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.HIN], offeringType: 'MANDATORY' }),
         t.agent.patch(`${API}/subject-offerings/${offering.subjectOfferingId}`).send({ offeringType: 'ELECTIVE' }),
         t.agent.delete(`${API}/subject-offerings/${offering.subjectOfferingId}`),
         t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'T2', code: 'T2', startDate: '2026-10-01', endDate: '2026-12-31' }),
@@ -549,17 +549,17 @@ describe('session status rules (edit guard)', () => {
       }
       // Still fully readable.
       expect((await t.agent.get(t.sessionUrl).expect(200)).body.data.status).toBe(status);
-      expect((await t.agent.get(`${t.sessionUrl}/grade-offerings`).expect(200)).body.data).toHaveLength(1);
-      expect((await t.agent.get(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).expect(200)).body.data).toHaveLength(1);
+      expect((await t.agent.get(`${t.sessionUrl}/class-offerings`).expect(200)).body.data).toHaveLength(1);
+      expect((await t.agent.get(`${API}/class-offerings/${g!.classOfferingId}/subjects`).expect(200)).body.data).toHaveLength(1);
       expect((await t.agent.get(`${t.sessionUrl}/terms`).expect(200)).body.data).toHaveLength(1);
     }
   });
 });
 
 describe('location dependency (Module 1 registry)', () => {
-  it('a location with grade offerings in a non-closed session cannot be archived', async () => {
+  it('a location with class offerings in a non-closed session cannot be archived', async () => {
     const t = await draftSession();
-    await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G06!]);
+    await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G06!]);
     await t.agent.post(`${API}/locations/${t.chd.locationId}/deactivate`).expect(200);
 
     const blocked = expectError(await t.agent.post(`${API}/locations/${t.chd.locationId}/archive`), 409, 'LOCATION_HAS_DEPENDENCIES');
@@ -571,7 +571,7 @@ describe('location dependency (Module 1 registry)', () => {
     await t.agent.post(`${API}/locations/${t.chd.locationId}/archive`).expect(200);
   });
 
-  it('a location used by a session without grades is not blocked from archiving, but the session keeps its code locked', async () => {
+  it('a location used by a session without classes is not blocked from archiving, but the session keeps its code locked', async () => {
     const t = await draftSession();
     await t.agent.post(`${API}/locations/${t.chd.locationId}/deactivate`).expect(200);
     expectError(await t.agent.patch(`${API}/locations/${t.chd.locationId}`).send({ locationCode: 'CHD2' }), 409, 'LOCATION_CODE_LOCKED');
@@ -582,11 +582,11 @@ describe('location dependency (Module 1 registry)', () => {
 describe('audit trail (AS-17)', () => {
   it('every mutation writes an audit row with field-level changes, grouped by session', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G08!]);
-    await t.agent.patch(`${API}/grade-offerings/${g!.gradeOfferingId}`).send({ displayName: 'Class VIII', capacity: 90 }).expect(200);
-    const [section] = (await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G08!]);
+    await t.agent.patch(`${API}/class-offerings/${g!.classOfferingId}`).send({ displayName: 'Class VIII', capacity: 90 }).expect(200);
+    const [section] = (await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data;
     await t.agent.patch(`${API}/sections/${section.sectionOfferingId}`).send({ capacity: 40 }).expect(200);
-    const [offering] = (await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201)).body.data;
+    const [offering] = (await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201)).body.data;
     await t.agent.patch(`${API}/subject-offerings/${offering.subjectOfferingId}`).send({ offeringType: 'ELECTIVE' }).expect(200);
     const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
     await t.agent.patch(`${API}/terms/${term.termId}`).send({ endDate: '2026-09-15' }).expect(200);
@@ -594,7 +594,7 @@ describe('audit trail (AS-17)', () => {
     await t.agent.delete(`${API}/terms/${term.termId}`).expect(204);
     await t.agent.delete(`${API}/subject-offerings/${offering.subjectOfferingId}`).expect(204);
     await t.agent.delete(`${API}/sections/${section.sectionOfferingId}`).expect(204);
-    await t.agent.delete(`${API}/grade-offerings/${g!.gradeOfferingId}`).expect(204);
+    await t.agent.delete(`${API}/class-offerings/${g!.classOfferingId}`).expect(204);
 
     const events = await auditForSession(t.agent, t.id);
     const actions = events.map((e) => e.action);
@@ -602,9 +602,9 @@ describe('audit trail (AS-17)', () => {
       [
         'academic_session.created',
         'academic_session.updated',
-        'grade_offering.created',
-        'grade_offering.updated',
-        'grade_offering.deleted',
+        'class_offering.created',
+        'class_offering.updated',
+        'class_offering.deleted',
         'section.created',
         'section.updated',
         'section.deleted',
@@ -617,9 +617,9 @@ describe('audit trail (AS-17)', () => {
       ].sort(),
     );
     const find = (action: string) => events.find((e) => e.action === action)!;
-    expect(find('grade_offering.updated').changes).toEqual(
+    expect(find('class_offering.updated').changes).toEqual(
       expect.arrayContaining([
-        { field: 'displayName', from: 'Grade 8', to: 'Class VIII' },
+        { field: 'displayName', from: 'Class 8', to: 'Class VIII' },
         { field: 'capacity', from: null, to: 90 },
       ]),
     );
@@ -627,7 +627,7 @@ describe('audit trail (AS-17)', () => {
     expect(find('subject_offering.updated').changes).toEqual([{ field: 'offeringType', from: 'MANDATORY', to: 'ELECTIVE' }]);
     expect(find('academic_session.updated').changes).toEqual([{ field: 'name', from: 'Academic Year 2026-27', to: 'AY 26-27' }]);
     expect(find('academic_session.created')).toMatchObject({ entityType: 'academic_session', actor: { role: 'SCHOOL_ADMIN', name: 'Ada Admin' } });
-    expect(find('grade_offering.deleted').metadata).toMatchObject({ removed: { sections: 0, subjectOfferings: 0 } });
+    expect(find('class_offering.deleted').metadata).toMatchObject({ removed: { sections: 0, subjectOfferings: 0 } });
 
     // Subject master events are per subject.
     await t.agent.patch(`${API}/subjects/${t.subjects.MATH}`).send({ name: 'Maths' }).expect(200);
@@ -643,7 +643,7 @@ describe('audit trail (AS-17)', () => {
     const t = await draftSession();
     const before = (await auditForSession(t.agent, t.id)).length;
     await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Bad', code: 'B', startDate: '2025-01-01', endDate: '2025-02-01' }).expect(400);
-    await t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.pkl.locationId, gradeIds: [t.ref.gradeId.G01!] }).expect(409);
+    await t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.pkl.locationId, classIds: [t.ref.classId.G01!] }).expect(409);
     expect((await auditForSession(t.agent, t.id)).length).toBe(before);
   });
 });
@@ -651,19 +651,19 @@ describe('audit trail (AS-17)', () => {
 describe('limited and denied roles', () => {
   it('Faculty and Staff read PUBLISHED / ACTIVE / CLOSED structure only, never drafts or configuration; Parents get nothing', async () => {
     const t = await draftSession();
-    const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-    await t.agent.post(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201);
+    const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+    await t.agent.post(`${API}/class-offerings/${g!.classOfferingId}/subjects`).send({ subjectIds: [t.subjects.MATH], offeringType: 'MANDATORY' }).expect(201);
 
     for (const role of ['FACULTY', 'STAFF'] as const) {
       const user = await createUserAndLogin(t.tenantId, role);
       // Draft: invisible everywhere.
       expect((await user.agent.get(`${API}/academic-sessions`).expect(200)).body.data).toEqual([]);
       expectError(await user.agent.get(t.sessionUrl), 404, 'NOT_FOUND');
-      expectError(await user.agent.get(`${t.sessionUrl}/grade-offerings`), 404, 'NOT_FOUND');
+      expectError(await user.agent.get(`${t.sessionUrl}/class-offerings`), 404, 'NOT_FOUND');
       expectError(await user.agent.get(`${t.sessionUrl}/terms`), 404, 'NOT_FOUND');
-      expectError(await user.agent.get(`${API}/grade-offerings/${g!.gradeOfferingId}`), 404, 'NOT_FOUND');
-      expectError(await user.agent.get(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`), 404, 'NOT_FOUND');
-      expect((await user.agent.get(`${API}/subjects`).query({ gradeId: t.ref.gradeId.G06! }).expect(200)).body.data.items).toEqual([]); // no leak via the grade filter
+      expectError(await user.agent.get(`${API}/class-offerings/${g!.classOfferingId}`), 404, 'NOT_FOUND');
+      expectError(await user.agent.get(`${API}/class-offerings/${g!.classOfferingId}/subjects`), 404, 'NOT_FOUND');
+      expect((await user.agent.get(`${API}/subjects`).query({ classId: t.ref.classId.G06! }).expect(200)).body.data.items).toEqual([]); // no leak via the class filter
 
       for (const status of ['PUBLISHED', 'ACTIVE', 'CLOSED'] as const) {
         await forceStatus(t.tenantId, t.id, status);
@@ -671,9 +671,9 @@ describe('limited and denied roles', () => {
         expect(list).toHaveLength(1);
         expect(list[0]).toMatchObject({ status, warnings: [] });
         expect(list[0]).not.toHaveProperty('lastValidation');
-        expect((await user.agent.get(`${t.sessionUrl}/grade-offerings`).expect(200)).body.data).toHaveLength(1);
-        expect((await user.agent.get(`${API}/grade-offerings/${g!.gradeOfferingId}/subjects`).expect(200)).body.data).toHaveLength(1);
-        expect((await user.agent.get(`${API}/subjects`).query({ gradeId: t.ref.gradeId.G06! }).expect(200)).body.data.items).toHaveLength(1);
+        expect((await user.agent.get(`${t.sessionUrl}/class-offerings`).expect(200)).body.data).toHaveLength(1);
+        expect((await user.agent.get(`${API}/class-offerings/${g!.classOfferingId}/subjects`).expect(200)).body.data).toHaveLength(1);
+        expect((await user.agent.get(`${API}/subjects`).query({ classId: t.ref.classId.G06! }).expect(200)).body.data.items).toHaveLength(1);
       }
       // …but never archived ones, and never write.
       await forceStatus(t.tenantId, t.id, 'ARCHIVED');
@@ -685,24 +685,24 @@ describe('limited and denied roles', () => {
     }
 
     const parent = await createUserAndLogin(t.tenantId, 'PARENT');
-    for (const url of [`${API}/boards`, `${API}/grades`, `${API}/subjects`, `${API}/academic-sessions`, t.sessionUrl]) {
+    for (const url of [`${API}/boards`, `${API}/classes`, `${API}/subjects`, `${API}/academic-sessions`, t.sessionUrl]) {
       expectError(await parent.agent.get(url), 403, 'FORBIDDEN');
     }
   });
 });
 
-/** Grade 6 at Mohali offering English, Hindi, Punjabi, Urdu, Mathematics and Science. */
-async function grade6() {
+/** Class 6 at Mohali offering English, Hindi, Punjabi, Urdu, Mathematics and Science. */
+async function class6() {
   const t = await draftSession();
   const more = await createMoreSubjects(t.agent);
-  const [g] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-  const url = `${API}/grade-offerings/${g!.gradeOfferingId}`;
-  const core = await offer(t.agent, g!.gradeOfferingId, [t.subjects.MATH!, t.subjects.SCI!, t.subjects.ENG!]);
-  const languages = await offer(t.agent, g!.gradeOfferingId, [more.PUN!, t.subjects.HIN!, more.URD!], 'LANGUAGE');
+  const [g] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+  const url = `${API}/class-offerings/${g!.classOfferingId}`;
+  const core = await offer(t.agent, g!.classOfferingId, [t.subjects.MATH!, t.subjects.SCI!, t.subjects.ENG!]);
+  const languages = await offer(t.agent, g!.classOfferingId, [more.PUN!, t.subjects.HIN!, more.URD!], 'LANGUAGE');
   const o = { ...core, ...languages } as Record<string, string>;
   const group = async (body: Record<string, unknown>) => (await t.agent.post(`${url}/choice-groups`).send(body).expect(201)).body.data as ChoiceGroupDTO;
   const post = (path: string, body: Record<string, unknown>) => t.agent.post(`${url}/${path}`).send(body);
-  return { ...t, more, url, gradeOfferingId: g!.gradeOfferingId, o, group, post };
+  return { ...t, more, url, classOfferingId: g!.classOfferingId, o, group, post };
 }
 
 const validate = async (t: DraftSession) => (await t.agent.post(`${t.sessionUrl}/validate`).expect(200)).body.data as ValidationResultDTO;
@@ -710,7 +710,7 @@ const find = (r: ValidationResultDTO, code: string) => r.issues.filter((i) => i.
 
 describe('subject choice groups (AS-08)', () => {
   it('QA 9: a language group is just data — Core, Language 1 (choose one of Punjabi / Hindi / Urdu), Language 2', async () => {
-    const t = await grade6();
+    const t = await class6();
     const core = await t.group({ name: 'Core', ruleType: 'REQUIRED_ALL', subjectOfferingIds: [t.o.MATH!, t.o.SCI!] });
     const lang1 = await t.group({ name: 'Language 1', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.PUN!, t.o.HIN!, t.o.URD!] });
     const lang2 = await t.group({ name: 'Language 2', ruleType: 'REQUIRED_ALL', subjectOfferingIds: [t.o.ENG!] });
@@ -732,7 +732,7 @@ describe('subject choice groups (AS-08)', () => {
   });
 
   it('QA 10: CHOOSE_ONE and CHOOSE_N take their numbers from the rule type; bad numbers are refused', async () => {
-    const t = await grade6();
+    const t = await class6();
     const two = [t.o.PUN!, t.o.HIN!, t.o.URD!];
 
     const chooseN = await t.group({ name: 'Electives', ruleType: 'CHOOSE_N', min: 1, max: 2, subjectOfferingIds: two });
@@ -752,8 +752,8 @@ describe('subject choice groups (AS-08)', () => {
     expectError(await t.post('choice-groups', { name: 'X', ruleType: 'PICK_SOME', subjectOfferingIds: [t.o.ENG!] }), 400, 'VALIDATION_FAILED');
   });
 
-  it('a subject sits in at most one group, and only subjects offered for this grade can be listed', async () => {
-    const t = await grade6();
+  it('a subject sits in at most one group, and only subjects offered for this class can be listed', async () => {
+    const t = await class6();
     await t.group({ name: 'Language 1', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.PUN!, t.o.HIN!] });
 
     const clash = expectError(await t.post('choice-groups', { name: 'Language 2', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.HIN!, t.o.URD!] }), 409, 'SUBJECT_IN_ANOTHER_GROUP');
@@ -764,14 +764,14 @@ describe('subject choice groups (AS-08)', () => {
     // …but a group may keep its own items when it is edited.
     await t.agent.patch(`${API}/choice-groups/${second.choiceGroupId}`).send({ subjectOfferingIds: [t.o.URD!], name: 'Second language' }).expect(200);
 
-    // Another grade's offering is out of reach.
-    const [g7] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G07!]);
-    const other = await offer(t.agent, g7!.gradeOfferingId, [t.subjects.ENG!]);
+    // Another class's offering is out of reach.
+    const [g7] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G07!]);
+    const other = await offer(t.agent, g7!.classOfferingId, [t.subjects.ENG!]);
     expect(expectError(await t.post('choice-groups', { name: 'Mixed', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [other.ENG!] }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('subjectOfferingIds');
   });
 
   it('deleting a draft subject offering removes it from groups, constraints and programmes (and empty groups)', async () => {
-    const t = await grade6();
+    const t = await class6();
     const group = await t.group({ name: 'Languages', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.PUN!, t.o.HIN!] });
     const solo = await t.group({ name: 'Solo', ruleType: 'REQUIRED_ALL', subjectOfferingIds: [t.o.URD!] });
     await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: t.o.MATH! }).expect(201);
@@ -787,7 +787,7 @@ describe('subject choice groups (AS-08)', () => {
   });
 
   it('groups are hard-deleted only in DRAFT', async () => {
-    const t = await grade6();
+    const t = await class6();
     const group = await t.group({ name: 'Language 1', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.PUN!, t.o.HIN!] });
     await forceStatus(t.tenantId, t.id, 'PUBLISHED');
     expectError(await t.agent.delete(`${API}/choice-groups/${group.choiceGroupId}`), 409, 'USE_DEACTIVATE_INSTEAD');
@@ -798,8 +798,8 @@ describe('subject choice groups (AS-08)', () => {
 });
 
 describe('subject constraints (AS-09)', () => {
-  it('QA 11: REQUIRES and EXCLUDES between two subjects of the same grade', async () => {
-    const t = await grade6();
+  it('QA 11: REQUIRES and EXCLUDES between two subjects of the same class', async () => {
+    const t = await class6();
     const requires = (await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: t.o.MATH! }).expect(201)).body.data as ConstraintDTO;
     expect(requires).toMatchObject({ type: 'REQUIRES', subjectName: 'Science', otherSubjectName: 'Mathematics', summary: 'Science requires Mathematics' });
     const excludes = (await t.post('constraints', { type: 'EXCLUDES', subjectOfferingId: t.o.PUN!, otherSubjectOfferingId: t.o.URD! }).expect(201)).body.data as ConstraintDTO;
@@ -811,8 +811,8 @@ describe('subject constraints (AS-09)', () => {
     expectError(await t.post('constraints', { type: 'EXCLUDES', subjectOfferingId: t.o.URD!, otherSubjectOfferingId: t.o.PUN! }), 409, 'CONSTRAINT_EXISTS');
 
     expect(expectError(await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: t.o.SCI! }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('otherSubjectOfferingId');
-    const [g7] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G07!]);
-    const elsewhere = await offer(t.agent, g7!.gradeOfferingId, [t.subjects.HIN!]);
+    const [g7] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G07!]);
+    const elsewhere = await offer(t.agent, g7!.classOfferingId, [t.subjects.HIN!]);
     expect(expectError(await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: elsewhere.HIN! }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('subjectOfferingId');
     expectError(await t.post('constraints', { type: 'MAYBE', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: t.o.MATH! }), 400, 'VALIDATION_FAILED');
 
@@ -829,7 +829,7 @@ describe('subject constraints (AS-09)', () => {
 
 describe('impossible rules are detected (AS-14)', () => {
   it('QA 12: min above the eligible subjects, REQUIRES + EXCLUDES on one pair, and friends — each message names the rule', async () => {
-    const t = await grade6();
+    const t = await class6();
     await t.group({ name: 'Pick three languages', ruleType: 'CHOOSE_N', min: 3, max: 3, subjectOfferingIds: [t.o.PUN!, t.o.HIN!] });
     await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.SCI!, otherSubjectOfferingId: t.o.MATH! }).expect(201);
     await t.post('constraints', { type: 'EXCLUDES', subjectOfferingId: t.o.MATH!, otherSubjectOfferingId: t.o.SCI! }).expect(201);
@@ -851,7 +851,7 @@ describe('impossible rules are detected (AS-14)', () => {
   });
 
   it('flags excludes inside a "take all" group, a requires target that was deactivated, and mandatory subjects in optional groups', async () => {
-    const t = await grade6();
+    const t = await class6();
     await t.group({ name: 'Compulsory languages', ruleType: 'REQUIRED_ALL', subjectOfferingIds: [t.o.PUN!, t.o.URD!] });
     await t.post('constraints', { type: 'EXCLUDES', subjectOfferingId: t.o.PUN!, otherSubjectOfferingId: t.o.URD! }).expect(201);
     await t.post('constraints', { type: 'REQUIRES', subjectOfferingId: t.o.HIN!, otherSubjectOfferingId: t.o.ENG! }).expect(201);
@@ -875,12 +875,12 @@ describe('impossible rules are detected (AS-14)', () => {
       locations: { L1: { status: 'ACTIVE', name: 'Mohali Campus' } },
       ruleVersions: { RV: { status: 'PUBLISHED', name: '2026-27' } },
       otherSessions: [],
-      grades: { G6: { code: 'G06', sequence: 9, isBoardGrade: false }, G11: { code: 'G11', sequence: 14, isBoardGrade: false } },
-      gradeOfferings: [{ id: 'GO', locationId: 'L1', gradeId: 'G6', displayName: 'Class VI', status: 'ACTIVE' }],
-      sections: [{ id: 'S1', gradeOfferingId: 'GO', status: 'ACTIVE' }],
+      classes: { G6: { code: 'G06', sequence: 9, isBoardClass: false }, G11: { code: 'G11', sequence: 14, isBoardClass: false } },
+      classOfferings: [{ id: 'GO', locationId: 'L1', classId: 'G6', displayName: 'Class VI', status: 'ACTIVE' }],
+      sections: [{ id: 'S1', classOfferingId: 'GO', status: 'ACTIVE' }],
       subjectOfferings: [
-        { id: 'O1', gradeOfferingId: 'GO', subjectName: 'Maths', offeringType: 'MANDATORY', status: 'ACTIVE', subjectActive: true },
-        { id: 'O2', gradeOfferingId: 'GO', subjectName: 'Science', offeringType: 'MANDATORY', status: 'ACTIVE', subjectActive: true },
+        { id: 'O1', classOfferingId: 'GO', subjectName: 'Maths', offeringType: 'MANDATORY', status: 'ACTIVE', subjectActive: true },
+        { id: 'O2', classOfferingId: 'GO', subjectName: 'Science', offeringType: 'MANDATORY', status: 'ACTIVE', subjectActive: true },
       ],
       groups: [],
       constraints: [],
@@ -904,33 +904,33 @@ describe('impossible rules are detected (AS-14)', () => {
       expect(codes(run((i) => (i.session.locations = [])))).toContain('ERROR:SESSION_NO_LOCATIONS');
       expect(run((i) => (i.locations.L1!.status = 'INACTIVE')).find((x) => x.code === 'LOCATION_NOT_ACTIVE')?.message).toContain('Mohali Campus');
       expect(codes(run((i) => (i.ruleVersions.RV = undefined)))).toContain('ERROR:RULE_VERSION_MISSING');
-      expect(codes(run((i) => (i.gradeOfferings = [])))).toContain('ERROR:NO_GRADE_OFFERINGS');
-      expect(run((i) => (i.sections = [])).find((x) => x.code === 'GRADE_WITHOUT_SECTIONS')?.message).toBe('Class VI at Mohali Campus has no sections.');
-      expect(codes(run((i) => (i.subjectOfferings = [])))).toContain('ERROR:GRADE_WITHOUT_SUBJECTS');
+      expect(codes(run((i) => (i.classOfferings = [])))).toContain('ERROR:NO_CLASS_OFFERINGS');
+      expect(run((i) => (i.sections = [])).find((x) => x.code === 'CLASS_WITHOUT_SECTIONS')?.message).toBe('Class VI at Mohali Campus has no sections.');
+      expect(codes(run((i) => (i.subjectOfferings = [])))).toContain('ERROR:CLASS_WITHOUT_SUBJECTS');
       expect(codes(run((i) => i.terms.push({ id: 'T9', name: 'Late', locationId: null, startDate: '2027-04-01', endDate: '2027-05-01' })))).toContain('ERROR:TERM_OUTSIDE_SESSION');
-      expect(codes(run((i) => i.groups.push({ id: 'G', gradeOfferingId: 'GO', name: 'Bad', ruleType: 'CHOOSE_N', min: 3, max: 1, status: 'ACTIVE', subjectOfferingIds: ['O1', 'O2'] })))).toEqual(
+      expect(codes(run((i) => i.groups.push({ id: 'G', classOfferingId: 'GO', name: 'Bad', ruleType: 'CHOOSE_N', min: 3, max: 1, status: 'ACTIVE', subjectOfferingIds: ['O1', 'O2'] })))).toEqual(
         expect.arrayContaining(['ERROR:GROUP_MIN_GREATER_THAN_MAX', 'ERROR:GROUP_MIN_EXCEEDS_ELIGIBLE']),
       );
       expect(codes(run((i) => i.programmes.push({ id: 'P', locationId: 'L1', name: 'Science', status: 'ACTIVE', subjectRules: [{ subjectOfferingId: 'GONE' }] })))).toContain('ERROR:PROGRAMME_INACTIVE_SUBJECT');
     });
 
-    it('warnings and info never read as errors; inactive grades are ignored', () => {
+    it('warnings and info never read as errors; inactive classes are ignored', () => {
       const issues = run((i) => {
         i.otherSessions.push({ id: 'o', name: 'Last year', startDate: '2026-01-01', endDate: '2026-06-30', status: 'CLOSED' });
         i.otherSessions.push({ id: 'a', name: 'Ancient', startDate: '2026-01-01', endDate: '2026-06-30', status: 'ARCHIVED' });
         i.ruleVersions.RV = { status: 'RETIRED', name: '2025-26' };
         i.terms = [];
-        i.grades.G11 = { code: 'G11', sequence: 14, isBoardGrade: false };
-        i.gradeOfferings.push({ id: 'G11O', locationId: 'L1', gradeId: 'G11', displayName: 'Class XI', status: 'INACTIVE' });
+        i.classes.G11 = { code: 'G11', sequence: 14, isBoardClass: false };
+        i.classOfferings.push({ id: 'G11O', locationId: 'L1', classId: 'G11', displayName: 'Class XI', status: 'INACTIVE' });
       });
-      expect(codes(issues)).toEqual(['WARNING:RULE_VERSION_RETIRED', 'WARNING:SESSION_DATES_OVERLAP', 'WARNING:GRADE_WITHOUT_TERMS', 'INFO:NO_TERMS']);
+      expect(codes(issues)).toEqual(['WARNING:RULE_VERSION_RETIRED', 'WARNING:SESSION_DATES_OVERLAP', 'WARNING:CLASS_WITHOUT_TERMS', 'INFO:NO_TERMS']);
       expect(issues.find((x) => x.code === 'SESSION_DATES_OVERLAP')?.message).toContain('Last year');
 
-      expect(codes(run((i) => i.gradeOfferings.push({ id: 'G11O', locationId: 'L1', gradeId: 'G11', displayName: 'Class XI', status: 'ACTIVE' })))).toEqual(
-        expect.arrayContaining(['ERROR:GRADE_WITHOUT_SECTIONS', 'INFO:NO_PROGRAMMES']),
+      expect(codes(run((i) => i.classOfferings.push({ id: 'G11O', locationId: 'L1', classId: 'G11', displayName: 'Class XI', status: 'ACTIVE' })))).toEqual(
+        expect.arrayContaining(['ERROR:CLASS_WITHOUT_SECTIONS', 'INFO:NO_PROGRAMMES']),
       );
-      // A board grade never needs terms.
-      expect(codes(run((i) => { i.terms = []; i.grades.G6!.isBoardGrade = true; }))).toEqual(['INFO:NO_TERMS']);
+      // A board class never needs terms.
+      expect(codes(run((i) => { i.terms = []; i.classes.G6!.isBoardClass = true; }))).toEqual(['INFO:NO_TERMS']);
     });
 
     it('lists errors first', () => {
@@ -942,21 +942,21 @@ describe('impossible rules are detected (AS-14)', () => {
 });
 
 describe('programmes and flexible combinations (AS-10, AS-11)', () => {
-  /** Mohali: Grade 9, 11 and 12; Chandigarh: Grade 11. */
+  /** Mohali: Class 9, 11 and 12; Chandigarh: Class 11. */
   async function senior() {
     const t = await draftSession();
     const more = await createMoreSubjects(t.agent);
-    const [g9, g11, g12] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G09!, t.ref.gradeId.G11!, t.ref.gradeId.G12!]);
-    const [chd11] = await addGrades(t.agent, t.id, t.chd.locationId, [t.ref.gradeId.G11!]);
-    const o9 = await offer(t.agent, g9!.gradeOfferingId, [t.subjects.ENG!]);
+    const [g9, g11, g12] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G09!, t.ref.classId.G11!, t.ref.classId.G12!]);
+    const [chd11] = await addClasses(t.agent, t.id, t.chd.locationId, [t.ref.classId.G11!]);
+    const o9 = await offer(t.agent, g9!.classOfferingId, [t.subjects.ENG!]);
     const o11 = {
-      ...(await offer(t.agent, g11!.gradeOfferingId, [t.subjects.ENG!])),
-      ...(await offer(t.agent, g11!.gradeOfferingId, [more.PHY!, more.CHEM!, t.subjects.MATH!, more.BIO!, more.CS!], 'ELECTIVE')),
+      ...(await offer(t.agent, g11!.classOfferingId, [t.subjects.ENG!])),
+      ...(await offer(t.agent, g11!.classOfferingId, [more.PHY!, more.CHEM!, t.subjects.MATH!, more.BIO!, more.CS!], 'ELECTIVE')),
     } as Record<string, string>;
-    const o12 = await offer(t.agent, g12!.gradeOfferingId, [more.PHY!]);
-    const oChd = await offer(t.agent, chd11!.gradeOfferingId, [t.subjects.ENG!]);
+    const o12 = await offer(t.agent, g12!.classOfferingId, [more.PHY!]);
+    const oChd = await offer(t.agent, chd11!.classOfferingId, [t.subjects.ENG!]);
     const create = (body: Record<string, unknown>) =>
-      t.agent.post(`${API}/academic-programmes`).send({ academicSessionId: t.id, locationId: t.moh.locationId, gradeFromId: t.ref.gradeId.G11, gradeToId: t.ref.gradeId.G12, ...body });
+      t.agent.post(`${API}/academic-programmes`).send({ academicSessionId: t.id, locationId: t.moh.locationId, classFromId: t.ref.classId.G11, classToId: t.ref.classId.G12, ...body });
     return { ...t, more, g11, o9, o11, o12, oChd, create };
   }
 
@@ -995,21 +995,21 @@ describe('programmes and flexible combinations (AS-10, AS-11)', () => {
     expect(patched).toMatchObject({ name: 'Science (PCM/PCB)', choiceMin: 1, choiceMax: 2 });
   });
 
-  it('subjects must be offered at the programme’s location, inside its grade range, and listed once', async () => {
+  it('subjects must be offered at the programme’s location, inside its class range, and listed once', async () => {
     const s = await senior();
     const stream = (rules: unknown[], extra: Record<string, unknown> = {}) => s.create({ name: 'S', code: 'X1', kind: 'STREAM', subjectRules: rules, ...extra });
     const rule = (id: string | undefined, requirement = 'REQUIRED') => ({ subjectOfferingId: id, requirement });
 
-    expect(expectError(await stream([rule(s.o9.ENG)]), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty(['subjectRules.0.subjectOfferingId']); // Grade 9 is outside XI–XII
+    expect(expectError(await stream([rule(s.o9.ENG)]), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty(['subjectRules.0.subjectOfferingId']); // Class 9 is outside XI–XII
     expect(expectError(await stream([rule(s.oChd.ENG)]), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty(['subjectRules.0.subjectOfferingId']); // another location
     expect(expectError(await stream([rule(s.o11.ENG), rule(s.o11.ENG, 'OPTIONAL')]), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('subjectRules');
     expect(expectError(await stream([rule(s.o11.MATH, 'CHOICE')], { choiceMin: 1, choiceMax: 2 }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('choiceMax');
     expect(expectError(await stream([rule(s.o11.MATH, 'CHOICE'), rule(s.o11.BIO, 'CHOICE')], { choiceMin: 2, choiceMax: 1 }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('choiceMax');
-    expect(expectError(await stream([rule(s.o11.ENG)], { gradeFromId: s.ref.gradeId.G12, gradeToId: s.ref.gradeId.G11 }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('gradeToId');
+    expect(expectError(await stream([rule(s.o11.ENG)], { classFromId: s.ref.classId.G12, classToId: s.ref.classId.G11 }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('classToId');
     expectError(await stream([rule(s.o11.ENG)], { locationId: s.pkl.locationId }), 409, 'LOCATION_NOT_IN_SESSION');
     expectError(await stream([rule(s.o11.ENG)], { boardId: '6f0b3e0a-1f2e-4d5b-8c1a-0a1b2c3d4e5f' }), 404, 'NOT_FOUND');
     expectError(await stream([rule(s.o11.ENG)], { academicSessionId: '6f0b3e0a-1f2e-4d5b-8c1a-0a1b2c3d4e5f' }), 404, 'NOT_FOUND');
-    // A range that includes both grades accepts a Grade 12 subject too.
+    // A range that includes both classes accepts a Class 12 subject too.
     await stream([rule(s.o11.ENG), rule(s.o12.PHY)]).expect(201);
     expectError(await stream([rule(s.o11.ENG)]), 409, 'PROGRAMME_CODE_TAKEN');
   });
@@ -1033,26 +1033,26 @@ describe('programmes and flexible combinations (AS-10, AS-11)', () => {
     await s.agent.delete(`${API}/academic-programmes/${p.programmeId}`).expect(204);
   });
 
-  it('QA 14: a flexible combination has no fixed subject list — the grade’s groups and constraints define what is allowed', async () => {
+  it('QA 14: a flexible combination has no fixed subject list — the class’s groups and constraints define what is allowed', async () => {
     const s = await senior();
     expect(expectError(await s.create({ name: 'Flex', code: 'FLEX', kind: 'FLEXIBLE', subjectRules: [{ subjectOfferingId: s.o11.ENG, requirement: 'REQUIRED' }] }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('subjectRules');
     const flex = (await s.create({ name: 'Flexible Combination', code: 'FLEX', kind: 'FLEXIBLE', choiceMin: 2, choiceMax: 3 }).expect(201)).body.data as ProgrammeDTO;
     expect(flex).toMatchObject({ kind: 'FLEXIBLE', subjectRules: [], choiceMin: null, choiceMax: null });
-    await s.create({ name: 'Science', code: 'SCI', kind: 'STREAM', gradeToId: s.ref.gradeId.G11, subjectRules: [{ subjectOfferingId: s.o11.PHY, requirement: 'REQUIRED' }] }).expect(201);
+    await s.create({ name: 'Science', code: 'SCI', kind: 'STREAM', classToId: s.ref.classId.G11, subjectRules: [{ subjectOfferingId: s.o11.PHY, requirement: 'REQUIRED' }] }).expect(201);
 
-    // The rules a flexible student picks within live on the grade.
-    const g11Url = `${API}/grade-offerings/${s.g11!.gradeOfferingId}`;
+    // The rules a flexible student picks within live on the class.
+    const g11Url = `${API}/class-offerings/${s.g11!.classOfferingId}`;
     await s.agent.post(`${g11Url}/choice-groups`).send({ name: 'Electives', ruleType: 'CHOOSE_N', min: 1, max: 3, subjectOfferingIds: [s.o11.MATH, s.o11.BIO, s.o11.CS] }).expect(201);
     await s.agent.post(`${g11Url}/constraints`).send({ type: 'EXCLUDES', subjectOfferingId: s.o11.BIO, otherSubjectOfferingId: s.o11.CS }).expect(201);
 
-    const context = (gradeId: string) => s.agent.get(`${API}/academic-context`).query({ academicSessionId: s.id, locationId: s.moh.locationId, gradeId });
-    const g11 = (await context(s.ref.gradeId.G11!).expect(200)).body.data;
+    const context = (classId: string) => s.agent.get(`${API}/academic-context`).query({ academicSessionId: s.id, locationId: s.moh.locationId, classId });
+    const g11 = (await context(s.ref.classId.G11!).expect(200)).body.data;
     expect(g11.programmes.map((p: ProgrammeDTO) => p.code)).toEqual(['FLEX', 'SCI']);
     expect(g11.choiceGroups.map((g: ChoiceGroupDTO) => g.summary)).toEqual(['Choose 1 to 3 of Mathematics, Biology, Computer Science']);
     expect(g11.constraints.map((c: ConstraintDTO) => c.summary)).toEqual(['Biology excludes Computer Science']);
-    // Grade XII is inside Flexible's range but outside Science's; Grade 9 is in neither.
-    expect((await context(s.ref.gradeId.G12!).expect(200)).body.data.programmes.map((p: ProgrammeDTO) => p.code)).toEqual(['FLEX']);
-    expect((await context(s.ref.gradeId.G09!).expect(200)).body.data.programmes).toEqual([]);
+    // Class XII is inside Flexible's range but outside Science's; Class 9 is in neither.
+    expect((await context(s.ref.classId.G12!).expect(200)).body.data.programmes.map((p: ProgrammeDTO) => p.code)).toEqual(['FLEX']);
+    expect((await context(s.ref.classId.G09!).expect(200)).body.data.programmes).toEqual([]);
   });
 });
 
@@ -1061,27 +1061,27 @@ const sessionOf = (t: DraftSession, id = t.id) => get<AcademicSessionDTO>(t, `/a
 const clone = (t: DraftSession, body: Record<string, unknown> = {}, id = t.id) =>
   t.agent.post(`${API}/academic-sessions/${id}/clone`).send({ name: 'Academic Year 2027-28', code: '2027-28', startDate: '2027-04-01', endDate: '2028-03-31', ...body });
 
-/** A complete plan: Grade 6 at Mohali with two sections, three subjects (one with a CBSE code), a group, a rule, a programme and two terms. */
+/** A complete plan: Class 6 at Mohali with two sections, three subjects (one with a CBSE code), a group, a rule, a programme and two terms. */
 async function rich() {
   const t = await draftSession();
   await t.agent.put(`${API}/subjects/${t.subjects.MATH}/board-codes`).send({ boardRuleVersionId: t.ref.ruleVersionId('CBSE'), boardSubjectCode: '041' }).expect(200);
-  const [g6] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-  const gradeOfferingId = g6!.gradeOfferingId;
-  const sections = (await t.agent.post(`${API}/grade-offerings/${gradeOfferingId}/sections`).send({ codes: ['A', 'B'] }).expect(201)).body.data as { sectionOfferingId: string }[];
-  const o = await offer(t.agent, gradeOfferingId, [t.subjects.MATH!, t.subjects.SCI!, t.subjects.ENG!], 'ELECTIVE');
-  const group = (await t.agent.post(`${API}/grade-offerings/${gradeOfferingId}/choice-groups`).send({ name: 'Electives', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [o.MATH, o.SCI] }).expect(201)).body.data;
-  const constraint = (await t.agent.post(`${API}/grade-offerings/${gradeOfferingId}/constraints`).send({ type: 'REQUIRES', subjectOfferingId: o.SCI, otherSubjectOfferingId: o.ENG }).expect(201)).body.data;
+  const [g6] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+  const classOfferingId = g6!.classOfferingId;
+  const sections = (await t.agent.post(`${API}/class-offerings/${classOfferingId}/sections`).send({ codes: ['A', 'B'] }).expect(201)).body.data as { sectionOfferingId: string }[];
+  const o = await offer(t.agent, classOfferingId, [t.subjects.MATH!, t.subjects.SCI!, t.subjects.ENG!], 'ELECTIVE');
+  const group = (await t.agent.post(`${API}/class-offerings/${classOfferingId}/choice-groups`).send({ name: 'Electives', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [o.MATH, o.SCI] }).expect(201)).body.data;
+  const constraint = (await t.agent.post(`${API}/class-offerings/${classOfferingId}/constraints`).send({ type: 'REQUIRES', subjectOfferingId: o.SCI, otherSubjectOfferingId: o.ENG }).expect(201)).body.data;
   const programme = (
     await t.agent
       .post(`${API}/academic-programmes`)
-      .send({ academicSessionId: t.id, locationId: t.moh.locationId, name: 'Grade 6 track', code: 'P6', kind: 'STREAM', gradeFromId: t.ref.gradeId.G06, gradeToId: t.ref.gradeId.G06, subjectRules: [{ subjectOfferingId: o.MATH, requirement: 'REQUIRED' }] })
+      .send({ academicSessionId: t.id, locationId: t.moh.locationId, name: 'Class 6 track', code: 'P6', kind: 'STREAM', classFromId: t.ref.classId.G06, classToId: t.ref.classId.G06, subjectRules: [{ subjectOfferingId: o.MATH, requirement: 'REQUIRED' }] })
       .expect(201)
   ).body.data;
   const term1 = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
   const term2 = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 2', code: 'T2', startDate: '2026-10-01', endDate: '2027-03-31' }).expect(201)).body.data;
   return {
     ...t,
-    gradeOfferingId,
+    classOfferingId,
     sectionIds: sections.map((s) => s.sectionOfferingId),
     o,
     groupId: group.choiceGroupId as string,
@@ -1103,14 +1103,14 @@ describe('validate → publish → activate (AS-14, AS-15)', () => {
 
     const empty = (await act(t, 'validate').expect(200)).body.data as ValidationResultDTO;
     expect(empty.canPublish).toBe(false);
-    expect(empty.issues.map((i) => i.code)).toContain('NO_GRADE_OFFERINGS');
+    expect(empty.issues.map((i) => i.code)).toContain('NO_CLASS_OFFERINGS');
     expect(empty.summary.errors).toBeGreaterThan(0);
     expect((await sessionOf(t)).lastValidation).toMatchObject({ errors: empty.summary.errors, warnings: empty.summary.warnings });
 
     // Publishing re-runs validation and refuses, naming every error.
     const blocked = expectError(await act(t, 'publish'), 400, 'VALIDATION_FAILED');
     expect(blocked.message).toMatch(/^Fix \d+ errors? before you publish/);
-    expect((blocked.details as unknown as { issues: { level: string; code: string }[] }).issues.filter((i) => i.level === 'ERROR').map((i) => i.code)).toContain('NO_GRADE_OFFERINGS');
+    expect((blocked.details as unknown as { issues: { level: string; code: string }[] }).issues.filter((i) => i.level === 'ERROR').map((i) => i.code)).toContain('NO_CLASS_OFFERINGS');
     expect((await sessionOf(t)).status).toBe('DRAFT');
 
     const plan = await makePublishable(t);
@@ -1122,7 +1122,7 @@ describe('validate → publish → activate (AS-14, AS-15)', () => {
     await t.agent.delete(`${API}/terms/${plan.termId}`).expect(204);
     const noTerms = (await act(t, 'validate').expect(200)).body.data as ValidationResultDTO;
     expect(noTerms.canPublish).toBe(true);
-    expect(noTerms.issues.map((i) => `${i.level}:${i.code}`)).toEqual(['WARNING:GRADE_WITHOUT_TERMS', 'INFO:NO_TERMS']);
+    expect(noTerms.issues.map((i) => `${i.level}:${i.code}`)).toEqual(['WARNING:CLASS_WITHOUT_TERMS', 'INFO:NO_TERMS']);
 
     const published = (await act(t, 'publish').expect(200)).body.data as AcademicSessionDTO;
     expect(published).toMatchObject({ status: 'PUBLISHED', isCurrent: false, deletable: false });
@@ -1214,14 +1214,14 @@ describe('closing (AS-15)', () => {
     const refused = {
       'PATCH session': t.agent.patch(t.sessionUrl).send({ name: 'x' }),
       'validate': act(t, 'validate'),
-      'POST grade': t.agent.post(`${t.sessionUrl}/grade-offerings`).send({ locationId: t.moh.locationId, gradeIds: [t.ref.gradeId.G07!] }),
-      'PATCH grade': t.agent.patch(`${API}/grade-offerings/${t.gradeOfferingId}`).send({ displayName: 'x' }),
-      'POST section': t.agent.post(`${API}/grade-offerings/${t.gradeOfferingId}/sections`).send({ codes: ['Z'] }),
+      'POST class': t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.moh.locationId, classIds: [t.ref.classId.G07!] }),
+      'PATCH class': t.agent.patch(`${API}/class-offerings/${t.classOfferingId}`).send({ displayName: 'x' }),
+      'POST section': t.agent.post(`${API}/class-offerings/${t.classOfferingId}/sections`).send({ codes: ['Z'] }),
       'PATCH subject offering': t.agent.patch(`${API}/subject-offerings/${t.o.MATH}`).send({ offeringType: 'MANDATORY' }),
-      'POST group': t.agent.post(`${API}/grade-offerings/${t.gradeOfferingId}/choice-groups`).send({ name: 'x', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.ENG] }),
+      'POST group': t.agent.post(`${API}/class-offerings/${t.classOfferingId}/choice-groups`).send({ name: 'x', ruleType: 'CHOOSE_ONE', subjectOfferingIds: [t.o.ENG] }),
       'PATCH group': t.agent.patch(`${API}/choice-groups/${t.groupId}`).send({ name: 'x' }),
       'DELETE group': t.agent.delete(`${API}/choice-groups/${t.groupId}`),
-      'POST constraint': t.agent.post(`${API}/grade-offerings/${t.gradeOfferingId}/constraints`).send({ type: 'EXCLUDES', subjectOfferingId: t.o.MATH, otherSubjectOfferingId: t.o.ENG }),
+      'POST constraint': t.agent.post(`${API}/class-offerings/${t.classOfferingId}/constraints`).send({ type: 'EXCLUDES', subjectOfferingId: t.o.MATH, otherSubjectOfferingId: t.o.ENG }),
       'DELETE constraint': t.agent.delete(`${API}/constraints/${t.constraintId}`),
       'PATCH programme': t.agent.patch(`${API}/academic-programmes/${t.programmeId}`).send({ name: 'x' }),
       'DELETE programme': t.agent.delete(`${API}/academic-programmes/${t.programmeId}`),
@@ -1237,11 +1237,11 @@ describe('closing (AS-15)', () => {
     for (const action of ['publish', 'activate', 'close']) expectError(await act(t, action), 409, 'INVALID_STATUS_TRANSITION');
 
     // Everything is still there to read, and a closed session is the natural source for next year's plan.
-    expect(await get<unknown[]>(t, `/academic-sessions/${t.id}/grade-offerings`)).toHaveLength(1);
-    expect(await get<unknown[]>(t, `/grade-offerings/${t.gradeOfferingId}/choice-groups`)).toHaveLength(1);
+    expect(await get<unknown[]>(t, `/academic-sessions/${t.id}/class-offerings`)).toHaveLength(1);
+    expect(await get<unknown[]>(t, `/class-offerings/${t.classOfferingId}/choice-groups`)).toHaveLength(1);
     expect(await get<unknown[]>(t, `/academic-programmes?academicSessionId=${t.id}`)).toHaveLength(1);
     expect(await get<unknown[]>(t, `/academic-sessions/${t.id}/terms`)).toHaveLength(2);
-    expect(await GradeOffering.countDocuments({ tenantId: t.tenantId, sessionId: t.id })).toBe(1);
+    expect(await ClassOffering.countDocuments({ tenantId: t.tenantId, sessionId: t.id })).toBe(1);
     await clone(t).expect(201);
 
     expect(await act(t, 'archive').expect(200).then((r) => r.body.data.status)).toBe('ARCHIVED');
@@ -1260,7 +1260,7 @@ describe('unsafe changes on an ACTIVE session (AS-15)', () => {
     registerAcademicDependency({
       key: KEY,
       label: 'Faculty assignments',
-      entityTypes: ['grade_offering', 'section_offering', 'subject_offering', 'academic_term', 'session_location', 'choice_group', 'constraint', 'programme'],
+      entityTypes: ['class_offering', 'section_offering', 'subject_offering', 'academic_term', 'session_location', 'choice_group', 'constraint', 'programme'],
       count: async ({ entityId }) => (inUse.has(entityId) ? 3 : 0),
       message: (n) => `${n} faculty assignments use this.`,
     });
@@ -1270,7 +1270,7 @@ describe('unsafe changes on an ACTIVE session (AS-15)', () => {
     const t = await rich();
     registerStub();
     try {
-      for (const id of [t.gradeOfferingId, ...t.sectionIds, t.o.MATH!, t.groupId, t.constraintId, t.programmeId, ...t.termIds, t.moh.locationId, t.chd.locationId]) inUse.add(id);
+      for (const id of [t.classOfferingId, ...t.sectionIds, t.o.MATH!, t.groupId, t.constraintId, t.programmeId, ...t.termIds, t.moh.locationId, t.chd.locationId]) inUse.add(id);
 
       // DRAFT: nothing downstream can exist yet, so the guard stays out of the way.
       const draftChange = await t.agent.patch(`${API}/sections/${t.sectionIds[1]}`).send({ status: 'INACTIVE' }).expect(200);
@@ -1281,7 +1281,7 @@ describe('unsafe changes on an ACTIVE session (AS-15)', () => {
       const before = await auditForSession(t.agent, t.id);
 
       const blocked: [string, ReturnType<typeof t.agent.patch>][] = [
-        ['grade offering', t.agent.patch(`${API}/grade-offerings/${t.gradeOfferingId}`).send({ status: 'INACTIVE' })],
+        ['class offering', t.agent.patch(`${API}/class-offerings/${t.classOfferingId}`).send({ status: 'INACTIVE' })],
         ['section', t.agent.patch(`${API}/sections/${t.sectionIds[0]}`).send({ status: 'INACTIVE' })],
         ['subject offering', t.agent.patch(`${API}/subject-offerings/${t.o.MATH}`).send({ status: 'INACTIVE' })],
         ['group deactivate', t.agent.patch(`${API}/choice-groups/${t.groupId}`).send({ status: 'INACTIVE' })],
@@ -1305,8 +1305,8 @@ describe('unsafe changes on an ACTIVE session (AS-15)', () => {
       // Display edits and additions are always fine on an ACTIVE session.
       await t.agent.patch(`${API}/sections/${t.sectionIds[0]}`).send({ displayName: 'Rose' }).expect(200);
       await t.agent.patch(`${API}/choice-groups/${t.groupId}`).send({ name: 'Electives (renamed)' }).expect(200);
-      await t.agent.post(`${API}/grade-offerings/${t.gradeOfferingId}/sections`).send({ codes: ['C'] }).expect(201);
-      const [g7] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G07!]);
+      await t.agent.post(`${API}/class-offerings/${t.classOfferingId}/sections`).send({ codes: ['C'] }).expect(201);
+      const [g7] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G07!]);
       expect(g7).toBeTruthy();
 
       // Once nothing references them any more, the same changes go through.
@@ -1329,7 +1329,7 @@ describe('clone / roll forward (AS-13)', () => {
       { locationId: t.chd.locationId, boardId: t.ref.boardId.PSEB, boardRuleVersionId: t.ref.ruleVersionId('PSEB') },
     ] }).expect(200);
     const original = await sessionOf(t);
-    const countsBefore = await Promise.all([GradeOffering, SectionOffering, SubjectOffering, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, AcademicTerm].map((m) => (m as typeof GradeOffering).countDocuments({ tenantId: t.tenantId, sessionId: t.id })));
+    const countsBefore = await Promise.all([ClassOffering, SectionOffering, SubjectOffering, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, AcademicTerm].map((m) => (m as typeof ClassOffering).countDocuments({ tenantId: t.tenantId, sessionId: t.id })));
 
     const res = await clone(t);
     expect(res.status, JSON.stringify(res.body)).toBe(201);
@@ -1340,14 +1340,14 @@ describe('clone / roll forward (AS-13)', () => {
     expect(copy.locations.map((l) => `${l.locationCode}:${l.boardCode}:${l.ruleVersionName}:${l.affiliationNumber}`)).toEqual(['MOH:CBSE:2026-27:1630457', 'CHD:PSEB:2026-27:null']);
 
     // Structure came across with NEW ids.
-    const grades = await get<{ gradeOfferingId: string; displayName: string; sectionCount: number; subjectCount: number }[]>(t, `${copyUrl}/grade-offerings`);
-    expect(grades).toMatchObject([{ displayName: 'Grade 6', sectionCount: 1, subjectCount: 3 }]); // section B was inactive
-    expect(grades[0]!.gradeOfferingId).not.toBe(t.gradeOfferingId);
-    const newGrade = grades[0]!.gradeOfferingId;
-    const sections = await get<{ sectionCode: string; sectionOfferingId: string }[]>(t, `/grade-offerings/${newGrade}/sections`);
+    const classes = await get<{ classOfferingId: string; displayName: string; sectionCount: number; subjectCount: number }[]>(t, `${copyUrl}/class-offerings`);
+    expect(classes).toMatchObject([{ displayName: 'Class 6', sectionCount: 1, subjectCount: 3 }]); // section B was inactive
+    expect(classes[0]!.classOfferingId).not.toBe(t.classOfferingId);
+    const newClass = classes[0]!.classOfferingId;
+    const sections = await get<{ sectionCode: string; sectionOfferingId: string }[]>(t, `/class-offerings/${newClass}/sections`);
     expect(sections.map((s) => s.sectionCode)).toEqual(['A']);
     expect(t.sectionIds).not.toContain(sections[0]!.sectionOfferingId);
-    const offerings = await get<{ subjectOfferingId: string; subjectCode: string; boardSubjectCode: string | null }[]>(t, `/grade-offerings/${newGrade}/subjects`);
+    const offerings = await get<{ subjectOfferingId: string; subjectCode: string; boardSubjectCode: string | null }[]>(t, `/class-offerings/${newClass}/subjects`);
     expect(offerings.map((o) => o.subjectCode).sort()).toEqual(['ENG', 'MATH', 'SCI']);
     expect(offerings.find((o) => o.subjectCode === 'MATH')?.boardSubjectCode).toBe('041'); // board code mapping travels with the pinned rule version
     const oldIds = Object.values(t.o);
@@ -1355,10 +1355,10 @@ describe('clone / roll forward (AS-13)', () => {
 
     // Rules point at the NEW offerings.
     const newId = (code: string) => offerings.find((o) => o.subjectCode === code)!.subjectOfferingId;
-    const groups = await get<{ name: string; ruleType: string; subjects: { subjectOfferingId: string }[] }[]>(t, `/grade-offerings/${newGrade}/choice-groups`);
+    const groups = await get<{ name: string; ruleType: string; subjects: { subjectOfferingId: string }[] }[]>(t, `/class-offerings/${newClass}/choice-groups`);
     expect(groups).toMatchObject([{ name: 'Electives', ruleType: 'CHOOSE_ONE' }]);
     expect(groups[0]!.subjects.map((s) => s.subjectOfferingId).sort()).toEqual([newId('MATH'), newId('SCI')].sort());
-    const constraints = await get<{ subjectOfferingId: string; otherSubjectOfferingId: string; type: string }[]>(t, `/grade-offerings/${newGrade}/constraints`);
+    const constraints = await get<{ subjectOfferingId: string; otherSubjectOfferingId: string; type: string }[]>(t, `/class-offerings/${newClass}/constraints`);
     expect(constraints).toMatchObject([{ type: 'REQUIRES', subjectOfferingId: newId('SCI'), otherSubjectOfferingId: newId('ENG') }]);
     const programmes = await get<{ code: string; subjectRules: { subjectOfferingId: string }[] }[]>(t, `/academic-programmes?academicSessionId=${copy.academicSessionId}`);
     expect(programmes).toMatchObject([{ code: 'P6', subjectRules: [{ subjectOfferingId: newId('MATH') }] }]);
@@ -1377,11 +1377,11 @@ describe('clone / roll forward (AS-13)', () => {
     const { lastValidation: _a, updatedAt: _b, ...originalNow } = await sessionOf(t);
     const { lastValidation: _c, updatedAt: _d, ...originalBefore } = original;
     expect(originalNow).toEqual(originalBefore);
-    const countsAfter = await Promise.all([GradeOffering, SectionOffering, SubjectOffering, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, AcademicTerm].map((m) => (m as typeof GradeOffering).countDocuments({ tenantId: t.tenantId, sessionId: t.id })));
+    const countsAfter = await Promise.all([ClassOffering, SectionOffering, SubjectOffering, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, AcademicTerm].map((m) => (m as typeof ClassOffering).countDocuments({ tenantId: t.tenantId, sessionId: t.id })));
     expect(countsAfter).toEqual(countsBefore);
 
     const event = (await auditForSession(t.agent, copy.academicSessionId)).find((e) => e.action === 'academic_session.cloned')!;
-    expect(event.metadata).toMatchObject({ clonedFromSessionId: t.id, termShiftDays: 365, copied: { gradeOfferings: 1, sections: 1, subjectOfferings: 3, choiceGroups: 1, constraints: 1, programmes: 1, terms: 2 } });
+    expect(event.metadata).toMatchObject({ clonedFromSessionId: t.id, termShiftDays: 365, copied: { classOfferings: 1, sections: 1, subjectOfferings: 3, choiceGroups: 1, constraints: 1, programmes: 1, terms: 2 } });
   });
 
   it('refuses a taken code or bad dates, needs the publish permission, and starts from any visible session', async () => {
@@ -1391,7 +1391,7 @@ describe('clone / roll forward (AS-13)', () => {
     expect(expectError(await clone(t, { startDate: 'soon' }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('startDate');
     expectError(await clone(t, {}, '6f0b3e0a-1f2e-4d5b-8c1a-0a1b2c3d4e5f'), 404, 'NOT_FOUND');
     expect(await AcademicSession.countDocuments({ tenantId: t.tenantId })).toBe(1); // nothing half-created
-    expect(await GradeOffering.countDocuments({ tenantId: t.tenantId })).toBe(1);
+    expect(await ClassOffering.countDocuments({ tenantId: t.tenantId })).toBe(1);
 
     const faculty = await createUserAndLogin(t.tenantId, 'FACULTY');
     expectError(await faculty.agent.post(`${t.sessionUrl}/clone`).send({ name: 'x', code: 'X1', startDate: '2027-04-01', endDate: '2028-03-31' }), 403, 'FORBIDDEN');
@@ -1402,34 +1402,34 @@ describe('overview, academic context and current session (AS-16, AS-18)', () => 
   it('the overview reports counts, boards and a checklist that follows the plan', async () => {
     const t = await draftSession();
     const empty = await get<AcademicOverviewDTO>(t, `/academic-sessions/${t.id}/overview`);
-    expect(empty.counts).toEqual({ locations: 2, grades: 0, sections: 0, subjects: 0, programmes: 0, terms: 0, choiceGroups: 0 });
+    expect(empty.counts).toEqual({ locations: 2, classes: 0, sections: 0, subjects: 0, programmes: 0, terms: 0, choiceGroups: 0 });
     expect(empty.boards.map((b) => `${b.locationCode}:${b.boardCode}`)).toEqual(['MOH:CBSE', 'CHD:PSEB']);
     const status = (o: AcademicOverviewDTO) => Object.fromEntries(o.checklist.map((c) => [c.key, c.status]));
-    expect(status(empty)).toEqual({ session: 'completed', board: 'completed', grades: 'pending', sections: 'pending', subjects: 'pending', rules: 'optional', terms: 'optional', validation: 'pending' });
+    expect(status(empty)).toEqual({ session: 'completed', board: 'completed', classes: 'pending', sections: 'pending', subjects: 'pending', rules: 'optional', terms: 'optional', validation: 'pending' });
 
     const full = await rich();
     await act(full, 'validate').expect(200);
     const o = await get<AcademicOverviewDTO>(full, `/academic-sessions/${full.id}/overview`);
-    expect(o.counts).toEqual({ locations: 2, grades: 1, sections: 2, subjects: 3, programmes: 1, terms: 2, choiceGroups: 1 });
-    expect(status(o)).toEqual({ session: 'completed', board: 'completed', grades: 'completed', sections: 'completed', subjects: 'completed', rules: 'completed', terms: 'completed', validation: 'completed' });
+    expect(o.counts).toEqual({ locations: 2, classes: 1, sections: 2, subjects: 3, programmes: 1, terms: 2, choiceGroups: 1 });
+    expect(status(o)).toEqual({ session: 'completed', board: 'completed', classes: 'completed', sections: 'completed', subjects: 'completed', rules: 'completed', terms: 'completed', validation: 'completed' });
     expect(o.lastValidation).toMatchObject({ errors: 0 });
 
     const faculty = await createUserAndLogin(full.tenantId, 'FACULTY');
     expectError(await faculty.agent.get(`${full.sessionUrl}/overview`), 403, 'FORBIDDEN');
   });
 
-  it('AS-18: the context lists a location’s grades, or returns the whole tree for one grade', async () => {
+  it('AS-18: the context lists a location’s classes, or returns the whole tree for one class', async () => {
     const t = await rich();
     await activate(t);
     const query = (extra: Record<string, string> = {}) => t.agent.get(`${API}/academic-context`).query({ academicSessionId: t.id, locationId: t.moh.locationId, ...extra });
 
-    const list = (await query().expect(200)).body.data as AcademicContextGradesDTO;
+    const list = (await query().expect(200)).body.data as AcademicContextClassesDTO;
     expect(list).toMatchObject({ sessionStatus: 'ACTIVE', board: { boardCode: 'CBSE', ruleVersionName: '2026-27' } });
-    expect(list.grades.map((g) => g.displayName)).toEqual(['Grade 6']);
+    expect(list.classes.map((g) => g.displayName)).toEqual(['Class 6']);
     expect(list).not.toHaveProperty('sections');
 
-    const tree = (await query({ gradeId: t.ref.gradeId.G06! }).expect(200)).body.data as AcademicContextDTO;
-    expect(tree.gradeOffering).toMatchObject({ gradeOfferingId: t.gradeOfferingId, canonicalCode: 'G06' });
+    const tree = (await query({ classId: t.ref.classId.G06! }).expect(200)).body.data as AcademicContextDTO;
+    expect(tree.classOffering).toMatchObject({ classOfferingId: t.classOfferingId, canonicalCode: 'G06' });
     expect(tree.sections.map((s) => s.sectionCode)).toEqual(['A', 'B']);
     expect(tree.subjectOfferings.map((s) => `${s.subjectCode}:${s.boardSubjectCode}`).sort()).toEqual(['ENG:null', 'MATH:041', 'SCI:null']);
     expect(tree.choiceGroups.map((g) => g.summary)).toEqual(['Choose 1 of Mathematics, Science']);
@@ -1438,7 +1438,7 @@ describe('overview, academic context and current session (AS-16, AS-18)', () => 
     expect(tree.terms.map((x) => x.code)).toEqual(['T1', 'T2']);
 
     expectError(await query({ locationId: t.pkl.locationId }), 409, 'LOCATION_NOT_IN_SESSION');
-    expectError(await query({ gradeId: t.ref.gradeId.G07! }), 404, 'NOT_FOUND');
+    expectError(await query({ classId: t.ref.classId.G07! }), 404, 'NOT_FOUND');
     expect(expectError(await t.agent.get(`${API}/academic-context`).query({ academicSessionId: t.id }), 400, 'VALIDATION_FAILED').details.fields).toHaveProperty('locationId');
   });
 
@@ -1449,7 +1449,7 @@ describe('overview, academic context and current session (AS-16, AS-18)', () => 
     const staff = await createUserAndLogin(t.tenantId, 'STAFF');
     const parent = await createUserAndLogin(t.tenantId, 'PARENT');
     const ask = (agent: typeof faculty.agent, academicSessionId: string) =>
-      agent.get(`${API}/academic-context`).query({ academicSessionId, locationId: t.moh.locationId, gradeId: t.ref.gradeId.G06! });
+      agent.get(`${API}/academic-context`).query({ academicSessionId, locationId: t.moh.locationId, classId: t.ref.classId.G06! });
 
     for (const user of [faculty, staff]) {
       expectError(await ask(user.agent, t.id), 404, 'NOT_FOUND'); // still a draft
@@ -1457,7 +1457,7 @@ describe('overview, academic context and current session (AS-16, AS-18)', () => 
     }
     await activate(t);
     for (const user of [faculty, staff]) {
-      expect((await ask(user.agent, t.id).expect(200)).body.data.gradeOffering.gradeOfferingId).toBe(t.gradeOfferingId);
+      expect((await ask(user.agent, t.id).expect(200)).body.data.classOffering.classOfferingId).toBe(t.classOfferingId);
       expect((await user.agent.get(`${API}/academic-sessions/current`).expect(200)).body.data.academicSessionId).toBe(t.id);
       expectError(await ask(user.agent, draftCopy.academicSessionId), 404, 'NOT_FOUND');
       expectError(await user.agent.get(`${API}/academic-programmes`).query({ academicSessionId: draftCopy.academicSessionId }), 404, 'NOT_FOUND');
@@ -1471,7 +1471,7 @@ describe('overview, academic context and current session (AS-16, AS-18)', () => 
 });
 
 describe('integration: a downstream module through academicService (AS-18)', () => {
-  /** A dev-only fake "faculty assignment" module: it resolves Location → Session → Grade → Section → Subject, stores only offering ids, and registers itself as a dependency. */
+  /** A dev-only fake "faculty assignment" module: it resolves Location → Session → Class → Section → Subject, stores only offering ids, and registers itself as a dependency. */
   function facultyModule() {
     const assignments: { sectionOfferingId: string; subjectOfferingId: string }[] = [];
     const KEY = 'test.faculty-assignments';
@@ -1513,15 +1513,15 @@ describe('integration: a downstream module through academicService (AS-18)', () 
       expect(usable).toMatchObject({
         location: { locationCode: 'MOH', displayName: 'Mohali Campus' },
         session: { code: '2026-27', status: 'ACTIVE' },
-        gradeOffering: { gradeOfferingId: t.gradeOfferingId, displayName: 'Grade 6' },
+        classOffering: { classOfferingId: t.classOfferingId, displayName: 'Class 6' },
         section: { sectionOfferingId: sectionA, sectionCode: 'A' },
       });
       expect(await academicService.assertSubjectOfferingUsable(t.ctx, t.o.MATH!, { purpose: 'NEW_ASSIGNMENT' })).toMatchObject({
         subjectOffering: { subjectOfferingId: t.o.MATH, subjectName: 'Mathematics', offeringType: 'ELECTIVE' },
-        gradeOffering: { displayName: 'Grade 6' },
+        classOffering: { displayName: 'Class 6' },
       });
       // The context call is the same data the HTTP route serves.
-      const context = (await academicService.getContext(t.ctx, { academicSessionId: t.id, locationId: t.moh.locationId, gradeId: t.ref.gradeId.G06! })) as AcademicContextDTO;
+      const context = (await academicService.getContext(t.ctx, { academicSessionId: t.id, locationId: t.moh.locationId, classId: t.ref.classId.G06! })) as AcademicContextDTO;
       expect(context.sections).toHaveLength(2);
 
       // QA 17 through the module: the section is in use, so it cannot be deactivated; the unused one can, and then refuses new work.
@@ -1547,14 +1547,14 @@ describe('integration: a downstream module through academicService (AS-18)', () 
     }
   });
 
-  it('an inactive grade or subject refuses new assignments but stays readable', async () => {
+  it('an inactive class or subject refuses new assignments but stays readable', async () => {
     const t = await rich();
     await activate(t);
     await t.agent.patch(`${API}/subject-offerings/${t.o.ENG}`).send({ status: 'INACTIVE' }).expect(200);
     await expect(academicService.assertSubjectOfferingUsable(t.ctx, t.o.ENG!, { purpose: 'NEW_ASSIGNMENT' })).rejects.toMatchObject({ details: { reason: 'SUBJECT_INACTIVE' } });
     expect(await academicService.assertSubjectOfferingUsable(t.ctx, t.o.ENG!, { purpose: 'HISTORICAL_READ' })).toMatchObject({ subjectOffering: { subjectName: 'English' } });
-    await t.agent.patch(`${API}/grade-offerings/${t.gradeOfferingId}`).send({ status: 'INACTIVE' }).expect(200);
-    await expect(academicService.assertSectionUsable(t.ctx, t.sectionIds[0]!, { purpose: 'NEW_ASSIGNMENT' })).rejects.toMatchObject({ details: { reason: 'GRADE_INACTIVE' } });
+    await t.agent.patch(`${API}/class-offerings/${t.classOfferingId}`).send({ status: 'INACTIVE' }).expect(200);
+    await expect(academicService.assertSectionUsable(t.ctx, t.sectionIds[0]!, { purpose: 'NEW_ASSIGNMENT' })).rejects.toMatchObject({ details: { reason: 'CLASS_INACTIVE' } });
   });
 
   it('Module 1 setup overview: Academic Structure is upcoming, then pending while only drafts exist, then completed once a session is active', async () => {
@@ -1599,7 +1599,7 @@ describe('audit trail for rules and lifecycle (AS-17)', () => {
 
     const by = (action: string) => events.filter((e) => e.action === action);
     expect(by('choice_group.updated')[1]!.changes).toEqual(expect.arrayContaining([{ field: 'name', from: 'Electives', to: 'Electives 2' }, { field: 'status', from: 'ACTIVE', to: 'INACTIVE' }]));
-    expect(by('programme.updated')[0]!.changes).toEqual([{ field: 'name', from: 'Grade 6 track', to: 'Track 6' }]);
+    expect(by('programme.updated')[0]!.changes).toEqual([{ field: 'name', from: 'Class 6 track', to: 'Track 6' }]);
     expect(by('constraint.deleted')[0]!.changes).toEqual([{ field: 'rule', from: 'Science requires English', to: null }]);
     expect(by('academic_session.published')[0]).toMatchObject({ entityType: 'academic_session', changes: [{ field: 'status', from: 'DRAFT', to: 'PUBLISHED' }], actor: { role: 'SCHOOL_ADMIN' } });
     expect(by('academic_session.published')[0]!.metadata).toMatchObject({ validation: { errors: 0 } });
@@ -1630,22 +1630,22 @@ describe('the PRD §23 demo dataset', () => {
     expect(next.previousSessionId).toBe(active.academicSessionId);
 
     const [moh, chd] = active.locations.map((l) => l.locationId) as [string, string];
-    const grades = (await admin.get(`${API}/grades`).expect(200)).body.data as { gradeId: string; canonicalCode: string }[];
-    const gradeId = (code: string) => grades.find((g) => g.canonicalCode === code)!.gradeId;
+    const classes = (await admin.get(`${API}/classes`).expect(200)).body.data as { classId: string; canonicalCode: string }[];
+    const classId = (code: string) => classes.find((g) => g.canonicalCode === code)!.classId;
     const context = async (locationId: string, extra: Record<string, string> = {}) =>
       (await admin.get(`${API}/academic-context`).query({ academicSessionId: active.academicSessionId, locationId, ...extra }).expect(200)).body.data;
 
-    expect((await context(moh)).grades).toHaveLength(14); // Nursery–XII
-    expect((await context(chd)).grades).toHaveLength(10); // Nursery–VIII
-    for (const location of [moh, chd]) expect((await context(location, { gradeId: gradeId('G08') })).sections.map((s: { sectionCode: string }) => s.sectionCode)).toEqual(['A', 'B', 'C']);
+    expect((await context(moh)).classes).toHaveLength(14); // Nursery–XII
+    expect((await context(chd)).classes).toHaveLength(10); // Nursery–VIII
+    for (const location of [moh, chd]) expect((await context(location, { classId: classId('G08') })).sections.map((s: { sectionCode: string }) => s.sectionCode)).toEqual(['A', 'B', 'C']);
 
-    const g6 = (await context(moh, { gradeId: gradeId('G06') })) as AcademicContextDTO;
+    const g6 = (await context(moh, { classId: classId('G06') })) as AcademicContextDTO;
     expect(g6.choiceGroups.map((g) => `${g.name}: ${g.summary}`)).toEqual([
       'Core: Take all of Mathematics, Science, Social Science, Physical Education',
       'Language 1: Choose 1 of Punjabi, Hindi, Urdu',
       'Language 2: Take all of English',
     ]);
-    const g11 = (await context(moh, { gradeId: gradeId('G11') })) as AcademicContextDTO;
+    const g11 = (await context(moh, { classId: classId('G11') })) as AcademicContextDTO;
     expect(g11.programmes.map((p) => p.name).sort()).toEqual(['Commerce', 'Flexible Combination', 'Humanities', 'Science']);
     expect(g11.subjectOfferings.find((s) => s.subjectCode === 'PHY')?.boardSubjectCode).toBe('042');
     expect(g11.terms.map((t) => t.code)).toEqual(['T1', 'T2']);

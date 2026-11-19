@@ -3,36 +3,55 @@ import { Copy, Link2, Plus, Trash2, Unlink } from 'lucide-react';
 import { SUBJECT_OFFERING_TYPES, SUBJECT_OFFERING_TYPE_LABELS, type SubjectOfferingDTO, type SubjectOfferingType } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ComboboxField } from '@/components/ui/field';
+import { InfoTip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
-import { useAcademicMutation, useGradeOfferings, useSession, useSubjectOfferings, useSubjects } from '../api';
-import { GradePicker } from '../grade-picker';
+import { useAcademicMutation, useClassOfferings, useSession, useSubjectOfferings, useSubjects } from '../api';
+import { ClassPicker } from '../class-picker';
 import type { TabProps } from '../session-page';
+import { HelpHeading, TabIntro } from '../help';
 import { StatusToggle } from '../status-toggle';
 
 const OFFERING_TYPE_OPTIONS = SUBJECT_OFFERING_TYPES.map((t) => ({ value: t, label: SUBJECT_OFFERING_TYPE_LABELS[t] }));
 
-function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: { gradeOfferingId: string; sessionId: string; locationId: string; readOnly: boolean; draft: boolean }) {
-  const offerings = useSubjectOfferings(gradeOfferingId);
+function OfferingTypeHelp() {
+  return (
+    <>
+      <p>What kind of subject this is for the class:</p>
+      <ul>
+        <li><b>Mandatory</b>: every student studies it.</li>
+        <li><b>Elective</b>: students may choose it from a set of options.</li>
+        <li><b>Optional / additional</b>: an extra subject some students take on top of the rest.</li>
+        <li><b>Language</b>: a language subject, such as Hindi or Punjabi.</li>
+        <li><b>Skill</b>: a skill or activity subject, such as Art or Computers.</li>
+        <li><b>Internal</b>: the school teaches and marks it itself; it isn’t reported to the board.</li>
+      </ul>
+      <p>If students pick between subjects, also set that up on the Subject Choice Rules tab.</p>
+    </>
+  );
+}
+
+function Offerings({ classOfferingId, sessionId, locationId, readOnly, draft }: { classOfferingId: string; sessionId: string; locationId: string; readOnly: boolean; draft: boolean }) {
+  const offerings = useSubjectOfferings(classOfferingId);
   const subjects = useSubjects({ status: 'ACTIVE' }, 200);
   const session = useSession(sessionId);
-  const grades = useGradeOfferings(sessionId, locationId);
+  const classes = useClassOfferings(sessionId, locationId);
   const pinned = session.data?.locations.find((l) => l.locationId === locationId)?.boardRuleVersionId;
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [type, setType] = useState<SubjectOfferingType>('MANDATORY');
   const [copyFrom, setCopyFrom] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const add = useAcademicMutation((_: void) => api.post(`/grade-offerings/${gradeOfferingId}/subjects`, { subjectIds: [...picked], offeringType: type }), { quiet: true, success: 'Subjects added.' });
+  const add = useAcademicMutation((_: void) => api.post(`/class-offerings/${classOfferingId}/subjects`, { subjectIds: [...picked], offeringType: type }), { quiet: true, success: 'Subjects added.' });
   const patch = useAcademicMutation(({ id, body }: { id: string; body: Record<string, unknown> }) => api.patch(`/subject-offerings/${id}`, body));
   const remove = useAcademicMutation((id: string) => api.delete<void>(`/subject-offerings/${id}`), { success: 'Subject removed.' });
-  const copy = useAcademicMutation((from: string) => api.post<{ created: unknown[]; skipped: number }>(`/grade-offerings/${gradeOfferingId}/subjects/copy-from/${from}`), {
+  const copy = useAcademicMutation((from: string) => api.post<{ created: unknown[]; skipped: number }>(`/class-offerings/${classOfferingId}/subjects/copy-from/${from}`), {
     success: (r) => `Copied ${r.created.length} subject${r.created.length === 1 ? '' : 's'}${r.skipped ? `, skipped ${r.skipped} already there` : ''}.`,
   });
 
@@ -47,7 +66,7 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
     <div className="space-y-6">
       {list.length === 0 ? (
         <Card>
-          <EmptyState title="No subjects offered yet" description={readOnly ? undefined : 'Add subjects below, or copy the list from another grade.'} />
+          <EmptyState title="No subjects offered yet" description={readOnly ? undefined : 'Add subjects below, or copy the list from another class.'} />
         </Card>
       ) : (
         <ul className="space-y-2" aria-label="Subject offerings">
@@ -100,12 +119,22 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Add subjects</CardTitle>
-              <CardDescription>Choose from the subject master. Board codes link up on their own when a mapping exists.</CardDescription>
+              <HelpHeading
+                title="Add subjects"
+                helpLabel="How to add subjects"
+                help={
+                  <>
+                    <p>Tick the subjects taught in this class, choose their type, then press Add.</p>
+                    <p>The list comes from your school’s subject list (Academic Structure). Missing a subject? Add it there first.</p>
+                    <p><b>Board code</b>: the code your board (e.g. CBSE) uses for the subject. It links on its own when one is known.</p>
+                  </>
+                }
+              />
+              <CardDescription>Tick the subjects taught in this class. Board codes link up on their own when one is known.</CardDescription>
             </div>
           </CardHeader>
           {available.length === 0 ? (
-            <p className="text-sm text-muted">Every active subject is already offered for this grade.</p>
+            <p className="text-sm text-muted">Every active subject is already offered for this class.</p>
           ) : (
             <fieldset className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <legend className="sr-only">Subjects</legend>
@@ -127,6 +156,7 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
             <ComboboxField
               containerClassName="w-52"
               label="Offering type"
+              labelAside={<InfoTip label="About offering types"><OfferingTypeHelp /></InfoTip>}
               value={type}
               onChange={(v) => setType(v as SubjectOfferingType)}
               options={OFFERING_TYPE_OPTIONS}
@@ -153,13 +183,13 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
           <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-line pt-4">
             <ComboboxField
               containerClassName="w-64"
-              label="Copy from another grade"
+              label="Copy from another class"
               value={copyFrom}
               onChange={setCopyFrom}
               hint="Only when you ask. Nothing is copied automatically."
-              placeholder="Choose a grade…"
-              options={(grades.data ?? []).filter((g) => g.gradeOfferingId !== gradeOfferingId).map((g) => ({ value: g.gradeOfferingId, label: g.displayName }))}
-              searchPlaceholder="Search grades…"
+              placeholder="Choose a class…"
+              options={(classes.data ?? []).filter((g) => g.classOfferingId !== classOfferingId).map((g) => ({ value: g.classOfferingId, label: g.displayName }))}
+              searchPlaceholder="Search classes…"
             />
             <Button variant="outline" disabled={!copyFrom} loading={copy.isPending} loadingText="Copying…" onClick={() => copy.mutate(copyFrom)}>
               <Copy /> Copy subjects
@@ -172,10 +202,16 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
 }
 
 export function SubjectsTab({ sessionId, locationId, readOnly, status }: TabProps) {
-  const [gradeOfferingId, setGradeOfferingId] = useState('');
+  const [classOfferingId, setClassOfferingId] = useState('');
   return (
-    <GradePicker sessionId={sessionId} locationId={locationId} value={gradeOfferingId} onChange={setGradeOfferingId}>
-      {(id) => <Offerings key={id} gradeOfferingId={id} sessionId={sessionId} locationId={locationId} readOnly={readOnly} draft={status === 'DRAFT'} />}
-    </GradePicker>
+    <div className="space-y-5">
+      <TabIntro title="Subjects" need="required">
+        <p>List the subjects taught in each class. Pick a class, then tick its subjects. Every class needs at least one subject.</p>
+        <p>Tip: once one class is done, use “Copy from another class” to save time.</p>
+      </TabIntro>
+      <ClassPicker sessionId={sessionId} locationId={locationId} value={classOfferingId} onChange={setClassOfferingId}>
+        {(id) => <Offerings key={id} classOfferingId={id} sessionId={sessionId} locationId={locationId} readOnly={readOnly} draft={status === 'DRAFT'} />}
+      </ClassPicker>
+    </div>
   );
 }

@@ -319,7 +319,7 @@ export interface LocationValidationDTO {
 
 // ───────────────────────────────────────────────────────────── Academic structure (Module 2)
 //
-// Other modules store offering UUIDs (`gradeOfferingId`, `sectionOfferingId`, `subjectOfferingId`),
+// Other modules store offering UUIDs (`classOfferingId`, `sectionOfferingId`, `subjectOfferingId`),
 // never display labels such as "Class VIII-A".
 
 export interface BoardDTO {
@@ -344,8 +344,8 @@ export interface BoardRuleVersionDTO {
   isSystem: boolean;
 }
 
-export interface GradeMasterDTO {
-  gradeId: string;
+export interface ClassMasterDTO {
+  classId: string;
   canonicalCode: string;
   canonicalName: string;
   /** Short label used as the default display code, e.g. `8` or `KG`. */
@@ -353,7 +353,7 @@ export interface GradeMasterDTO {
   sequenceNumber: number;
   educationStage: EducationStage;
   isPrePrimary: boolean;
-  isBoardGrade: boolean;
+  isBoardClass: boolean;
 }
 
 export interface BoardSubjectCodeDTO {
@@ -428,11 +428,11 @@ export interface AcademicSessionDTO {
   updatedAt: string;
 }
 
-export interface GradeOfferingDTO {
-  gradeOfferingId: string;
+export interface ClassOfferingDTO {
+  classOfferingId: string;
   academicSessionId: string;
   locationId: string;
-  gradeId: string;
+  classId: string;
   canonicalCode: string;
   displayName: string;
   displayCode: string;
@@ -446,7 +446,7 @@ export interface GradeOfferingDTO {
 
 export interface SectionOfferingDTO {
   sectionOfferingId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   academicSessionId: string;
   locationId: string;
   sectionCode: string;
@@ -458,7 +458,7 @@ export interface SectionOfferingDTO {
 
 export interface SubjectOfferingDTO {
   subjectOfferingId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   academicSessionId: string;
   locationId: string;
   subjectId: string;
@@ -491,7 +491,7 @@ export interface AcademicTermDTO {
 
 export interface ChoiceGroupDTO {
   choiceGroupId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   academicSessionId: string;
   name: string;
   ruleType: ChoiceRuleType;
@@ -507,7 +507,7 @@ export interface ChoiceGroupDTO {
 
 export interface ConstraintDTO {
   constraintId: string;
-  gradeOfferingId: string;
+  classOfferingId: string;
   academicSessionId: string;
   type: ConstraintType;
   subjectOfferingId: string;
@@ -534,8 +534,8 @@ export interface ProgrammeDTO {
   name: string;
   code: string;
   kind: ProgrammeKind;
-  gradeFromId: string;
-  gradeToId: string;
+  classFromId: string;
+  classToId: string;
   boardId: string | null;
   subjectRules: ProgrammeSubjectRuleDTO[];
   choiceMin: number | null;
@@ -565,22 +565,22 @@ export type ChecklistStatus = 'completed' | 'pending' | 'optional';
 export interface AcademicOverviewDTO {
   academicSessionId: string;
   status: SessionStatus;
-  counts: { locations: number; grades: number; sections: number; subjects: number; programmes: number; terms: number; choiceGroups: number };
+  counts: { locations: number; classes: number; sections: number; subjects: number; programmes: number; terms: number; choiceGroups: number };
   boards: { locationId: string; locationCode: string | null; locationName: string | null; boardCode: string | null; boardName: string | null; ruleVersionName: string | null }[];
-  checklist: { key: 'session' | 'board' | 'grades' | 'sections' | 'subjects' | 'rules' | 'terms' | 'validation'; label: string; status: ChecklistStatus; detail: string }[];
+  checklist: { key: 'session' | 'board' | 'classes' | 'sections' | 'subjects' | 'rules' | 'terms' | 'validation'; label: string; status: ChecklistStatus; detail: string }[];
   lastValidation: ValidationSummaryDTO | null;
 }
 
-export interface AcademicContextGradesDTO {
+export interface AcademicContextClassesDTO {
   academicSessionId: string;
   locationId: string;
   sessionStatus: SessionStatus;
   board: { boardId: string; boardCode: string | null; boardRuleVersionId: string; ruleVersionName: string | null };
-  grades: GradeOfferingDTO[];
+  classes: ClassOfferingDTO[];
 }
 
-export interface AcademicContextDTO extends AcademicContextGradesDTO {
-  gradeOffering: GradeOfferingDTO;
+export interface AcademicContextDTO extends AcademicContextClassesDTO {
+  classOffering: ClassOfferingDTO;
   sections: SectionOfferingDTO[];
   subjectOfferings: SubjectOfferingDTO[];
   choiceGroups: ChoiceGroupDTO[];
@@ -594,7 +594,7 @@ export interface AcademicUsabilityDTO {
   purpose: AcademicPurpose;
   location: { locationId: string; locationCode: string; displayName: string };
   session: { academicSessionId: string; code: string; name: string; status: SessionStatus };
-  gradeOffering: { gradeOfferingId: string; gradeId: string; displayName: string };
+  classOffering: { classOfferingId: string; classId: string; displayName: string };
   section?: { sectionOfferingId: string; sectionCode: string; displayName: string };
   subjectOffering?: { subjectOfferingId: string; subjectId: string; subjectName: string; offeringType: SubjectOfferingType };
 }
@@ -729,8 +729,8 @@ export interface FacultyAssignmentDTO {
   locationId: string;
   locationCode: string;
   locationName: string;
-  gradeOfferingId: string;
-  gradeName: string;
+  classOfferingId: string;
+  schoolClassName: string;
   sectionId: string | null;
   sectionCode: string | null;
   sectionName: string | null;

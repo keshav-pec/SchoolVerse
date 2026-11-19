@@ -98,7 +98,7 @@ export const setupStatus = {
     { key: 'school_profile', label: 'School Profile', description: 'Name, legal name, code and operational defaults.', status: 'completed' as const, weight: 15, module: 'school-setup', href: '/school-setup/profile' },
     { key: 'primary_location', label: 'Primary Location', description: 'Your main campus.', status: 'completed' as const, weight: 20, module: 'school-setup', href: '/school-setup/locations' },
     { key: 'official_identifiers', label: 'Official Identifiers', description: 'Affiliation, registration or UDISE+ numbers.', status: 'pending' as const, weight: 5, module: 'school-setup', href: '/school-setup/profile' },
-    { key: 'academic_structure', label: 'Academic Structure', description: 'Academic years, grades, sections and subjects.', status: 'upcoming' as const, weight: 20, module: 'academic-structure', href: null },
+    { key: 'academic_structure', label: 'Academic Structure', description: 'Academic years, classes, sections and subjects.', status: 'upcoming' as const, weight: 20, module: 'academic-structure', href: null },
     { key: 'buildings_rooms', label: 'Buildings & Rooms', description: 'Buildings and rooms for each campus.', status: 'upcoming' as const, weight: 10, module: 'buildings-rooms', href: null },
     { key: 'academic_calendar', label: 'Academic Calendar', description: 'Terms, holidays and key dates.', status: 'upcoming' as const, weight: 10, module: 'academic-calendar', href: null },
   ],

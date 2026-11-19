@@ -5,7 +5,7 @@ import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AuditEv
 import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
-import { BoardRuleVersion, EducationBoard, GradeMaster } from '../src/modules/academic/reference.model';
+import { BoardRuleVersion, EducationBoard, ClassMaster } from '../src/modules/academic/reference.model';
 import { seedReferenceData } from '../src/modules/academic/reference.seed';
 import { AcademicSession } from '../src/modules/academic/session.model';
 import { todayIn } from '../src/modules/academic/term.service';
@@ -193,17 +193,17 @@ export async function auditFor(agent: Agent, entityId: string): Promise<AuditEve
 // ───────────────────────────────────────────────────────────── academic structure (Module 2)
 
 /**
- * The seeded system data: boards, their `2026-27` rule versions and the grade master. Collections are wiped between
+ * The seeded system data: boards, their `2026-27` rule versions and the class master. Collections are wiped between
  * tests, so call this in `beforeEach` (or at the start of a test). Idempotent.
  */
 export async function loadReference() {
   await seedReferenceData();
-  const [boards, versions, grades] = await Promise.all([
+  const [boards, versions, classes] = await Promise.all([
     EducationBoard.find({ tenantId: null }).lean(),
     BoardRuleVersion.find({ tenantId: null }).lean(),
-    GradeMaster.find().lean(),
+    ClassMaster.find().lean(),
   ]);
-  const gradeId = Object.fromEntries(grades.map((g) => [g.canonicalCode, g._id])) as Record<string, string>;
+  const classId = Object.fromEntries(classes.map((g) => [g.canonicalCode, g._id])) as Record<string, string>;
   const boardId = Object.fromEntries(boards.map((b) => [b.boardCode, b._id])) as Record<string, string>;
   const ruleVersionId = (code: string) => versions.find((v) => v.boardId === boardId[code])!._id;
   /** A session location entry: this location follows the given built-in board (latest published rule version). */
@@ -213,7 +213,7 @@ export async function loadReference() {
     boardRuleVersionId: ruleVersionId(boardCode),
     ...extra,
   });
-  return { boardId, ruleVersionId, gradeId, pin };
+  return { boardId, ruleVersionId, classId, pin };
 }
 export type Reference = Awaited<ReturnType<typeof loadReference>>;
 
@@ -255,10 +255,10 @@ export async function createStarterSubjects(agent: Agent): Promise<Record<string
   return ids;
 }
 
-export async function addGrades(agent: Agent, academicSessionId: string, locationId: string, gradeIds: string[], extra: Record<string, unknown> = {}) {
-  const res = await agent.post(`${API}/academic-sessions/${academicSessionId}/grade-offerings`).send({ locationId, gradeIds, ...extra });
+export async function addClasses(agent: Agent, academicSessionId: string, locationId: string, classIds: string[], extra: Record<string, unknown> = {}) {
+  const res = await agent.post(`${API}/academic-sessions/${academicSessionId}/class-offerings`).send({ locationId, classIds, ...extra });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.data as { gradeOfferingId: string; gradeId: string; displayName: string }[];
+  return res.body.data as { classOfferingId: string; classId: string; displayName: string }[];
 }
 
 export async function auditForSession(agent: Agent, academicSessionId: string) {
@@ -281,9 +281,9 @@ export async function createMoreSubjects(agent: Agent): Promise<Record<string, s
   return ids;
 }
 
-/** Offers subjects for a grade offering and returns `{ subjectCode: subjectOfferingId }`. */
-export async function offer(agent: Agent, gradeOfferingId: string, subjectIds: string[], offeringType = 'MANDATORY'): Promise<Record<string, string>> {
-  const res = await agent.post(`${API}/grade-offerings/${gradeOfferingId}/subjects`).send({ subjectIds, offeringType });
+/** Offers subjects for a class offering and returns `{ subjectCode: subjectOfferingId }`. */
+export async function offer(agent: Agent, classOfferingId: string, subjectIds: string[], offeringType = 'MANDATORY'): Promise<Record<string, string>> {
+  const res = await agent.post(`${API}/class-offerings/${classOfferingId}/subjects`).send({ subjectIds, offeringType });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   return Object.fromEntries((res.body.data as SubjectOfferingDTO[]).map((o) => [o.subjectCode, o.subjectOfferingId]));
 }
@@ -304,13 +304,13 @@ export async function draftSession() {
 }
 export type DraftSession = Awaited<ReturnType<typeof draftSession>>;
 
-/** Adds the smallest plan that passes validation: Grade 6 at Mohali with a section, a subject and a session-wide term. */
+/** Adds the smallest plan that passes validation: Class 6 at Mohali with a section, a subject and a session-wide term. */
 export async function makePublishable(t: DraftSession) {
-  const [grade] = await addGrades(t.agent, t.id, t.moh.locationId, [t.ref.gradeId.G06!]);
-  const section = (await t.agent.post(`${API}/grade-offerings/${grade!.gradeOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data[0];
-  const offerings = await offer(t.agent, grade!.gradeOfferingId, [t.subjects.MATH!, t.subjects.SCI!]);
+  const [schoolClass] = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G06!]);
+  const section = (await t.agent.post(`${API}/class-offerings/${schoolClass!.classOfferingId}/sections`).send({ codes: ['A'] }).expect(201)).body.data[0];
+  const offerings = await offer(t.agent, schoolClass!.classOfferingId, [t.subjects.MATH!, t.subjects.SCI!]);
   const term = (await t.agent.post(`${t.sessionUrl}/terms`).send({ name: 'Term 1', code: 'T1', startDate: '2026-04-01', endDate: '2026-09-30' }).expect(201)).body.data;
-  return { gradeOfferingId: grade!.gradeOfferingId, sectionId: section.sectionOfferingId as string, offerings, termId: term.termId as string };
+  return { classOfferingId: schoolClass!.classOfferingId, sectionId: section.sectionOfferingId as string, offerings, termId: term.termId as string };
 }
 
 // ───────────────────────────────────────────────────────────── faculty & staff (Module 3)
@@ -321,18 +321,18 @@ export function today() {
 }
 
 /**
- * A school (MOH, CHD active, PKL draft) with an ACTIVE session 2026-27: Grade VIII at Mohali with sections A, B, C and
+ * A school (MOH, CHD active, PKL draft) with an ACTIVE session 2026-27: Class VIII at Mohali with sections A, B, C and
  * Mathematics + Science, a department and a designation. Everything the staff tests need to assign classes.
  */
 export async function staffSchool(workspace?: string) {
   const s = await academicSchool(workspace);
   const session = await createSession(s.agent, [s.ref.pin(s.moh.locationId), s.ref.pin(s.chd.locationId, 'PSEB')]);
   const subjects = await createStarterSubjects(s.agent);
-  const [grade8] = await addGrades(s.agent, session.academicSessionId, s.moh.locationId, [s.ref.gradeId.G08!]);
-  const gradeOfferingId = grade8!.gradeOfferingId;
-  const sectionRows = (await s.agent.post(`${API}/grade-offerings/${gradeOfferingId}/sections`).send({ codes: ['A', 'B', 'C'] }).expect(201)).body.data as { sectionCode: string; sectionOfferingId: string }[];
+  const [class8] = await addClasses(s.agent, session.academicSessionId, s.moh.locationId, [s.ref.classId.G08!]);
+  const classOfferingId = class8!.classOfferingId;
+  const sectionRows = (await s.agent.post(`${API}/class-offerings/${classOfferingId}/sections`).send({ codes: ['A', 'B', 'C'] }).expect(201)).body.data as { sectionCode: string; sectionOfferingId: string }[];
   const sections = Object.fromEntries(sectionRows.map((r) => [r.sectionCode, r.sectionOfferingId])) as Record<'A' | 'B' | 'C', string>;
-  const offerings = await offer(s.agent, gradeOfferingId, [subjects.MATH!, subjects.SCI!]);
+  const offerings = await offer(s.agent, classOfferingId, [subjects.MATH!, subjects.SCI!]);
   await forceStatus(s.tenantId, session.academicSessionId, 'ACTIVE');
 
   const dept = (await s.agent.post(`${API}/departments`).send({ code: 'ACAD', name: 'Academics' }).expect(201)).body.data.departmentId as string;
@@ -341,7 +341,7 @@ export async function staffSchool(workspace?: string) {
     ...s,
     session,
     sessionId: session.academicSessionId,
-    gradeOfferingId,
+    classOfferingId,
     sections,
     offerings: offerings as Record<'MATH' | 'SCI', string>,
     dept,

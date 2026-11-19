@@ -2,7 +2,7 @@ import { ArrowRight, Check, CircleAlert, CircleDashed, Info, ShieldCheck, Triang
 import type { AcademicSessionDTO, ValidationIssueDTO, ValidationResultDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/sv/error-state';
 import { useAuth } from '@/lib/auth';
@@ -10,6 +10,7 @@ import { messageFor } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { sessionCall, useAcademicMutation, useOverview } from '../api';
 import { LifecycleButtons } from '../lifecycle-buttons';
+import { HelpHeading } from '../help';
 import { TAB_FOR_ENTITY, TAB_LABELS } from '../tab-links';
 
 const GROUPS = [
@@ -83,7 +84,21 @@ export function OverviewTab({
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Setup checklist</CardTitle>
+            <HelpHeading
+              title="Setup checklist"
+              helpLabel="How to use the checklist"
+              help={
+                <>
+                  <p>Work through the tabs above from left to right. This list shows what’s done.</p>
+                  <ul>
+                    <li><b>Green tick</b>: done.</li>
+                    <li><b>Orange circle</b>: still to do before you can publish.</li>
+                    <li><b>Grey circle</b>: optional. Skip it if your school doesn’t need it.</li>
+                  </ul>
+                  <p>Required: Classes &amp; Sections and Subjects. Optional: Subject Choice Rules, Programmes and Terms.</p>
+                </>
+              }
+            />
             <CardDescription>Everything a session needs before it can be published.</CardDescription>
           </div>
         </CardHeader>
@@ -119,7 +134,20 @@ export function OverviewTab({
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Validation</CardTitle>
+            <HelpHeading
+              title="Validation"
+              helpLabel="What is validation?"
+              help={
+                <>
+                  <p>Validation checks the whole setup for mistakes before you publish, such as a class with no sections.</p>
+                  <ul>
+                    <li><b>Errors</b> must be fixed before publishing.</li>
+                    <li><b>Warnings</b> and <b>suggestions</b> are advice only.</li>
+                  </ul>
+                  <p>Each item has a button that takes you to the tab where you fix it.</p>
+                </>
+              }
+            />
             <CardDescription>
               {session.lastValidation ? `Last run ${new Date(session.lastValidation.at).toLocaleString('en-IN')}: ${session.lastValidation.errors} error(s), ${session.lastValidation.warnings} warning(s).` : 'Not validated yet.'}
             </CardDescription>
