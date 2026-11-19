@@ -1,44 +1,142 @@
-import { useState } from 'react';
-import { ROLE_DESCRIPTIONS } from '@shared';
-import { Check, Copy, Fingerprint, History, School, ShieldCheck, Sparkles } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { Link } from 'react-router';
+import { ROLE_LABELS, type Permission } from '@shared';
+import {
+  ArrowRight,
+  GraduationCap,
+  Inbox,
+  LayoutDashboard,
+  Library,
+  ListTree,
+  MapPinned,
+  School,
+  Sparkles,
+  UserRound,
+  UsersRound,
+} from 'lucide-react';
 import { motion } from 'motion/react';
-import { toast } from 'sonner';
 import { CampusScene } from '@/components/illustrations/campus-scene';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { RoleBadge } from '@/components/sv/role-badge';
-import { useSession } from '@/lib/auth';
+import { Card } from '@/components/ui/card';
+import { useAuth, useSession } from '@/lib/auth';
 import { firstName, greetingFor } from '@/lib/utils';
 
-const SAFEGUARDS = [
-  { Icon: Fingerprint, title: 'Tenant-isolated', text: 'Your school’s data is walled off from every other workspace.' },
-  { Icon: ShieldCheck, title: 'Server-enforced roles', text: 'Permissions are checked on the server, not just hidden in the UI.' },
-  { Icon: History, title: 'Audit trail on', text: 'Configuration changes record who, when, and what changed.' },
-];
-
-function CopyId({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        await navigator.clipboard.writeText(value).catch(() => undefined);
-        setCopied(true);
-        toast.success('Workspace ID copied');
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-canvas px-2 py-1 font-mono text-xs text-muted hover:text-ink"
-      aria-label="Copy workspace ID"
-    >
-      <span className="truncate">{value}</span>
-      {copied ? <Check className="size-3.5 shrink-0 text-success" /> : <Copy className="size-3.5 shrink-0" />}
-    </button>
-  );
+interface QuickLink {
+  to: string;
+  title: string;
+  text: string;
+  Icon: ComponentType<{ className?: string }>;
+  tint: string;
+  permission: Permission;
+  /** Hidden for users who hold this permission (they get a richer link instead). */
+  hideWith?: Permission;
+  when?: (user: { role: string; personId: string | null }) => boolean;
 }
+
+/** Mirrors the sidebar: each link only appears for people who can open that section. */
+const QUICK_LINKS: QuickLink[] = [
+  {
+    to: '/school-setup',
+    title: 'Finish setting up your school',
+    text: 'See what’s done and what’s left to get your school ready.',
+    Icon: LayoutDashboard,
+    tint: 'bg-brand-soft text-brand',
+    permission: 'setup:manage',
+  },
+  {
+    to: '/school-setup/profile',
+    title: 'School profile',
+    text: 'Keep your school’s name, address, contact details and branding up to date.',
+    Icon: School,
+    tint: 'bg-lavender-soft text-lavender',
+    permission: 'school:view',
+  },
+  {
+    to: '/school-setup/locations',
+    title: 'Campuses & locations',
+    text: 'Add and manage your campuses, buildings and other school locations.',
+    Icon: MapPinned,
+    tint: 'bg-mint-soft text-success',
+    permission: 'location:view',
+  },
+  {
+    to: '/academics',
+    title: 'Academic setup',
+    text: 'Plan academic years, terms, classes and sections.',
+    Icon: GraduationCap,
+    tint: 'bg-sun-soft text-warning',
+    permission: 'academic:view_config',
+  },
+  {
+    to: '/academics/subjects',
+    title: 'Subjects',
+    text: 'Maintain the list of subjects your school teaches.',
+    Icon: Library,
+    tint: 'bg-coral-soft text-coral',
+    permission: 'academic:view_config',
+  },
+  {
+    to: '/academics',
+    title: 'Academic structure',
+    text: 'Browse the school’s academic years, classes and sections.',
+    Icon: GraduationCap,
+    tint: 'bg-sun-soft text-warning',
+    permission: 'academic:view',
+    hideWith: 'academic:view_config',
+  },
+  {
+    to: '/people',
+    title: 'Faculty & staff',
+    text: 'Find people, view their profiles and add new team members.',
+    Icon: UsersRound,
+    tint: 'bg-brand-soft text-brand',
+    permission: 'employee:view',
+  },
+  {
+    to: '/people/requests',
+    title: 'Review change requests',
+    text: 'Approve or decline profile updates your team has asked for.',
+    Icon: Inbox,
+    tint: 'bg-coral-soft text-coral',
+    permission: 'employee:approve_changes',
+  },
+  {
+    to: '/people/settings',
+    title: 'Departments & designations',
+    text: 'Organise your team into departments and job titles.',
+    Icon: ListTree,
+    tint: 'bg-lavender-soft text-lavender',
+    permission: 'employee:manage',
+  },
+  {
+    to: '/me',
+    title: 'My profile',
+    text: 'Check your details and ask for changes if something is out of date.',
+    Icon: UserRound,
+    tint: 'bg-mint-soft text-success',
+    permission: 'employee:directory',
+    when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
+  },
+  {
+    to: '/colleagues',
+    title: 'Colleagues',
+    text: 'Look up your colleagues and how to reach them.',
+    Icon: UsersRound,
+    tint: 'bg-brand-soft text-brand',
+    permission: 'employee:directory',
+    hideWith: 'employee:view',
+  },
+];
 
 export function HomePage() {
   const session = useSession();
-  const isAdmin = session.user.role === 'SCHOOL_ADMIN';
+  const { can } = useAuth();
+  const links = QUICK_LINKS.filter(
+    (l) =>
+      can(l.permission) &&
+      !(l.hideWith && can(l.hideWith)) &&
+      (!l.when || l.when(session.user)),
+  );
 
   return (
     <div className="space-y-6">
@@ -47,109 +145,64 @@ export function HomePage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-        className="relative overflow-hidden rounded-[20px] bg-navy px-6 py-8 text-white shadow-pop sm:px-10 sm:py-10"
+        className="relative overflow-hidden rounded-[20px] bg-navy px-6 py-6 text-white shadow-pop sm:px-10 sm:py-8"
       >
         <div className="pointer-events-none absolute -top-20 right-1/3 size-64 rounded-full bg-brand opacity-60 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-10 size-64 rounded-full bg-lavender opacity-30 blur-3xl" />
         <div className="relative grid items-center gap-6 lg:grid-cols-[1.1fr_1fr]">
           <div>
             <Badge tone="sun" className="mb-4">
-              <Sparkles /> Admin Workspace
+              <Sparkles /> {ROLE_LABELS[session.user.role]} Workspace
             </Badge>
             <h1 className="text-[28px] leading-tight font-extrabold sm:text-[34px]">
               {greetingFor()}, {firstName(session.user.fullName)} <span className="inline-block animate-wiggle origin-bottom">👋</span>
             </h1>
             <p className="mt-3 max-w-lg text-[15px] text-navy-text">
-              Welcome to <strong className="text-white">{session.tenant.name}</strong> on SchoolVerse.{' '}
-              {isAdmin
-                ? ''
-                : 'Your School Admin is setting up the school. You’ll see campuses and details here once they’re ready.'}
+              Welcome to <strong className="text-white">{session.tenant.name}</strong> on SchoolVerse.
             </p>
           </div>
-          <CampusScene className="mx-auto max-w-[420px] lg:-my-6" />
+          <CampusScene className="mx-auto max-w-[340px] lg:-my-5" />
         </div>
       </motion.section>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Workspace */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Your workspace</CardTitle>
-              <CardDescription>The tenant boundary for all your school data.</CardDescription>
-            </div>
-            <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
-              <School className="size-5" />
-            </span>
-          </CardHeader>
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-muted">Name</dt>
-              <dd className="font-semibold">{session.tenant.name}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Workspace ID</dt>
-              <dd className="mt-1">
-                <CopyId value={session.tenant.tenantId} />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted">Status</dt>
-              <dd className="mt-1">
-                <Badge tone="success">
-                  <Check /> Active
-                </Badge>
-              </dd>
-            </div>
-          </dl>
-        </Card>
+      <section aria-labelledby="home-actions">
+        <h2 id="home-actions" className="text-lg font-bold text-ink">
+          What you can do
+        </h2>
+        <p className="mt-0.5 text-sm text-muted">Jump straight to the part of SchoolVerse you need.</p>
 
-        {/* Role */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Your role</CardTitle>
-              <CardDescription>{ROLE_DESCRIPTIONS[session.user.role]}</CardDescription>
-            </div>
-          </CardHeader>
-          <RoleBadge role={session.user.role} />
-          <p className="mt-4 text-sm text-muted">
-            {session.permissions.length > 0
-              ? `You have ${session.permissions.length} permission${session.permissions.length === 1 ? '' : 's'} in this workspace:`
-              : 'Your role has no access to school configuration.'}
-          </p>
-          <ul className="mt-2.5 flex flex-wrap gap-1.5">
-            {session.permissions.map((p) => (
-              <li key={p} className="rounded-md bg-canvas px-2 py-1 font-mono text-[11px] text-muted">
-                {p}
+        {links.length > 0 ? (
+          <ul className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {links.map(({ to, title, text, Icon, tint }) => (
+              <li key={`${to}-${title}`}>
+                <Link
+                  to={to}
+                  className="group flex h-full items-start gap-3.5 rounded-card border border-line bg-white p-5 shadow-card outline-none transition hover:-translate-y-0.5 hover:border-brand/40 focus-visible:ring-4 focus-visible:ring-brand/20"
+                >
+                  <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${tint}`}>
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-ink">{title}</span>
+                    <span className="mt-0.5 block text-[13px] text-muted">{text}</span>
+                  </span>
+                  <ArrowRight
+                    className="mt-1 size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-brand"
+                    aria-hidden="true"
+                  />
+                </Link>
               </li>
             ))}
           </ul>
-        </Card>
-
-        {/* Safeguards */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>Built-in safeguards</CardTitle>
-              <CardDescription>Active from day one.</CardDescription>
-            </div>
-          </CardHeader>
-          <ul className="space-y-4">
-            {SAFEGUARDS.map(({ Icon, title, text }) => (
-              <li key={title} className="flex gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-mint-soft text-success">
-                  <Icon className="size-[18px]" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold">{title}</p>
-                  <p className="text-[13px] text-muted">{text}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+        ) : (
+          <Card className="mt-4">
+            <p className="text-sm text-muted">
+              There’s nothing for you to manage here just yet. Your School Admin is setting things up, and
+              you’ll see more here as soon as they’re ready.
+            </p>
+          </Card>
+        )}
+      </section>
     </div>
   );
 }

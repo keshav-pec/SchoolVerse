@@ -29,7 +29,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
-import { RoleBadge } from '@/components/sv/role-badge';
 import { usePendingRequestCount } from '@/features/people/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -296,9 +295,6 @@ function UserMenu() {
         <DropdownMenuLabel>
           <p className="text-sm font-semibold">{session.user.fullName}</p>
           <p className="truncate text-xs text-muted">{session.user.email}</p>
-          <div className="mt-2">
-            <RoleBadge role={session.user.role} />
-          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
