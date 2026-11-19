@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CreateIdentifierInput, CreateSchoolInput, SchoolDTO, SchoolIdentifierDTO, UpdateIdentifierInput, UpdateSchoolInput } from '@shared';
+import type { CreateIdentifierInput, CreateSchoolInput, SchoolCodeAvailabilityDTO, SchoolDTO, SchoolIdentifierDTO, UpdateIdentifierInput, UpdateSchoolInput } from '@shared';
 import { api } from '@/lib/api';
 
 export const schoolKeys = {
@@ -10,6 +10,26 @@ export const schoolKeys = {
 /** The tenant's School Master, or `null` before it has been created. */
 export function useCurrentSchool(enabled = true) {
   return useQuery({ queryKey: schoolKeys.current, queryFn: () => api.get<SchoolDTO | null>('/schools/current'), placeholderData: keepPreviousData, enabled });
+}
+
+/** Live School code check (platform-wide) + a suggestion built from the school name. Works before the school exists. */
+export function fetchSchoolCodeAvailability(args: { code?: string; name?: string }) {
+  const qs = new URLSearchParams();
+  if (args.code) qs.set('code', args.code);
+  if (args.name) qs.set('name', args.name);
+  return api.get<SchoolCodeAvailabilityDTO>(`/schools/code-availability?${qs}`);
+}
+
+export function useSchoolCodeAvailability(args: { code?: string; name?: string }, enabled: boolean) {
+  const code = args.code?.trim();
+  const name = args.name?.trim();
+  return useQuery({
+    queryKey: ['school-code-availability', code ?? '', name ?? ''],
+    queryFn: () => fetchSchoolCodeAvailability({ code, name }),
+    enabled: enabled && Boolean(code || name),
+    staleTime: 5_000,
+    retry: false,
+  });
 }
 
 export function useCreateSchool() {

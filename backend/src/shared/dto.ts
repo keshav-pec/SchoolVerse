@@ -233,6 +233,8 @@ export interface LocationCodeAvailabilityDTO {
   suggestion: string | null;
 }
 
+export type SchoolCodeAvailabilityDTO = LocationCodeAvailabilityDTO;
+
 /** One reason an archive is blocked (`LOCATION_HAS_DEPENDENCIES` → `details.dependencies`). */
 export interface LocationDependencyDTO {
   key: string;

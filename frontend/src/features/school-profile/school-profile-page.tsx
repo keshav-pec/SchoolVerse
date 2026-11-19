@@ -123,7 +123,7 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
           <p className="mb-6 rounded-xl bg-canvas p-4 text-sm text-muted">You can add a logo right after creating the profile.</p>
         )}
 
-        <IdentityFields form={form} />
+        <IdentityFields form={form} autoSuggestCode={creating} />
 
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-dashed border-line px-4 py-3" aria-label="Preview">
           <span className="text-[11px] font-bold tracking-widest text-muted uppercase">Preview</span>

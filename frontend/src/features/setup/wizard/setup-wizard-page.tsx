@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useNavigate } from 'react-router';
-import { createSchoolSchema, SCHOOL_PROFILE_FIELDS, SETUP_STEP_COUNT, type SchoolDTO, type UpdateSchoolInput } from '@shared';
+import { createSchoolSchema, SCHOOL_CODE_TAKEN_MESSAGE, SCHOOL_PROFILE_FIELDS, SETUP_STEP_COUNT, type SchoolDTO, type UpdateSchoolInput } from '@shared';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
@@ -14,7 +14,7 @@ import { useAuth, useSession } from '@/lib/auth';
 import { applyServerErrors } from '@/lib/errors';
 import { FullScreenLoader } from '@/routes/guards';
 import { useLocations } from '../../locations/api';
-import { useCreateSchool, useCurrentSchool, useUpdateSchool } from '../../school-profile/api';
+import { fetchSchoolCodeAvailability, useCreateSchool, useCurrentSchool, useUpdateSchool } from '../../school-profile/api';
 import { ContactFields, DefaultsFields, IDENTITY_FIELDS, IdentityFields, schoolFormValues, type SchoolFormValues } from '../../school-profile/school-fields';
 import { useSaveSetupProgress } from '../api';
 import { clearDraft, readDraft, writeDraft } from './draft';
@@ -74,7 +74,18 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
 
   // ── steps 1–2: create or update the school
   const nextFromIdentity = async () => {
-    if (await form.trigger([...IDENTITY_FIELDS])) go(2);
+    if (!(await form.trigger([...IDENTITY_FIELDS]))) return;
+    // Don't let anyone move on with a code another school already uses.
+    try {
+      const r = await fetchSchoolCodeAvailability({ code: form.getValues('schoolCode') });
+      if (r.valid && !r.available) {
+        form.setError('schoolCode', { type: 'server', message: r.message ?? SCHOOL_CODE_TAKEN_MESSAGE });
+        return;
+      }
+    } catch {
+      // The server re-checks on save; a failed pre-check must not block the wizard.
+    }
+    go(2);
   };
 
   const submitProfile = form.handleSubmit(
@@ -128,7 +139,7 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
               void nextFromIdentity();
             }}
           >
-            <IdentityFields form={form} />
+            <IdentityFields form={form} autoSuggestCode={!school} />
             <StepActions>
               <Button type="submit" size="lg">
                 Continue <ArrowRight />

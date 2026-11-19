@@ -46,7 +46,13 @@ export type CreateSchoolInput = z.input<typeof createSchoolSchema>;
 export type CreateSchoolData = z.output<typeof createSchoolSchema>;
 
 /** PATCH: a missing key leaves the field unchanged; `null`/`""` clears an optional field. */
-export const updateSchoolSchema = z.object(schoolProfileShape).partial();
+/** Live check for the School code field + a suggestion from the school name. */
+export const schoolCodeAvailabilityQuerySchema = z
+  .object({ code: z.string().max(40).optional(), name: z.string().max(200).optional() })
+  .refine((v) => Boolean(v.code?.trim() || v.name?.trim()), { message: 'Provide a code or a name.', path: ['code'] });
+export type SchoolCodeAvailabilityQuery = z.output<typeof schoolCodeAvailabilityQuerySchema>;
+
+export const updateSchoolSchema =z.object(schoolProfileShape).partial();
 export type UpdateSchoolInput = z.input<typeof updateSchoolSchema>;
 export type UpdateSchoolData = z.output<typeof updateSchoolSchema>;
 

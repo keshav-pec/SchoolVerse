@@ -38,7 +38,7 @@ describe('School Profile page', () => {
   it('puts server field errors on the matching input', async () => {
     mockApi('SCHOOL_ADMIN', {
       ...base,
-      [`PATCH ${API}/schools/${SCHOOL_ID}`]: { status: 409, error: { code: 'SCHOOL_CODE_TAKEN', message: 'This school code is already in use.', details: { fields: { schoolCode: 'This school code is already in use.' } } } },
+      [`PATCH ${API}/schools/${SCHOOL_ID}`]: { status: 409, error: { code: 'SCHOOL_CODE_TAKEN', message: 'This School code is already taken', details: { fields: { schoolCode: 'This School code is already taken' } } } },
     });
     const user = userEvent.setup();
     renderWithApp(<SchoolProfilePage />, { route: '/school-setup/profile' });
@@ -48,7 +48,7 @@ describe('School Profile page', () => {
     await user.type(code, 'taken');
     await user.click(await screen.findByRole('button', { name: /save changes/i }));
 
-    expect(await screen.findByText('This school code is already in use.')).toBeInTheDocument();
+    expect(await screen.findByText('This School code is already taken')).toBeInTheDocument();
     expect(code).toHaveAttribute('aria-invalid', 'true');
   });
 

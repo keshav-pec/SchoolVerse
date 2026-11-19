@@ -29,7 +29,7 @@ export const ERROR_CODES = {
 
   // School master
   SCHOOL_ALREADY_EXISTS: { status: 409, message: 'This workspace already has a school profile.' },
-  SCHOOL_CODE_TAKEN: { status: 409, message: 'This school code is already in use.' },
+  SCHOOL_CODE_TAKEN: { status: 409, message: 'This School code is already taken' },
   UNSUPPORTED_FILE_TYPE: { status: 415, message: 'Upload a PNG, JPEG or WebP image.' },
   FILE_TOO_LARGE: { status: 413, message: 'This file is too large. The maximum size is 2 MB.' },
   FILE_REQUIRED: { status: 400, message: 'Choose a file to upload.' },

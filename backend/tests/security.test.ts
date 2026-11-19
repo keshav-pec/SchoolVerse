@@ -329,11 +329,11 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     expect(stored).toMatchObject({ tenantId: attacker.tenantId, schoolId: attacker.school.schoolId });
   });
 
-  it('two tenants each get their own school even with identical codes', async () => {
+  it('two tenants each get their own school (and school codes are unique across them)', async () => {
     const a = await setupSchool({ workspace: 'Tenant One' });
     const b = await setupSchool({ workspace: 'Tenant Two' });
     expect(a.school.schoolCode).toBe(validSchool.schoolCode);
-    expect(b.school.schoolCode).toBe(validSchool.schoolCode);
+    expect(b.school.schoolCode).not.toBe(a.school.schoolCode);
     expect(a.school.schoolId).not.toBe(b.school.schoolId);
   });
 

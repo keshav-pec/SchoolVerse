@@ -53,6 +53,28 @@ describe('School profile (SCH-LOC-01)', () => {
     expect(res.body.error.details.schoolId).toBe(school.schoolId);
   });
 
+  it('[QA] school code: suggests initials, flags codes used by any other school, and rejects duplicates', async () => {
+    const a = await signupAdmin();
+    const sug = await a.agent.get(`${API}/schools/code-availability`).query({ name: "St. Joseph's Convent Senior Secondary School" }).expect(200);
+    expect(sug.body.data).toMatchObject({ code: null, suggestion: 'SJCSSS' });
+
+    await createSchool(a.agent, { schoolCode: 'GPS' });
+
+    const b = await signupAdmin();
+    // Another tenant's "Greenfield Public School" gets the next free code, not GPS.
+    const next = await b.agent.get(`${API}/schools/code-availability`).query({ name: 'Greenfield Public School' }).expect(200);
+    expect(next.body.data.suggestion).toBe('GPS-2');
+    const taken = await b.agent.get(`${API}/schools/code-availability`).query({ code: 'gps' }).expect(200);
+    expect(taken.body.data).toMatchObject({ code: 'GPS', valid: true, available: false, message: 'This School code is already taken', suggestion: 'GPS-2' });
+    expect((await b.agent.get(`${API}/schools/code-availability`).query({ code: 'GPS-2' }).expect(200)).body.data.available).toBe(true);
+    // The owner's own code is never a clash.
+    expect((await a.agent.get(`${API}/schools/code-availability`).query({ code: 'GPS' }).expect(200)).body.data.available).toBe(true);
+
+    const dup = await b.agent.post(`${API}/schools`).send({ ...validSchool, schoolCode: 'GPS' }).expect(409);
+    expect(dup.body.error.code).toBe('SCHOOL_CODE_TAKEN');
+    expect(dup.body.error.details.fields.schoolCode).toBe('This School code is already taken');
+  });
+
   it('GET /schools/current returns null before onboarding, then the school', async () => {
     const { agent } = await signupAdmin();
     expect((await agent.get(`${API}/schools/current`).expect(200)).body.data).toBeNull();
@@ -307,7 +329,7 @@ describe('location code rules (SCH-LOC-08)', () => {
     }
   });
 
-  it('the same code is fine in another tenant’s school', async () => {
+  it('a location code is fine in another tenant’s school', async () => {
     await seededSchool('Tenant A');
     const b = await setupSchool({ workspace: 'Tenant B' });
     await createLocation(b.agent, b.school.schoolId, activeLocationBody());

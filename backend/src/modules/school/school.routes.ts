@@ -4,6 +4,8 @@ import {
   createIdentifierSchema,
   createLocationSchema,
   createSchoolSchema,
+  schoolCodeAvailabilityQuerySchema,
+  type SchoolCodeAvailabilityQuery,
   listLocationsQuerySchema,
   updateIdentifierSchema,
   updateSchoolSchema,
@@ -39,6 +41,11 @@ schoolRouter.get('/current', requirePermission('school:view'), async (req, res) 
   const ctx = contextOf(req);
   const school = await schoolService.getCurrentSchool(ctx);
   ok(res, school ? schoolService.toSchoolDTOFor(ctx, school) : null);
+});
+
+/** Live School code check + suggestion. Works before the school exists (onboarding). */
+schoolRouter.get('/code-availability', requirePermission('school:edit'), validate({ query: schoolCodeAvailabilityQuerySchema }), async (req, res) => {
+  ok(res, await schoolService.checkSchoolCodeAvailability(contextOf(req), res.locals.query as SchoolCodeAvailabilityQuery));
 });
 
 schoolRouter.post('/', requirePermission('school:edit'), validate({ body: createSchoolSchema }), async (req, res) => {

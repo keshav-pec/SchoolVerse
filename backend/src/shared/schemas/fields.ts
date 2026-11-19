@@ -245,6 +245,30 @@ export const locationCodeSchema = z
   );
 
 export const SCHOOL_CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{1,19}$/;
+export const SCHOOL_CODE_FORMAT_MESSAGE = 'Use 2–20 letters, numbers or hyphens, e.g. GPS or GPS-01.';
+export const SCHOOL_CODE_TAKEN_MESSAGE = 'This School code is already taken';
+
+const SCHOOL_CODE_SKIP_WORDS = new Set(['THE', 'OF', 'AND', 'FOR', 'A', 'AN', 'IN']);
+
+/**
+ * First guess for a school code from its name: the initials of its words
+ * ("Greenfield Public School" → GPS, "St. Joseph's Convent Senior Secondary School" → SJCSSS).
+ * A single word gives its first 3 letters. Returns '' when the name has no usable letters.
+ */
+export function suggestSchoolCodeBase(name: string): string {
+  const words = name
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase()
+    .replace(/['’]/g, '')
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean);
+  const pool = words.filter((w) => !SCHOOL_CODE_SKIP_WORDS.has(w));
+  const used = pool.length > 0 ? pool : words;
+  if (used.length === 0) return '';
+  const base = used.length === 1 ? used[0]!.slice(0, 3) : used.slice(0, 8).map((w) => w[0]).join('');
+  return base.length >= 2 ? base : (base + (used[0] ?? '').slice(1)).slice(0, 3);
+}
 
 export const schoolCodeSchema = z
   .string({ message: 'School code is required.' })
@@ -253,5 +277,5 @@ export const schoolCodeSchema = z
     z
       .string()
       .min(1, { message: 'School code is required.' })
-      .regex(SCHOOL_CODE_PATTERN, { message: 'Use 2–20 letters, numbers or hyphens, e.g. GPS or GPS-01.' }),
+      .regex(SCHOOL_CODE_PATTERN, { message: SCHOOL_CODE_FORMAT_MESSAGE }),
   );

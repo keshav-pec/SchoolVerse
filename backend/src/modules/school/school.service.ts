@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { ClientSession } from 'mongoose';
 import {
   IDENTIFIER_FIELDS,
+  SCHOOL_CODE_FORMAT_MESSAGE,
+  SCHOOL_CODE_PATTERN,
+  SCHOOL_CODE_TAKEN_MESSAGE,
   SCHOOL_PROFILE_FIELDS,
+  suggestSchoolCodeBase,
+  type SchoolCodeAvailabilityDTO,
+  type SchoolCodeAvailabilityQuery,
   type CreateIdentifierData,
   type CreateSchoolData,
   type SchoolDTO,
@@ -11,9 +17,10 @@ import {
   type UpdateSchoolData,
 } from '@shared';
 import { AppError } from '../../core/errors';
-import { pickDefined, toIso } from '../../core/objects';
+import { escapeRegex, pickDefined, toIso } from '../../core/objects';
 import { IMAGE_TYPES, sniffImageType, storage } from '../../core/storage/storage';
 import { duplicateKeyFields } from '../../db/errors';
+import { SKIP_TENANT_SCOPE } from '../../db/plugins/tenant-scope';
 import { withTransaction } from '../../db/transaction';
 import { actorFrom, can, type ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAudit } from '../audit/audit.service';
@@ -98,10 +105,57 @@ export async function getCurrentSchool(ctx: ServiceContext) {
 function mapSchoolDuplicate(err: unknown): never {
   const fields = duplicateKeyFields(err);
   if (fields?.includes('schoolCode')) {
-    throw new AppError('SCHOOL_CODE_TAKEN', undefined, { fields: { schoolCode: 'This school code is already in use.' } });
+    throw new AppError('SCHOOL_CODE_TAKEN', undefined, { fields: { schoolCode: SCHOOL_CODE_TAKEN_MESSAGE } });
   }
   if (fields?.length === 1 && fields[0] === 'tenantId') throw new AppError('SCHOOL_ALREADY_EXISTS');
   throw err;
+}
+
+// ───────────────────────────────────────────────────────────── school code availability
+
+/** School codes are unique platform-wide; a tenant's own school never counts as a clash. */
+async function takenCodes(ctx: ServiceContext, prefix: string): Promise<Set<string>> {
+  const rows = await School.find({ tenantId: { $ne: ctx.tenantId }, schoolCode: { $regex: `^${escapeRegex(prefix)}` } })
+    .setOptions(SKIP_TENANT_SCOPE)
+    .select('schoolCode')
+    .lean<{ schoolCode: string }[]>();
+  return new Set(rows.map((r) => r.schoolCode));
+}
+
+/** First free code for a base: GPS → GPS-2 → GPS-3 … (always ≤ 20 characters). */
+async function nextFreeSchoolCode(ctx: ServiceContext, rawBase: string): Promise<string | null> {
+  const base = rawBase.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20);
+  if (base.length < 2) return null;
+  const stem = base.replace(/-?[0-9]+$/, '') || base;
+  const taken = await takenCodes(ctx, stem.slice(0, 15));
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 1000; n += 1) {
+    const candidate = `${stem.slice(0, 20 - String(n).length - 1)}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** Powers the live availability check + auto-fill suggestion on the School code field. */
+export async function checkSchoolCodeAvailability(ctx: ServiceContext, query: SchoolCodeAvailabilityQuery): Promise<SchoolCodeAvailabilityDTO> {
+  const name = query.name?.trim();
+  const code = query.code?.trim() ? query.code.trim().toUpperCase() : null;
+  const fromName = name ? suggestSchoolCodeBase(name) : '';
+
+  if (!code) {
+    return { code: null, valid: false, available: false, message: null, suggestion: fromName ? await nextFreeSchoolCode(ctx, fromName) : null };
+  }
+  if (!SCHOOL_CODE_PATTERN.test(code)) {
+    return { code, valid: false, available: false, message: SCHOOL_CODE_FORMAT_MESSAGE, suggestion: await nextFreeSchoolCode(ctx, fromName || code) };
+  }
+  const clash = await School.exists({ schoolCode: code, tenantId: { $ne: ctx.tenantId } }).setOptions(SKIP_TENANT_SCOPE);
+  return {
+    code,
+    valid: true,
+    available: !clash,
+    message: clash ? SCHOOL_CODE_TAKEN_MESSAGE : null,
+    suggestion: clash ? await nextFreeSchoolCode(ctx, code) : null,
+  };
 }
 
 export async function createSchool(ctx: ServiceContext, data: CreateSchoolData) {

@@ -61,7 +61,8 @@ const schoolSchema = new Schema<SchoolDoc>(
 
 // MVP: exactly one School Master per tenant. Drop this index to allow several schools later.
 schoolSchema.index({ tenantId: 1 }, { unique: true });
-schoolSchema.index({ tenantId: 1, schoolCode: 1 }, { unique: true });
+// School codes are unique across the whole platform, not just per tenant.
+schoolSchema.index({ schoolCode: 1 }, { unique: true });
 schoolSchema.plugin(tenantScopePlugin);
 
 export const School = model<SchoolDoc>('School', schoolSchema);

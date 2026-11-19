@@ -11,6 +11,8 @@ import { AcademicSession } from '../src/modules/academic/session.model';
 import { todayIn } from '../src/modules/academic/term.service';
 import { hashPassword } from '../src/platform/auth/password';
 import { User } from '../src/platform/users/user.model';
+import { School } from '../src/modules/school/school.model';
+import { SKIP_TENANT_SCOPE } from '../src/db/plugins/tenant-scope';
 
 export const app = createApp();
 export const API = '/api/v1';
@@ -119,7 +121,13 @@ export function draftLocationBody(overrides: Record<string, unknown> = {}) {
 }
 
 export async function createSchool(agent: Agent, overrides: Record<string, unknown> = {}): Promise<SchoolDTO> {
-  const res = await agent.post(`${API}/schools`).send({ ...validSchool, ...overrides });
+  // School codes are unique platform-wide, so extra tenants in one test get GPS-2, GPS-3 …
+  let schoolCode = validSchool.schoolCode;
+  if (!('schoolCode' in overrides)) {
+    const used = await School.countDocuments({ schoolCode: { $regex: '^GPS(-\\d+)?$' } }).setOptions(SKIP_TENANT_SCOPE);
+    if (used > 0) schoolCode = `GPS-${used + 1}`;
+  }
+  const res = await agent.post(`${API}/schools`).send({ ...validSchool, schoolCode, ...overrides });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   return res.body.data as SchoolDTO;
 }
