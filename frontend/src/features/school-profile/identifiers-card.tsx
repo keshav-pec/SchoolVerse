@@ -8,7 +8,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { FormComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Can } from '@/components/sv/can';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
@@ -87,13 +87,15 @@ function IdentifierDrawer({ schoolId, identifier, open, onOpenChange }: { school
               <TextField label="Expiry date" type="date" error={errors.expiryDate?.message} {...form.register('expiryDate')} />
             </div>
             <TextField label="Document link" placeholder="https://…" hint="Optional link to the certificate or document." error={errors.documentUrl?.message} {...form.register('documentUrl')} />
-            <SelectField label="Status" required error={errors.status?.message} {...form.register('status')}>
-              {IDENTIFIER_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {IDENTIFIER_STATUS_LABELS[s]}
-                </option>
-              ))}
-            </SelectField>
+            <FormComboboxField
+              label="Status"
+              required
+              control={form.control}
+              name="status"
+              options={IDENTIFIER_STATUSES.map((s) => ({ value: s, label: IDENTIFIER_STATUS_LABELS[s] }))}
+              searchPlaceholder="Search statuses…"
+              error={errors.status?.message}
+            />
           </DrawerBody>
           <DrawerFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

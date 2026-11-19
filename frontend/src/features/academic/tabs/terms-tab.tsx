@@ -5,7 +5,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
@@ -90,19 +90,22 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <TextField label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Term 1" />
             <TextField label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="T1" />
-            <SelectField label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as TermType })}>
-              {TERM_TYPES.map((t) => (
-                <option key={t} value={t}>{TERM_TYPE_LABELS[t]}</option>
-              ))}
-            </SelectField>
+            <ComboboxField
+              label="Type"
+              value={form.type}
+              onChange={(v) => setForm({ ...form, type: v as TermType })}
+              options={TERM_TYPES.map((t) => ({ value: t, label: TERM_TYPE_LABELS[t] }))}
+              searchPlaceholder="Search types…"
+            />
             <TextField type="date" label="Start date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
             <TextField type="date" label="End date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-            <SelectField label="Applies to" value={form.locationId} onChange={(e) => setForm({ ...form, locationId: e.target.value })}>
-              <option value="">All locations</option>
-              {session.locations.map((l) => (
-                <option key={l.locationId} value={l.locationId}>{l.locationName} only</option>
-              ))}
-            </SelectField>
+            <ComboboxField
+              label="Applies to"
+              value={form.locationId}
+              onChange={(v) => setForm({ ...form, locationId: v })}
+              options={[{ value: '', label: 'All locations' }, ...session.locations.map((l) => ({ value: l.locationId, label: `${l.locationName} only` }))]}
+              searchPlaceholder="Search locations…"
+            />
           </div>
           {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
           <Button

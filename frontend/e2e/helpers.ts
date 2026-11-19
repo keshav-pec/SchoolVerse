@@ -69,11 +69,11 @@ export async function createPersonWithLogin(
   return employee.employeeId;
 }
 
-/** Selects the first option whose text matches (a select's own label has to be exact, and some are long). */
+/** Opens a themed dropdown (Combobox) and picks the first option whose text matches. */
 export async function chooseOption(
-  select: import('@playwright/test').Locator,
+  trigger: import('@playwright/test').Locator,
   text: RegExp | string,
 ) {
-  const option = select.locator('option', { hasText: text }).first();
-  await select.selectOption({ label: (await option.textContent())!.trim() });
+  await trigger.click();
+  await trigger.page().getByRole('listbox').getByRole('option').filter({ hasText: text }).first().click();
 }

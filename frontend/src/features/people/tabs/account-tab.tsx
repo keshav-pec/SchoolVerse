@@ -19,7 +19,7 @@ import {
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Can } from '@/components/sv/can';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
@@ -33,6 +33,8 @@ import { FormProblem, messageFor } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { DevOutboxHint } from '../../auth/dev-outbox-hint';
 import { useEmployeeAccount, usePeopleMutation } from '../api';
+
+const ROLE_OPTIONS = PROVISIONABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }));
 
 const ROLE_NOTE =
   'Designation doesn’t grant access. The role you choose here decides what this person can do.';
@@ -94,19 +96,15 @@ function CreateLoginForm({
         onChange={(e) => setEmail(e.target.value)}
         error={errors.email}
       />
-      <SelectField
+      <ComboboxField
         label="Role"
         required
         hint={ROLE_NOTE}
         value={role}
-        onChange={(e) => setRole(e.target.value as ProvisionableRole)}
-      >
-        {PROVISIONABLE_ROLES.map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
-      </SelectField>
+        onChange={(v) => setRole(v as ProvisionableRole)}
+        options={ROLE_OPTIONS}
+        searchPlaceholder="Search roles…"
+      />
       <p className="flex items-start gap-2 text-[13px] text-muted">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> You won’t set or see a
         password. {employee.displayName} gets a single-use link that works for 72 hours and chooses
@@ -195,18 +193,14 @@ function RoleDialog({ user, onClose }: { user: UserDTO; onClose: () => void }) {
         await change.mutateAsync({ role });
       }}
     >
-      <SelectField
+      <ComboboxField
         label="Role"
         value={role}
-        onChange={(e) => setRole(e.target.value as ProvisionableRole)}
+        onChange={(v) => setRole(v as ProvisionableRole)}
         hint={ROLE_NOTE}
-      >
-        {PROVISIONABLE_ROLES.map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
-      </SelectField>
+        options={ROLE_OPTIONS}
+        searchPlaceholder="Search roles…"
+      />
     </ConfirmDialog>
   );
 }

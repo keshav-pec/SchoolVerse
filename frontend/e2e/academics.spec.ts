@@ -25,7 +25,7 @@ test('admin builds a session end to end: create → grades and sections → subj
   await page.getByLabel('End date').fill('2029-03-31');
   await page.getByRole('button', { name: /^next/i }).click();
   await page.getByRole('checkbox', { name: /mohali campus/i }).check();
-  await expect(page.getByLabel('Rule version')).toHaveValue(/.+/);
+  await expect(page.getByLabel('Rule version')).not.toHaveText(/choose/i);
   await page.getByRole('button', { name: /^next/i }).click();
   await expect(page.getByRole('region', { name: 'Review' })).toContainText('Mohali Campus');
   await page.getByRole('button', { name: /^create session$/i }).click();

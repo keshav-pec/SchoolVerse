@@ -5,7 +5,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Can } from '@/components/sv/can';
 import { InfoGrid, InfoItem } from '@/components/sv/info-grid';
 import { api, ApiError } from '@/lib/api';
@@ -119,51 +119,41 @@ function EditDrawer({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
               ))}
             </datalist>
             <div className="grid gap-5 sm:grid-cols-2">
-              <SelectField
+              <ComboboxField
                 label="Department"
                 value={form.departmentId}
-                onChange={set('departmentId')}
-                error={errors.departmentId}
-              >
-                {(departments.data ?? [])
+                onChange={(departmentId) => setForm((f) => ({ ...f, departmentId }))}
+                options={(departments.data ?? [])
                   .filter((d) => d.status === 'ACTIVE' || d.departmentId === initial.departmentId)
-                  .map((d) => (
-                    <option key={d.departmentId} value={d.departmentId}>
-                      {d.name}
-                    </option>
-                  ))}
-              </SelectField>
-              <SelectField
+                  .map((d) => ({ value: d.departmentId, label: d.name }))}
+                searchPlaceholder="Search departments…"
+                error={errors.departmentId}
+              />
+              <ComboboxField
                 label="Designation"
                 hint="A title only. Access comes from the login role."
                 value={form.designationId}
-                onChange={set('designationId')}
-                error={errors.designationId}
-              >
-                {(designations.data ?? [])
+                onChange={(designationId) => setForm((f) => ({ ...f, designationId }))}
+                options={(designations.data ?? [])
                   .filter((d) => d.status === 'ACTIVE' || d.designationId === initial.designationId)
-                  .map((d) => (
-                    <option key={d.designationId} value={d.designationId}>
-                      {d.name}
-                    </option>
-                  ))}
-              </SelectField>
+                  .map((d) => ({ value: d.designationId, label: d.name }))}
+                searchPlaceholder="Search designations…"
+                error={errors.designationId}
+              />
             </div>
-            <SelectField
+            <ComboboxField
               label="Reporting manager"
               value={form.reportingManagerId}
-              onChange={set('reportingManagerId')}
+              onChange={(reportingManagerId) => setForm((f) => ({ ...f, reportingManagerId }))}
+              options={[
+                { value: '', label: 'No one' },
+                ...(managers.data?.items ?? [])
+                  .filter((m) => m.employeeId !== employee.employeeId)
+                  .map((m) => ({ value: m.employeeId, label: m.fullName, hint: m.employeeCode })),
+              ]}
+              searchPlaceholder="Search people…"
               error={errors.reportingManagerId}
-            >
-              <option value="">No one</option>
-              {(managers.data?.items ?? [])
-                .filter((m) => m.employeeId !== employee.employeeId)
-                .map((m) => (
-                  <option key={m.employeeId} value={m.employeeId}>
-                    {m.fullName} ({m.employeeCode})
-                  </option>
-                ))}
-            </SelectField>
+            />
           </DrawerBody>
           <DrawerFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>

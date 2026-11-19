@@ -7,9 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { Combobox } from '@/components/ui/combobox';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
@@ -20,6 +20,8 @@ import { ApiError, api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useAllRuleVersions, useBoards, useGradeMaster, useSubjects, type SubjectParams } from './api';
 import { StatusToggle } from './status-toggle';
+
+const CATEGORY_OPTIONS = SUBJECT_CATEGORIES.map((c) => ({ value: c, label: SUBJECT_CATEGORY_LABELS[c] }));
 
 const EMPTY = { subjectCode: '', name: '', shortName: '', category: 'OTHER' as SubjectCategory, languageCode: '', hasTheory: true, hasPractical: false, hasProject: false, hasInternalAssessment: false };
 
@@ -49,9 +51,14 @@ function BoardCodes({ subject }: { subject: SubjectDTO }) {
         ))}
       </ul>
       <div className="flex flex-wrap items-end gap-2">
-        <SelectField containerClassName="w-48" label="Board · version" value={versionId || options[0]?.id || ''} onChange={(e) => setVersionId(e.target.value)}>
-          {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </SelectField>
+        <ComboboxField
+          containerClassName="w-48"
+          label="Board · version"
+          value={versionId || options[0]?.id || ''}
+          onChange={setVersionId}
+          options={options.map((o) => ({ value: o.id, label: o.label }))}
+          searchPlaceholder="Search versions…"
+        />
         <TextField containerClassName="w-32" label="Code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="041" />
         <Button
           variant="secondary"
@@ -124,9 +131,14 @@ function SubjectDrawer({ open, onOpenChange, subject }: { open: boolean; onOpenC
             <TextField label="Internal code" required value={form.subjectCode} error={errors.subjectCode} onChange={(e) => setForm({ ...form, subjectCode: e.target.value.toUpperCase() })} placeholder="MATH" />
             <TextField label="Name" required value={form.name} error={errors.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Mathematics" />
             <TextField label="Short name" value={form.shortName} error={errors.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} />
-            <SelectField label="Category" value={form.category} error={errors.category} onChange={(e) => setForm({ ...form, category: e.target.value as SubjectCategory })}>
-              {SUBJECT_CATEGORIES.map((c) => <option key={c} value={c}>{SUBJECT_CATEGORY_LABELS[c]}</option>)}
-            </SelectField>
+            <ComboboxField
+              label="Category"
+              value={form.category}
+              error={errors.category}
+              onChange={(v) => setForm({ ...form, category: v as SubjectCategory })}
+              options={CATEGORY_OPTIONS}
+              searchPlaceholder="Search categories…"
+            />
             <TextField label="Language code" value={form.languageCode} error={errors.languageCode} onChange={(e) => setForm({ ...form, languageCode: e.target.value })} placeholder="en" hint="For language subjects only." />
           </div>
           <fieldset className="grid gap-2 sm:grid-cols-2">
@@ -190,20 +202,22 @@ export function SubjectsPage() {
             <Input className="pl-10" aria-label="Search by name or internal code" placeholder="Search by name or code" value={filters.search ?? ''} onChange={(e) => set({ search: e.target.value })} />
           </div>
           <Input aria-label="Board code" placeholder="Board code (041 or CBSE)" value={filters.boardCode ?? ''} onChange={(e) => set({ boardCode: e.target.value })} />
-          <Select aria-label="Category" value={filters.category ?? ''} onChange={(e) => set({ category: e.target.value })}>
-            <option value="">All categories</option>
-            {SUBJECT_CATEGORIES.map((c) => <option key={c} value={c}>{SUBJECT_CATEGORY_LABELS[c]}</option>)}
-          </Select>
-          <Select aria-label="Grade" value={filters.gradeId ?? ''} onChange={(e) => set({ gradeId: e.target.value })}>
-            <option value="">Any grade</option>
-            {(grades.data ?? []).map((g) => <option key={g.gradeId} value={g.gradeId}>{g.canonicalName}</option>)}
-          </Select>
+          <Combobox aria-label="Category" value={filters.category ?? ''} onChange={(v) => set({ category: v })} options={[{ value: '', label: 'All categories' }, ...CATEGORY_OPTIONS]} searchPlaceholder="Search categories…" />
+          <Combobox
+            aria-label="Grade"
+            value={filters.gradeId ?? ''}
+            onChange={(v) => set({ gradeId: v })}
+            options={[{ value: '', label: 'Any grade' }, ...(grades.data ?? []).map((g) => ({ value: g.gradeId, label: g.canonicalName }))]}
+            searchPlaceholder="Search grades…"
+          />
           <Input aria-label="Language code" placeholder="Language (en, hi…)" value={filters.languageCode ?? ''} onChange={(e) => set({ languageCode: e.target.value })} />
-          <Select aria-label="Status" value={filters.status ?? ''} onChange={(e) => set({ status: e.target.value })}>
-            <option value="">Any status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </Select>
+          <Combobox
+            aria-label="Status"
+            value={filters.status ?? ''}
+            onChange={(v) => set({ status: v })}
+            options={[{ value: '', label: 'Any status' }, { value: 'ACTIVE', label: 'Active' }, { value: 'INACTIVE', label: 'Inactive' }]}
+            searchPlaceholder="Search statuses…"
+          />
         </form>
       </Card>
 

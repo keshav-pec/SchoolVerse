@@ -1,4 +1,4 @@
-import { SelectField } from '@/components/ui/field';
+import { ComboboxField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert } from '@/components/ui/alert';
 import { ErrorState } from '@/components/sv/error-state';
@@ -27,14 +27,13 @@ export function GradePicker({
   return (
     <div className="space-y-5">
       <div className="max-w-xs">
-        <SelectField label="Grade" value={current} onChange={(e) => onChange(e.target.value)}>
-          {list.map((g) => (
-            <option key={g.gradeOfferingId} value={g.gradeOfferingId}>
-              {g.displayName}
-              {g.status === 'INACTIVE' ? ' (inactive)' : ''}
-            </option>
-          ))}
-        </SelectField>
+        <ComboboxField
+          label="Grade"
+          value={current}
+          onChange={onChange}
+          options={list.map((g) => ({ value: g.gradeOfferingId, label: g.displayName, hint: g.status === 'INACTIVE' ? 'Inactive' : undefined }))}
+          searchPlaceholder="Search grades…"
+        />
       </div>
       {children(current)}
     </div>

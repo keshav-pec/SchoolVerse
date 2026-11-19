@@ -4,7 +4,7 @@ import { SESSION_STATUS_LABELS, type AcademicContextDTO } from '@shared';
 import { LostPlanet } from '@/components/illustrations/lost-planet';
 import { Alert } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
-import { SelectField } from '@/components/ui/field';
+import { ComboboxField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
@@ -77,12 +77,20 @@ export function AcademicStructurePage() {
         <span className="inline-flex items-center gap-1.5"><Info className="size-4" aria-hidden="true" /> This is a limited, read-only view. Ask your School Admin for changes.</span>
       </Alert>
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <SelectField label="Session" value={current.academicSessionId} onChange={(e) => { setSessionId(e.target.value); setLocationId(''); setGradeId(''); }}>
-          {list.map((s) => <option key={s.academicSessionId} value={s.academicSessionId}>{s.name} ({SESSION_STATUS_LABELS[s.status]})</option>)}
-        </SelectField>
-        <SelectField label="Location" value={location?.locationId ?? ''} onChange={(e) => { setLocationId(e.target.value); setGradeId(''); }}>
-          {current.locations.map((l) => <option key={l.locationId} value={l.locationId}>{l.locationName} ({l.boardCode})</option>)}
-        </SelectField>
+        <ComboboxField
+          label="Session"
+          value={current.academicSessionId}
+          onChange={(v) => { setSessionId(v); setLocationId(''); setGradeId(''); }}
+          options={list.map((s) => ({ value: s.academicSessionId, label: s.name, hint: SESSION_STATUS_LABELS[s.status] }))}
+          searchPlaceholder="Search sessions…"
+        />
+        <ComboboxField
+          label="Location"
+          value={location?.locationId ?? ''}
+          onChange={(v) => { setLocationId(v); setGradeId(''); }}
+          options={current.locations.map((l) => ({ value: l.locationId, label: l.locationName ?? '', hint: l.boardCode ?? undefined }))}
+          searchPlaceholder="Search locations…"
+        />
       </div>
       {context.isLoading ? (
         <Skeleton className="h-40 rounded-card" role="status" aria-label="Loading grades" />

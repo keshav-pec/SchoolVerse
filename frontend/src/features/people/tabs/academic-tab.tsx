@@ -11,7 +11,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AssignmentStatusChip } from '@/components/sv/employee-status';
 import { Can } from '@/components/sv/can';
@@ -133,55 +133,43 @@ function AssignDrawer({
                 location on the Overview tab first.
               </Alert>
             )}
-            <SelectField
+            <ComboboxField
               label="Assignment type"
               required
               value={type}
-              onChange={(e) => setType(e.target.value as AcademicAssignmentType)}
-            >
-              {ACADEMIC_ASSIGNMENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {ACADEMIC_ASSIGNMENT_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </SelectField>
+              onChange={(v) => setType(v as AcademicAssignmentType)}
+              options={ACADEMIC_ASSIGNMENT_TYPES.map((t) => ({ value: t, label: ACADEMIC_ASSIGNMENT_TYPE_LABELS[t] }))}
+              searchPlaceholder="Search types…"
+            />
             <div className="grid gap-5 sm:grid-cols-2">
-              <SelectField
+              <ComboboxField
                 label="Location"
                 required
                 value={locationId}
-                onChange={(e) => {
-                  setLocationId(e.target.value);
+                onChange={(v) => {
+                  setLocationId(v);
                   setGrade('');
                   setSectionIds([]);
                   setSubject('');
                 }}
-              >
-                {locations.map((l) => (
-                  <option key={l.locationId} value={l.locationId}>
-                    {l.locationName}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
+                options={locations.map((l) => ({ value: l.locationId, label: l.locationName ?? '' }))}
+                searchPlaceholder="Search locations…"
+              />
+              <ComboboxField
                 label="Grade"
                 required
                 value={gradeOfferingId}
-                onChange={(e) => {
-                  setGrade(e.target.value);
+                onChange={(v) => {
+                  setGrade(v);
                   setSectionIds([]);
                   setSubject('');
                 }}
-              >
-                <option value="">Choose…</option>
-                {(grades.data ?? [])
+                placeholder="Choose…"
+                options={(grades.data ?? [])
                   .filter((g) => g.status === 'ACTIVE')
-                  .map((g) => (
-                    <option key={g.gradeOfferingId} value={g.gradeOfferingId}>
-                      {g.displayName}
-                    </option>
-                  ))}
-              </SelectField>
+                  .map((g) => ({ value: g.gradeOfferingId, label: g.displayName }))}
+                searchPlaceholder="Search grades…"
+              />
             </div>
 
             {needsSections && gradeOfferingId && (
@@ -236,19 +224,15 @@ function AssignDrawer({
             )}
 
             {type === 'SUBJECT_FACULTY' && gradeOfferingId && (
-              <SelectField
+              <ComboboxField
                 label="Subject"
                 required
                 value={subjectOfferingId}
-                onChange={(e) => setSubject(e.target.value)}
-              >
-                <option value="">Choose…</option>
-                {activeSubjects.map((s) => (
-                  <option key={s.subjectOfferingId} value={s.subjectOfferingId}>
-                    {s.subjectName}
-                  </option>
-                ))}
-              </SelectField>
+                onChange={setSubject}
+                placeholder="Choose…"
+                options={activeSubjects.map((s) => ({ value: s.subjectOfferingId, label: s.subjectName }))}
+                searchPlaceholder="Search subjects…"
+              />
             )}
 
             <div className="grid gap-5 sm:grid-cols-2">
@@ -343,17 +327,13 @@ export function AcademicTab({ employee }: { employee: EmployeeProfileDTO }) {
       ) : (
         <>
           <div className="mb-4 max-w-xs">
-            <SelectField
+            <ComboboxField
               label="Session"
               value={sessionId}
-              onChange={(e) => setPicked(e.target.value)}
-            >
-              {usable.map((s) => (
-                <option key={s.academicSessionId} value={s.academicSessionId}>
-                  {s.name} ({s.status.toLowerCase()})
-                </option>
-              ))}
-            </SelectField>
+              onChange={setPicked}
+              options={usable.map((s) => ({ value: s.academicSessionId, label: s.name, hint: s.status.toLowerCase() }))}
+              searchPlaceholder="Search sessions…"
+            />
           </div>
           {list.isLoading ? (
             <Skeleton className="h-24" />

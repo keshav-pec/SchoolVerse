@@ -5,7 +5,7 @@ import { BookOpen, CalendarRange, GraduationCap } from 'lucide-react';
 import type { SessionStatus, ValidationResultDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SelectField } from '@/components/ui/field';
+import { ComboboxField } from '@/components/ui/field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
@@ -101,13 +101,14 @@ export function SessionPage() {
 
       {session.locations.length > 1 && (
         <div className="mb-4 max-w-xs">
-          <SelectField label="Location" value={locationId} onChange={(e) => setChosenLocation(e.target.value)} hint="Grades and subjects differ per location.">
-            {session.locations.map((l) => (
-              <option key={l.locationId} value={l.locationId}>
-                {l.locationName} ({l.boardCode})
-              </option>
-            ))}
-          </SelectField>
+          <ComboboxField
+            label="Location"
+            value={locationId}
+            onChange={setChosenLocation}
+            hint="Grades and subjects differ per location."
+            options={session.locations.map((l) => ({ value: l.locationId, label: l.locationName ?? '', hint: l.boardCode ?? undefined }))}
+            searchPlaceholder="Search locations…"
+          />
         </div>
       )}
 

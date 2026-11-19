@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LOCATION_TYPE_LABELS } from '@shared';
 import { location, school, SCHOOL_ID } from '@/test/fixtures';
 import { mockApi, renderWithApp } from '@/test/utils';
 import { AddLocationDrawer } from '../add-location-drawer';
@@ -105,6 +106,6 @@ describe('Add Location drawer', () => {
     renderWithApp(<AddLocationDrawer open onOpenChange={() => {}} school={school} isFirst />);
     expect(await screen.findByRole('heading', { name: 'Add Primary Location' })).toBeInTheDocument();
     expect(await screen.findByRole('checkbox', { name: /make this the primary location/i })).toBeChecked();
-    expect(screen.getByLabelText(/location type/i)).toHaveValue('MAIN_CAMPUS');
+    expect(screen.getByLabelText(/location type/i)).toHaveTextContent(LOCATION_TYPE_LABELS.MAIN_CAMPUS);
   });
 });

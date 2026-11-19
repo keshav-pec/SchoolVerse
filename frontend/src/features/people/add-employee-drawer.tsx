@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { FormComboboxField, TextField } from '@/components/ui/field';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/errors';
@@ -337,19 +337,16 @@ export function AddEmployeeDrawer({
                     {...register('legalMiddleName')}
                   />
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <SelectField
+                    <FormComboboxField
                       label="Category"
                       required
+                      control={form.control}
+                      name="employeeCategory"
+                      placeholder="Choose…"
+                      options={EMPLOYEE_CATEGORIES.map((c) => ({ value: c, label: EMPLOYEE_CATEGORY_LABELS[c] }))}
+                      searchPlaceholder="Search categories…"
                       error={errors.employeeCategory?.message}
-                      {...register('employeeCategory')}
-                    >
-                      <option value="">Choose…</option>
-                      {EMPLOYEE_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {EMPLOYEE_CATEGORY_LABELS[c]}
-                        </option>
-                      ))}
-                    </SelectField>
+                    />
                     <TextField
                       label="Employee code"
                       required
@@ -386,48 +383,39 @@ export function AddEmployeeDrawer({
               )}
               {step === 1 && (
                 <div className="space-y-5">
-                  <SelectField
+                  <FormComboboxField
                     label="Primary location"
                     required
                     hint="Where this person mainly works. Add more locations later."
+                    control={form.control}
+                    name="primaryLocationId"
+                    placeholder="Choose…"
+                    options={(locations.data ?? []).map((l) => ({ value: l.locationId, label: l.displayName, hint: l.locationCode }))}
+                    searchPlaceholder="Search locations…"
                     error={errors.primaryLocationId?.message}
-                    {...register('primaryLocationId')}
-                  >
-                    <option value="">Choose…</option>
-                    {(locations.data ?? []).map((l) => (
-                      <option key={l.locationId} value={l.locationId}>
-                        {l.displayName} ({l.locationCode})
-                      </option>
-                    ))}
-                  </SelectField>
+                  />
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <SelectField
+                    <FormComboboxField
                       label="Department"
                       required
+                      control={form.control}
+                      name="departmentId"
+                      placeholder="Choose…"
+                      options={activeDepartments.map((d) => ({ value: d.departmentId, label: d.name }))}
+                      searchPlaceholder="Search departments…"
                       error={errors.departmentId?.message}
-                      {...register('departmentId')}
-                    >
-                      <option value="">Choose…</option>
-                      {activeDepartments.map((d) => (
-                        <option key={d.departmentId} value={d.departmentId}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </SelectField>
-                    <SelectField
+                    />
+                    <FormComboboxField
                       label="Designation"
                       required
                       hint="A title only. Access comes from the login role."
+                      control={form.control}
+                      name="designationId"
+                      placeholder="Choose…"
+                      options={activeDesignations.map((d) => ({ value: d.designationId, label: d.name }))}
+                      searchPlaceholder="Search designations…"
                       error={errors.designationId?.message}
-                      {...register('designationId')}
-                    >
-                      <option value="">Choose…</option>
-                      {activeDesignations.map((d) => (
-                        <option key={d.designationId} value={d.designationId}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </SelectField>
+                    />
                   </div>
                   {!departments.isLoading && activeDepartments.length === 0 && (
                     <Alert tone="warning">
@@ -435,19 +423,15 @@ export function AddEmployeeDrawer({
                       first.
                     </Alert>
                   )}
-                  <SelectField
+                  <FormComboboxField
                     label="Reporting manager"
                     hint="Optional."
+                    control={form.control}
+                    name="reportingManagerId"
+                    options={[{ value: '', label: 'No one' }, ...(managers.data?.items ?? []).map((m) => ({ value: m.employeeId, label: m.fullName, hint: m.employeeCode }))]}
+                    searchPlaceholder="Search people…"
                     error={errors.reportingManagerId?.message}
-                    {...register('reportingManagerId')}
-                  >
-                    <option value="">No one</option>
-                    {(managers.data?.items ?? []).map((m) => (
-                      <option key={m.employeeId} value={m.employeeId}>
-                        {m.fullName} ({m.employeeCode})
-                      </option>
-                    ))}
-                  </SelectField>
+                  />
                 </div>
               )}
               {step === 2 && (

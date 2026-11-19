@@ -5,7 +5,8 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { Combobox } from '@/components/ui/combobox';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
@@ -16,6 +17,7 @@ import type { TabProps } from '../session-page';
 import { StatusToggle } from '../status-toggle';
 
 const REQUIREMENTS: ProgrammeRequirement[] = ['REQUIRED', 'CHOICE', 'OPTIONAL'];
+const REQUIREMENT_OPTIONS = [{ value: '', label: 'Not included' }, ...REQUIREMENTS.map((r) => ({ value: r, label: r.charAt(0) + r.slice(1).toLowerCase() }))];
 
 function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationId: string }) {
   const master = useGradeMaster();
@@ -30,6 +32,7 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
   const [error, setError] = useState<string | null>(null);
 
   const grades = master.data ?? [];
+  const gradeOptions = grades.map((g) => ({ value: g.gradeId, label: g.canonicalName }));
   const seq = (id: string) => grades.find((g) => g.gradeId === id)?.sequenceNumber ?? 0;
   const senior = grades.filter((g) => g.sequenceNumber >= 3);
   const from = fromId || senior.find((g) => g.canonicalCode === 'G11')?.gradeId || '';
@@ -65,23 +68,15 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Science" />
         <TextField label="Code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SCI" />
-        <SelectField label="Kind" value={kind} onChange={(e) => setKind(e.target.value as ProgrammeKind)}>
-          {PROGRAMME_KINDS.map((k) => (
-            <option key={k} value={k}>
-              {k === 'STREAM' ? 'Stream' : 'Flexible combination'}
-            </option>
-          ))}
-        </SelectField>
-        <SelectField label="From grade" value={from} onChange={(e) => setFromId(e.target.value)}>
-          {grades.map((g) => (
-            <option key={g.gradeId} value={g.gradeId}>{g.canonicalName}</option>
-          ))}
-        </SelectField>
-        <SelectField label="To grade" value={to} onChange={(e) => setToId(e.target.value)}>
-          {grades.map((g) => (
-            <option key={g.gradeId} value={g.gradeId}>{g.canonicalName}</option>
-          ))}
-        </SelectField>
+        <ComboboxField
+          label="Kind"
+          value={kind}
+          onChange={(v) => setKind(v as ProgrammeKind)}
+          options={PROGRAMME_KINDS.map((k) => ({ value: k, label: k === 'STREAM' ? 'Stream' : 'Flexible combination' }))}
+          searchPlaceholder="Search kinds…"
+        />
+        <ComboboxField label="From grade" value={from} onChange={setFromId} options={gradeOptions} searchPlaceholder="Search grades…" />
+        <ComboboxField label="To grade" value={to} onChange={setToId} options={gradeOptions} searchPlaceholder="Search grades…" />
       </div>
 
       {kind === 'STREAM' && (
@@ -96,22 +91,19 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
                     <span>
                       {o.subjectName} <span className="text-muted">({inRange[i]?.displayName})</span>
                     </span>
-                    <select
+                    <Combobox
                       aria-label={`Requirement for ${o.subjectName}`}
-                      className="h-8 rounded-md border border-control bg-white px-2 text-sm"
+                      className="h-8 w-40 rounded-md px-2"
                       value={rules[o.subjectOfferingId] ?? ''}
-                      onChange={(e) => setRules((cur) => {
+                      onChange={(v) => setRules((cur) => {
                         const next = { ...cur };
-                        if (e.target.value) next[o.subjectOfferingId] = e.target.value as ProgrammeRequirement;
+                        if (v) next[o.subjectOfferingId] = v as ProgrammeRequirement;
                         else delete next[o.subjectOfferingId];
                         return next;
                       })}
-                    >
-                      <option value="">Not included</option>
-                      {REQUIREMENTS.map((r) => (
-                        <option key={r} value={r}>{r.charAt(0) + r.slice(1).toLowerCase()}</option>
-                      ))}
-                    </select>
+                      options={REQUIREMENT_OPTIONS}
+                      searchPlaceholder="Search…"
+                    />
                   </li>
                 )),
             )}

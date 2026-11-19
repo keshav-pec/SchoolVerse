@@ -8,7 +8,7 @@ import {
 } from '@shared';
 import { CirclePlay, DoorOpen, PauseCircle, RotateCcw, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SelectField, TextareaField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextareaField, TextField } from '@/components/ui/field';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { api } from '@/lib/api';
 import { FormProblem } from '@/lib/errors';
@@ -71,19 +71,15 @@ function ExitDialog({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
           value={exitDate}
           onChange={(e) => setExitDate(e.target.value)}
         />
-        <SelectField
+        <ComboboxField
           label="Reason"
           required
           value={reason}
-          onChange={(e) => setReason(e.target.value as ExitReasonCategory)}
-        >
-          <option value="">Choose…</option>
-          {EXIT_REASON_CATEGORIES.map((r) => (
-            <option key={r} value={r}>
-              {EXIT_REASON_LABELS[r]}
-            </option>
-          ))}
-        </SelectField>
+          onChange={(v) => setReason(v as ExitReasonCategory)}
+          placeholder="Choose…"
+          options={EXIT_REASON_CATEGORIES.map((r) => ({ value: r, label: EXIT_REASON_LABELS[r] }))}
+          searchPlaceholder="Search reasons…"
+        />
         <TextareaField
           label="Note"
           hint="Optional. Visible to administrators."

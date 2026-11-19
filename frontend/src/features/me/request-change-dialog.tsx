@@ -11,7 +11,7 @@ import {
 } from '@shared';
 import { Send } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { api } from '@/lib/api';
 import { FormProblem } from '@/lib/errors';
@@ -152,13 +152,13 @@ export function RequestChangeDialog({
         )}
         {category === 'GOVERNMENT_ID' && (
           <>
-            <SelectField label="ID type" value={values.type} onChange={set('type')}>
-              {GOVERNMENT_ID_TYPES.map((t: GovernmentIdType) => (
-                <option key={t} value={t}>
-                  {GOVERNMENT_ID_LABELS[t]}
-                </option>
-              ))}
-            </SelectField>
+            <ComboboxField
+              label="ID type"
+              value={values.type ?? ''}
+              onChange={(type) => setValues((v) => ({ ...v, type }))}
+              options={GOVERNMENT_ID_TYPES.map((t: GovernmentIdType) => ({ value: t, label: GOVERNMENT_ID_LABELS[t] }))}
+              searchPlaceholder="Search ID types…"
+            />
             <TextField
               label="ID number"
               required

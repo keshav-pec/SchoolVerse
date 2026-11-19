@@ -4,9 +4,9 @@ import { SUBJECT_OFFERING_TYPES, SUBJECT_OFFERING_TYPE_LABELS, type SubjectOffer
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SelectField } from '@/components/ui/field';
+import { ComboboxField } from '@/components/ui/field';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
@@ -15,6 +15,8 @@ import { useAcademicMutation, useGradeOfferings, useSession, useSubjectOfferings
 import { GradePicker } from '../grade-picker';
 import type { TabProps } from '../session-page';
 import { StatusToggle } from '../status-toggle';
+
+const OFFERING_TYPE_OPTIONS = SUBJECT_OFFERING_TYPES.map((t) => ({ value: t, label: SUBJECT_OFFERING_TYPE_LABELS[t] }));
 
 function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: { gradeOfferingId: string; sessionId: string; locationId: string; readOnly: boolean; draft: boolean }) {
   const offerings = useSubjectOfferings(gradeOfferingId);
@@ -63,13 +65,14 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
                 {readOnly ? (
                   <span className="text-sm">{SUBJECT_OFFERING_TYPE_LABELS[o.offeringType]}</span>
                 ) : (
-                  <Select aria-label={`Offering type of ${o.subjectName}`} className="h-9 w-44" value={o.offeringType} onChange={(e) => patch.mutate({ id: o.subjectOfferingId, body: { offeringType: e.target.value } })}>
-                    {SUBJECT_OFFERING_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {SUBJECT_OFFERING_TYPE_LABELS[t]}
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    aria-label={`Offering type of ${o.subjectName}`}
+                    className="h-9 w-44"
+                    value={o.offeringType}
+                    onChange={(v) => patch.mutate({ id: o.subjectOfferingId, body: { offeringType: v } })}
+                    options={OFFERING_TYPE_OPTIONS}
+                    searchPlaceholder="Search types…"
+                  />
                 )}
                 {!readOnly && mapping && !o.boardSubjectDefinitionId && (
                   <Button variant="outline" size="sm" onClick={() => patch.mutate({ id: o.subjectOfferingId, body: { boardSubjectDefinitionId: mapping.definitionId } })}>
@@ -121,13 +124,14 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
           )}
           {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <SelectField containerClassName="w-52" label="Offering type" value={type} onChange={(e) => setType(e.target.value as SubjectOfferingType)}>
-              {SUBJECT_OFFERING_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {SUBJECT_OFFERING_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </SelectField>
+            <ComboboxField
+              containerClassName="w-52"
+              label="Offering type"
+              value={type}
+              onChange={(v) => setType(v as SubjectOfferingType)}
+              options={OFFERING_TYPE_OPTIONS}
+              searchPlaceholder="Search types…"
+            />
             <Button
               disabled={picked.size === 0}
               loading={add.isPending}
@@ -147,14 +151,16 @@ function Offerings({ gradeOfferingId, sessionId, locationId, readOnly, draft }: 
           </div>
 
           <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-line pt-4">
-            <SelectField containerClassName="w-64" label="Copy from another grade" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} hint="Only when you ask. Nothing is copied automatically.">
-              <option value="">Choose a grade…</option>
-              {(grades.data ?? []).filter((g) => g.gradeOfferingId !== gradeOfferingId).map((g) => (
-                <option key={g.gradeOfferingId} value={g.gradeOfferingId}>
-                  {g.displayName}
-                </option>
-              ))}
-            </SelectField>
+            <ComboboxField
+              containerClassName="w-64"
+              label="Copy from another grade"
+              value={copyFrom}
+              onChange={setCopyFrom}
+              hint="Only when you ask. Nothing is copied automatically."
+              placeholder="Choose a grade…"
+              options={(grades.data ?? []).filter((g) => g.gradeOfferingId !== gradeOfferingId).map((g) => ({ value: g.gradeOfferingId, label: g.displayName }))}
+              searchPlaceholder="Search grades…"
+            />
             <Button variant="outline" disabled={!copyFrom} loading={copy.isPending} loadingText="Copying…" onClick={() => copy.mutate(copyFrom)}>
               <Copy /> Copy subjects
             </Button>

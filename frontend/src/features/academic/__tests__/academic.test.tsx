@@ -133,7 +133,7 @@ describe('read-only roles', () => {
       [`GET ${API}/grades`]: { data: [] },
     });
     renderWithApp(<SubjectsPage />);
-    expect(await screen.findByText('Mathematics')).toBeInTheDocument();
+    expect(await screen.findByText('MATH')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add subject|edit/i })).toBeNull();
   });
 

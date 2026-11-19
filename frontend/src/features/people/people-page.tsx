@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/ui/avatar';
 import { Can } from '@/components/sv/can';
@@ -251,67 +251,42 @@ export function PeoplePage() {
               className="pl-10"
             />
           </div>
-          <Select
+          <Combobox
             aria-label="Category"
             value={filters.category ?? ''}
-            onChange={(e) => setParam({ category: e.target.value })}
-          >
-            <option value="">All categories</option>
-            {EMPLOYEE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {EMPLOYEE_CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </Select>
-          <Select
+            onChange={(v) => setParam({ category: v })}
+            options={[{ value: '', label: 'All categories' }, ...EMPLOYEE_CATEGORIES.map((c) => ({ value: c, label: EMPLOYEE_CATEGORY_LABELS[c] }))]}
+            searchPlaceholder="Search categories…"
+          />
+          <Combobox
             aria-label="Department"
             value={filters.departmentId ?? ''}
-            onChange={(e) => setParam({ departmentId: e.target.value })}
-          >
-            <option value="">All departments</option>
-            {(departments.data ?? []).map((d) => (
-              <option key={d.departmentId} value={d.departmentId}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-          <Select
+            onChange={(v) => setParam({ departmentId: v })}
+            options={[{ value: '', label: 'All departments' }, ...(departments.data ?? []).map((d) => ({ value: d.departmentId, label: d.name }))]}
+            searchPlaceholder="Search departments…"
+          />
+          <Combobox
             aria-label="Designation"
             value={filters.designationId ?? ''}
-            onChange={(e) => setParam({ designationId: e.target.value })}
-          >
-            <option value="">All designations</option>
-            {(designations.data ?? []).map((d) => (
-              <option key={d.designationId} value={d.designationId}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-          <Select
+            onChange={(v) => setParam({ designationId: v })}
+            options={[{ value: '', label: 'All designations' }, ...(designations.data ?? []).map((d) => ({ value: d.designationId, label: d.name }))]}
+            searchPlaceholder="Search designations…"
+          />
+          <Combobox
             aria-label="Location"
             value={filters.locationId ?? ''}
-            onChange={(e) => setParam({ locationId: e.target.value })}
-          >
-            <option value="">All locations</option>
-            {(locations.data ?? []).map((l) => (
-              <option key={l.locationId} value={l.locationId}>
-                {l.displayName}
-              </option>
-            ))}
-          </Select>
-          <Select
+            onChange={(v) => setParam({ locationId: v })}
+            options={[{ value: '', label: 'All locations' }, ...(locations.data ?? []).map((l) => ({ value: l.locationId, label: l.displayName }))]}
+            searchPlaceholder="Search locations…"
+          />
+          <Combobox
             aria-label="Status"
             value={filters.status ?? ''}
-            onChange={(e) => setParam({ status: e.target.value })}
+            onChange={(v) => setParam({ status: v })}
+            options={[{ value: '', label: 'Current staff' }, ...EMPLOYEE_STATUSES.map((s) => ({ value: s, label: EMPLOYEE_STATUS_LABELS[s] }))]}
+            searchPlaceholder="Search statuses…"
             className="lg:col-start-6"
-          >
-            <option value="">Current staff</option>
-            {EMPLOYEE_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {EMPLOYEE_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
 
         {list.isLoading ? (

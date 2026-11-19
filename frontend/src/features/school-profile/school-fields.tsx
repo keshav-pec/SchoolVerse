@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { Check, LoaderCircle, Sparkles } from 'lucide-react';
 import { DEFAULT_CURRENCY, DEFAULT_LOCALE, DEFAULT_TIMEZONE, SCHOOL_CODE_TAKEN_MESSAGE, type SchoolDTO } from '@shared';
-import { ComboboxField, SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, FormComboboxField, TextField } from '@/components/ui/field';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { currencyOptions, LOCALE_OPTIONS, timeZoneOptions } from '@/lib/options';
 import { fetchSchoolCodeAvailability, useSchoolCodeAvailability } from './api';
@@ -182,20 +182,8 @@ export function DefaultsFields({ form }: { form: SchoolForm }) {
         searchPlaceholder="Search time zones…"
         error={err('defaultTimezone')}
       />
-      <SelectField label="Currency" required error={err('defaultCurrency')} {...form.register('defaultCurrency')}>
-        {currencyOptions().map((c) => (
-          <option key={c.value} value={c.value}>
-            {c.label}
-          </option>
-        ))}
-      </SelectField>
-      <SelectField label="Language & region" required error={err('defaultLocale')} {...form.register('defaultLocale')}>
-        {LOCALE_OPTIONS.map((l) => (
-          <option key={l.value} value={l.value}>
-            {l.label}
-          </option>
-        ))}
-      </SelectField>
+      <FormComboboxField label="Currency" required control={form.control} name="defaultCurrency" options={currencyOptions()} searchPlaceholder="Search currencies…" error={err('defaultCurrency')} />
+      <FormComboboxField label="Language & region" required control={form.control} name="defaultLocale" options={LOCALE_OPTIONS} searchPlaceholder="Search languages…" error={err('defaultLocale')} />
     </div>
   );
 }

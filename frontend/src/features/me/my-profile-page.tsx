@@ -26,7 +26,7 @@ import { Alert } from '@/components/ui/alert';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AssignmentStatusChip, EmployeeStatusPill } from '@/components/sv/employee-status';
 import { ErrorState } from '@/components/sv/error-state';
@@ -183,18 +183,14 @@ function EditDetails({ me, onClose }: { me: SelfProfileDTO; onClose: () => void 
             onChange={set('postalCode')}
             error={errors['address.postalCode']}
           />
-          <SelectField
+          <ComboboxField
             label="Country"
             value={v.country}
-            onChange={set('country')}
+            onChange={(country) => setV((x) => ({ ...x, country }))}
+            options={countryOptions()}
+            searchPlaceholder="Search countries…"
             error={errors['address.country']}
-          >
-            {countryOptions().map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </SelectField>
+          />
         </div>
       </fieldset>
       <fieldset className="space-y-4">

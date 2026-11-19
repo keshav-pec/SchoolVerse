@@ -11,8 +11,7 @@ import {
 } from '@shared';
 import { Check, Lock, LoaderCircle, Sparkles, TriangleAlert } from 'lucide-react';
 import { Combobox } from '@/components/ui/combobox';
-import { FieldShell, SelectField, TextareaField, TextField } from '@/components/ui/field';
-import { Select } from '@/components/ui/select';
+import { FieldShell, FormComboboxField, TextareaField, TextField } from '@/components/ui/field';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { countryOptions, currencyOptions, LOCALE_OPTIONS, localeLabel, timeZoneOptions } from '@/lib/options';
@@ -287,13 +286,15 @@ export function BasicsFields({
       <TextField label="Location name" required placeholder="e.g. Mohali Campus" error={err('displayName')} {...form.register('displayName')} />
       <div className="grid gap-5 sm:grid-cols-2">
         <LocationCodeField form={form} schoolId={schoolId} location={location} canCheck={canCheckCode} autoSuggest={autoSuggest} />
-        <SelectField label="Location type" required error={err('locationType')} {...form.register('locationType')}>
-          {LOCATION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {LOCATION_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </SelectField>
+        <FormComboboxField
+          label="Location type"
+          required
+          control={form.control}
+          name="locationType"
+          options={LOCATION_TYPES.map((t) => ({ value: t, label: LOCATION_TYPE_LABELS[t] }))}
+          searchPlaceholder="Search types…"
+          error={err('locationType')}
+        />
       </div>
       <TextField label="Official name" placeholder="As it appears on affiliation documents" hint="Optional. Use it if it differs from the display name." error={err('officialName')} {...form.register('officialName')} />
       <TextField label="Opening date" type="date" error={err('openingDate')} {...form.register('openingDate')} />
@@ -325,13 +326,7 @@ export function AddressFields({ form }: SectionProps) {
         <TextField label="District" error={err('address.district')} {...form.register('address.district')} />
         <TextField label="State" required autoComplete="address-level1" error={err('address.state')} {...form.register('address.state')} />
         <TextField label="Postal code" required inputMode="text" autoComplete="postal-code" hint={postalHint} error={err('address.postalCode')} {...form.register('address.postalCode')} />
-        <SelectField label="Country" required error={err('address.country')} {...form.register('address.country')}>
-          {countryOptions().map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </SelectField>
+        <FormComboboxField label="Country" required control={form.control} name="address.country" options={countryOptions()} searchPlaceholder="Search countries…" error={err('address.country')} />
       </div>
       <fieldset>
         <legend className="mb-2 text-sm font-semibold text-ink">Map coordinates (optional)</legend>
@@ -426,13 +421,7 @@ export function DefaultsFields({ form, school }: SectionProps & { school: Pick<S
         schoolValue={school.defaultCurrency}
         display={(v) => v}
         renderEditor={(value, onChange, id) => (
-          <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-            {currencyOptions().map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
+          <Combobox id={id} value={value} onChange={onChange} options={currencyOptions()} searchPlaceholder="Search currencies…" />
         )}
       />
       <OverrideRow
@@ -442,13 +431,7 @@ export function DefaultsFields({ form, school }: SectionProps & { school: Pick<S
         schoolValue={school.defaultLocale}
         display={localeLabel}
         renderEditor={(value, onChange, id) => (
-          <Select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-            {LOCALE_OPTIONS.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </Select>
+          <Combobox id={id} value={value} onChange={onChange} options={LOCALE_OPTIONS} searchPlaceholder="Search languages…" />
         )}
       />
     </div>

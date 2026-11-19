@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
 import type { ReactNode } from 'react';
-import type { ProfileChangeRequestDTO } from '@shared';
+import { EMPLOYEE_CATEGORY_LABELS, ROLE_LABELS, type ProfileChangeRequestDTO } from '@shared';
 import { MyProfilePage } from '@/features/me/my-profile-page';
 import { useAuth } from '@/lib/auth';
 import { RequireAuth, RequirePeopleAdmin } from '@/routes/guards';
 import { EMPLOYEE_ID, employeeProfile, restrictedProfile, selfProfile } from '@/test/fixtures';
-import { mockApi, renderWithApp } from '@/test/utils';
+import { mockApi, pickOption, renderWithApp } from '@/test/utils';
 import { AddEmployeeDrawer } from '../add-employee-drawer';
 import { ColleaguesPage } from '../colleagues-page';
 import { AccountTab } from '../tabs/account-tab';
@@ -135,7 +135,7 @@ describe('Account & Access tab (IAM-01)', () => {
       </Ready>,
     );
     const user = userEvent.setup();
-    await user.selectOptions(await screen.findByLabelText(/^role/i), 'STAFF');
+    await pickOption(user, await screen.findByLabelText(/^role/i), ROLE_LABELS.STAFF);
     await user.click(screen.getByRole('button', { name: /create login/i }));
     await waitFor(() => expect(api.callsTo('/user-account', 'POST')).toHaveLength(1));
     expect(api.callsTo('/user-account', 'POST')[0]!.body).toEqual({
@@ -203,7 +203,7 @@ describe('Add employee drawer (FSM-01)', () => {
     // A code in the wrong shape is caught as well.
     await user.type(within(drawer).getByLabelText(/first name/i), 'Priya');
     await user.type(within(drawer).getByLabelText(/last name/i), 'Sharma');
-    await user.selectOptions(within(drawer).getByLabelText(/^category/i), 'FACULTY');
+    await pickOption(user, within(drawer).getByLabelText(/^category/i), EMPLOYEE_CATEGORY_LABELS.FACULTY);
     await user.type(within(drawer).getByLabelText(/employee code/i), 'bad code!');
     await user.click(within(drawer).getByRole('button', { name: /^next/i }));
     expect(

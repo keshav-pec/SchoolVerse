@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import type { Role } from '@shared';
@@ -62,4 +63,10 @@ export function renderWithApp(ui: ReactElement, { route = '/' }: { route?: strin
       </AuthProvider>
     </QueryClientProvider>,
   );
+}
+
+/** Open a themed dropdown (`Combobox`) and pick an option by its visible label. */
+export async function pickOption(user: UserEvent, trigger: HTMLElement, label: string | RegExp) {
+  await user.click(trigger);
+  await user.click(await screen.findByRole('option', { name: label }));
 }

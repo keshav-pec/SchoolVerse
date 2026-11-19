@@ -11,7 +11,7 @@ import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { EmptyState } from '@/components/sv/empty-state';
@@ -110,17 +110,13 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
           <p className="text-sm font-semibold">Upload a document</p>
           {error && <Alert tone="danger">{error}</Alert>}
           <div className="grid gap-4 sm:grid-cols-2">
-            <SelectField
+            <ComboboxField
               label="Type"
               value={documentType}
-              onChange={(e) => setType(e.target.value as DocumentType)}
-            >
-              {DOCUMENT_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {DOCUMENT_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </SelectField>
+              onChange={(v) => setType(v as DocumentType)}
+              options={DOCUMENT_TYPES.map((t) => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] }))}
+              searchPlaceholder="Search document types…"
+            />
             <TextField
               label="Name"
               hint="Optional. Defaults to the file name."

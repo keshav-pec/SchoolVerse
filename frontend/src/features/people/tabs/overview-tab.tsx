@@ -8,7 +8,7 @@ import { ArrowRightLeft, MapPin, MapPinPlus, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AssignmentStatusChip } from '@/components/sv/employee-status';
 import { Can } from '@/components/sv/can';
@@ -54,21 +54,17 @@ function AddLocationDialog({
       }}
     >
       <div className="space-y-4">
-        <SelectField
+        <ComboboxField
           label="Location"
           required
           value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-        >
-          <option value="">Choose…</option>
-          {(locations.data ?? [])
+          onChange={setLocationId}
+          placeholder="Choose…"
+          options={(locations.data ?? [])
             .filter((l) => !placed.has(l.locationId))
-            .map((l) => (
-              <option key={l.locationId} value={l.locationId}>
-                {l.displayName} ({l.locationCode})
-              </option>
-            ))}
-        </SelectField>
+            .map((l) => ({ value: l.locationId, label: l.displayName, hint: l.locationCode }))}
+          searchPlaceholder="Search locations…"
+        />
         <TextField
           label="Starts on"
           type="date"
@@ -119,21 +115,17 @@ function TransferDialog({
       }}
     >
       <div className="space-y-4">
-        <SelectField
+        <ComboboxField
           label="New primary location"
           required
           value={toLocationId}
-          onChange={(e) => setTo(e.target.value)}
-        >
-          <option value="">Choose…</option>
-          {(locations.data ?? [])
+          onChange={setTo}
+          placeholder="Choose…"
+          options={(locations.data ?? [])
             .filter((l) => l.locationId !== current?.locationId)
-            .map((l) => (
-              <option key={l.locationId} value={l.locationId}>
-                {l.displayName} ({l.locationCode})
-              </option>
-            ))}
-        </SelectField>
+            .map((l) => ({ value: l.locationId, label: l.displayName, hint: l.locationCode }))}
+          searchPlaceholder="Search locations…"
+        />
         <TextField
           label="Starts on"
           type="date"

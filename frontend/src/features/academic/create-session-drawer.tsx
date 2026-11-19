@@ -4,7 +4,7 @@ import type { AcademicSessionDTO, MasterLocationDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
@@ -39,20 +39,23 @@ function LocationBoardRow({ location, entry, onChange }: { location: MasterLocat
       </label>
       {entry.on && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <SelectField label="Board" value={entry.boardId} onChange={(e) => onChange({ boardId: e.target.value, boardRuleVersionId: '' })}>
-            {(boards.data ?? []).map((b) => (
-              <option key={b.boardId} value={b.boardId}>
-                {b.boardName}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Rule version" value={entry.boardRuleVersionId} onChange={(e) => onChange({ boardRuleVersionId: e.target.value })} hint={published.length === 0 && !versions.isLoading ? 'This board has no published rule version yet.' : undefined}>
-            {published.map((v) => (
-              <option key={v.ruleVersionId} value={v.ruleVersionId}>
-                {v.name}
-              </option>
-            ))}
-          </SelectField>
+          <ComboboxField
+            label="Board"
+            value={entry.boardId}
+            onChange={(v) => onChange({ boardId: v, boardRuleVersionId: '' })}
+            placeholder="Choose…"
+            options={(boards.data ?? []).map((b) => ({ value: b.boardId, label: b.boardName }))}
+            searchPlaceholder="Search boards…"
+          />
+          <ComboboxField
+            label="Rule version"
+            value={entry.boardRuleVersionId}
+            onChange={(v) => onChange({ boardRuleVersionId: v })}
+            hint={published.length === 0 && !versions.isLoading ? 'This board has no published rule version yet.' : undefined}
+            placeholder="Choose…"
+            options={published.map((v) => ({ value: v.ruleVersionId, label: v.name }))}
+            searchPlaceholder="Search versions…"
+          />
           <TextField containerClassName="sm:col-span-2" label="Affiliation number (optional)" value={entry.affiliationNumber} onChange={(e) => onChange({ affiliationNumber: e.target.value })} />
         </div>
       )}
@@ -191,14 +194,15 @@ export function CreateSessionDrawer({ open, onOpenChange, sessions, onCreated }:
                 ))}
               </fieldset>
               {mode === 'CLONE' && (
-                <SelectField label="Session to clone" value={cloneId} onChange={(e) => setCloneId(e.target.value)} hint={sessions.length === 0 ? 'There is no earlier session to clone.' : undefined}>
-                  <option value="">Choose a session…</option>
-                  {sessions.map((s) => (
-                    <option key={s.academicSessionId} value={s.academicSessionId}>
-                      {s.name} ({s.code})
-                    </option>
-                  ))}
-                </SelectField>
+                <ComboboxField
+                  label="Session to clone"
+                  value={cloneId}
+                  onChange={setCloneId}
+                  hint={sessions.length === 0 ? 'There is no earlier session to clone.' : undefined}
+                  placeholder="Choose a session…"
+                  options={sessions.map((s) => ({ value: s.academicSessionId, label: s.name, hint: s.code }))}
+                  searchPlaceholder="Search sessions…"
+                />
               )}
               <section aria-label="Review" className="rounded-xl border border-line p-4 text-sm">
                 <h3 className="mb-2 font-bold">Review</h3>

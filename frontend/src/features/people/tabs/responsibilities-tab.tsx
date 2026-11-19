@@ -7,7 +7,7 @@ import {
 import { Plus, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AssignmentStatusChip } from '@/components/sv/employee-status';
 import { Can } from '@/components/sv/can';
@@ -65,18 +65,14 @@ function AddDialog({ employee, onClose }: { employee: EmployeeProfileDTO; onClos
             <option key={r} value={r} />
           ))}
         </datalist>
-        <SelectField
+        <ComboboxField
           label="Location"
           required
           value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-        >
-          {employee.locations.map((l) => (
-            <option key={l.locationId} value={l.locationId}>
-              {l.displayName}
-            </option>
-          ))}
-        </SelectField>
+          onChange={setLocationId}
+          options={employee.locations.map((l) => ({ value: l.locationId, label: l.displayName }))}
+          searchPlaceholder="Search locations…"
+        />
         <TextField
           label="Details"
           hint="Optional."

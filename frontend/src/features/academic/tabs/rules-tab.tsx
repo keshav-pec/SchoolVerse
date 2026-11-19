@@ -5,7 +5,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectField, TextField } from '@/components/ui/field';
+import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/sv/error-state';
 import { api } from '@/lib/api';
@@ -43,13 +43,13 @@ function GroupForm({ gradeOfferingId, offerings }: { gradeOfferingId: string; of
       </CardHeader>
       <div className="grid gap-3 sm:grid-cols-2">
         <TextField label="Group name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Language 1" />
-        <SelectField label="Rule" value={ruleType} onChange={(e) => setRuleType(e.target.value as ChoiceRuleType)}>
-          {CHOOSE_RULE_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {CHOICE_RULE_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </SelectField>
+        <ComboboxField
+          label="Rule"
+          value={ruleType}
+          onChange={(v) => setRuleType(v as ChoiceRuleType)}
+          options={CHOOSE_RULE_OPTIONS.map((t) => ({ value: t, label: CHOICE_RULE_TYPE_LABELS[t] }))}
+          searchPlaceholder="Search rules…"
+        />
         {ruleType === 'CHOOSE_N' && <TextField label="At least" type="number" min={0} value={min} onChange={(e) => setMin(e.target.value)} />}
         {(ruleType === 'CHOOSE_N' || ruleType === 'OPTIONAL') && <TextField label="At most" type="number" min={1} value={max} onChange={(e) => setMax(e.target.value)} />}
       </div>
@@ -92,24 +92,18 @@ function ConstraintForm({ gradeOfferingId, offerings }: { gradeOfferingId: strin
   const [b, setB] = useState('');
   const [error, setError] = useState<string | null>(null);
   const add = useAcademicMutation((_: void) => api.post(`/grade-offerings/${gradeOfferingId}/constraints`, { type, subjectOfferingId: a, otherSubjectOfferingId: b }), { quiet: true, success: 'Rule added.' });
-  const options = (
-    <>
-      <option value="">Choose…</option>
-      {offerings.map((o) => (
-        <option key={o.subjectOfferingId} value={o.subjectOfferingId}>
-          {o.subjectName}
-        </option>
-      ))}
-    </>
-  );
+  const options = offerings.map((o) => ({ value: o.subjectOfferingId, label: o.subjectName }));
   return (
     <div className="mt-4 grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr_auto]">
-      <SelectField label="Subject" value={a} onChange={(e) => setA(e.target.value)}>{options}</SelectField>
-      <SelectField label="Rule" value={type} onChange={(e) => setType(e.target.value as ConstraintType)}>
-        <option value="REQUIRES">requires</option>
-        <option value="EXCLUDES">excludes</option>
-      </SelectField>
-      <SelectField label="Other subject" value={b} onChange={(e) => setB(e.target.value)}>{options}</SelectField>
+      <ComboboxField label="Subject" value={a} onChange={setA} placeholder="Choose…" options={options} searchPlaceholder="Search subjects…" />
+      <ComboboxField
+        label="Rule"
+        value={type}
+        onChange={(v) => setType(v as ConstraintType)}
+        options={[{ value: 'REQUIRES', label: 'requires' }, { value: 'EXCLUDES', label: 'excludes' }]}
+        searchPlaceholder="Search rules…"
+      />
+      <ComboboxField label="Other subject" value={b} onChange={setB} placeholder="Choose…" options={options} searchPlaceholder="Search subjects…" />
       <Button
         disabled={!a || !b}
         loading={add.isPending}

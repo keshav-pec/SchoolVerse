@@ -7,7 +7,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
@@ -175,23 +175,23 @@ export function LocationsPage() {
                 <Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, code or city" aria-label="Search locations" className="pl-10" />
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Select aria-label="Filter by type" value={filters.type ?? ''} onChange={(e) => setParam({ type: e.target.value })} className="sm:w-48">
-                  <option value="">All types</option>
-                  {LOCATION_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {LOCATION_TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </Select>
+                <Combobox
+                  aria-label="Filter by type"
+                  value={filters.type ?? ''}
+                  onChange={(v) => setParam({ type: v })}
+                  options={[{ value: '', label: 'All types' }, ...LOCATION_TYPES.map((t) => ({ value: t, label: LOCATION_TYPE_LABELS[t] }))]}
+                  searchPlaceholder="Search types…"
+                  className="sm:w-48"
+                />
                 {facets && facets.cities.length > 1 && (
-                  <Select aria-label="Filter by city" value={filters.city ?? ''} onChange={(e) => setParam({ city: e.target.value })} className="sm:w-48">
-                    <option value="">All cities</option>
-                    {facets.cities.map((c) => (
-                      <option key={c.city} value={c.city}>
-                        {c.city} ({c.count})
-                      </option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    aria-label="Filter by city"
+                    value={filters.city ?? ''}
+                    onChange={(v) => setParam({ city: v })}
+                    options={[{ value: '', label: 'All cities' }, ...facets.cities.map((c) => ({ value: c.city, label: c.city, hint: String(c.count) }))]}
+                    searchPlaceholder="Search cities…"
+                    className="sm:w-48"
+                  />
                 )}
               </div>
             </div>

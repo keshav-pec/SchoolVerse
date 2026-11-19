@@ -26,7 +26,7 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
   const drawer = page.getByRole('dialog', { name: /add employee/i });
   await drawer.getByLabel(/^first name/i).fill('Asha');
   await drawer.getByLabel(/^last name/i).fill('Verma');
-  await drawer.getByLabel(/^category/i).selectOption('FACULTY');
+  await chooseOption(drawer.getByLabel(/^category/i), /^Faculty$/);
   await drawer.getByLabel(/^employee code/i).fill('fac-e2e1');
   await drawer.getByLabel(/^joining date/i).fill('2026-04-01');
   await drawer.getByRole('button', { name: /^next/i }).click();
@@ -118,7 +118,7 @@ test('admin adds non-teaching staff, transfers them, gives them a responsibility
   const drawer = page.getByRole('dialog', { name: /add employee/i });
   await drawer.getByLabel(/^first name/i).fill('Dev');
   await drawer.getByLabel(/^last name/i).fill('Kumar');
-  await drawer.getByLabel(/^category/i).selectOption('NON_TEACHING_STAFF');
+  await chooseOption(drawer.getByLabel(/^category/i), /^Non-teaching staff$/);
   await drawer.getByLabel(/^employee code/i).fill('STF-E2E1');
   await drawer.getByLabel(/^joining date/i).fill('2026-04-01');
   await drawer.getByRole('button', { name: /^next/i }).click();
@@ -192,7 +192,7 @@ test('admin exits an employee today and that person’s very next request is sig
   await expect(dialog).toContainText(/access ends on/i);
   await expect(dialog).toContainText(/assignments close on that day/i);
   await expect(dialog).toContainText(/kept for history/i);
-  await dialog.getByLabel(/^reason/i).selectOption('RESIGNATION');
+  await chooseOption(dialog.getByLabel(/^reason/i), /^Resignation$/);
   await dialog.getByRole('button', { name: /^initiate exit$/i }).click();
   await expectToast(page, /exit has been recorded/i);
   await expect(page.getByText('This employee has left the school')).toBeVisible();
