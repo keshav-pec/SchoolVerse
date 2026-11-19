@@ -8,7 +8,7 @@ import { env, isProd } from './config/env';
 import { errorHandler, notFoundHandler } from './core/error-handler';
 import { logger, redactUrl } from './core/logger';
 import { requestId } from './core/request-id';
-import { PUBLIC_UPLOAD_PREFIX, storage } from './core/storage/storage';
+import { PUBLIC_UPLOAD_PREFIX, legacyDiskStorage, storage } from './core/storage/storage';
 import { createDocsRouter } from './docs/swagger';
 import { registerAcademicLocationDependency } from './modules/academic/register';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
@@ -48,8 +48,18 @@ export function createApp() {
   // Uploaded images (school logos). Names are unguessable UUIDs and only sniffed image types are stored.
   app.use(
     PUBLIC_UPLOAD_PREFIX,
-    express.static(storage.rootDir, { index: false, dotfiles: 'deny', fallthrough: true, maxAge: '7d', immutable: true }),
+    express.static(legacyDiskStorage.rootDir, { index: false, dotfiles: 'deny', fallthrough: true, maxAge: '7d', immutable: true }),
   );
+  app.get(`${PUBLIC_UPLOAD_PREFIX}/*key`, async (req, res, next) => {
+    try {
+      const file = await storage.read(decodeURIComponent(req.path.slice(PUBLIC_UPLOAD_PREFIX.length + 1)));
+      if (!file) return next();
+      res.set({ 'Content-Type': file.contentType, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=604800, immutable' });
+      res.send(file.data);
+    } catch (err) {
+      next(err);
+    }
+  });
   app.use('/api/v1', apiRouter);
 
   app.use(notFoundHandler);

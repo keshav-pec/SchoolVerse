@@ -27,7 +27,7 @@ export const school: SchoolDTO = {
   defaultLocale: 'en-IN',
   status: 'ACTIVE',
   setupCompleted: true,
-  setup: { status: 'COMPLETED', currentStep: 6, completedAt: '2026-01-02T00:00:00.000Z' },
+  setup: { status: 'COMPLETED', currentStep: 5, completedAt: '2026-01-02T00:00:00.000Z' },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -91,7 +91,7 @@ export function unfinishedSchool(currentStep = 1) {
 export const setupStatus = {
   schoolId: SCHOOL_ID,
   setupStatus: 'COMPLETED' as const,
-  currentStep: 6,
+  currentStep: 5,
   completionPercent: 88,
   coreCompletionPercent: 92,
   items: [

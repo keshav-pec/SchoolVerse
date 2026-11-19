@@ -35,14 +35,11 @@ test('a new school signs up, walks the setup wizard and lands on a completed ove
   await page.getByLabel(/^phone/i).fill('98140 11001');
   await page.getByRole('button', { name: /save & continue/i }).click();
 
-  // ── step 4: no extra campuses; step 5: review
+  // ── step 4: no extra campuses; step 5: review & finish
   await expect(page.getByRole('heading', { name: /any other campuses/i })).toBeVisible();
   await page.getByRole('button', { name: /skip for now/i }).click();
-  await expect(page.getByRole('heading', { name: /review everything/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /review and finish/i })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Primary Location' })).toContainText('E2E Main Campus');
-  await page.getByRole('button', { name: /looks good/i }).click();
-
-  // ── step 6: finish
   await page.getByRole('button', { name: /complete school setup/i }).click();
   await expect(page.getByRole('heading', { name: /you’re all set/i })).toBeVisible();
   await page.getByRole('button', { name: /go to the overview/i }).click();
@@ -64,5 +61,5 @@ test('an unfinished setup resumes at the saved step after signing in again', asy
   const { login } = await import('./helpers');
   await login(page, 'admin@riverside.demo');
   await expect(page).toHaveURL(/\/setup$/);
-  await expect(page.getByRole('heading', { name: /review everything/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /review and finish/i })).toBeVisible();
 });

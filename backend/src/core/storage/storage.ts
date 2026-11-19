@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { env } from '../../config/env';
 import { logger } from '../logger';
+import { StoredFile } from './stored-file.model';
 
 /**
  * File storage port. Module 1 stores files on local disk; an S3/GCS adapter can implement the
@@ -50,7 +51,49 @@ export class LocalDiskStorage implements FileStorage {
   }
 }
 
-export const storage = new LocalDiskStorage(env.UPLOAD_DIR);
+/** Files saved before logos moved into the database. Still served (and removed) so nothing already uploaded breaks. */
+export const legacyDiskStorage = new LocalDiskStorage(env.UPLOAD_DIR);
+
+/**
+ * Stores public images in MongoDB. A server's own disk is wiped on redeploy and is not shared between
+ * environments, which left saved logo URLs pointing at files that no longer existed.
+ */
+export class DatabaseStorage implements FileStorage {
+  constructor(private readonly legacy: LocalDiskStorage, private readonly publicPrefix = PUBLIC_UPLOAD_PREFIX) {}
+
+  private keyOf(url: string): string | null {
+    if (!url.startsWith(`${this.publicPrefix}/`)) return null;
+    const key = url.slice(this.publicPrefix.length + 1);
+    return SAFE_KEY.test(key) && !key.includes('..') ? key : null;
+  }
+
+  async save({ key, body, contentType }: { key: string; body: Buffer; contentType: string }) {
+    if (!SAFE_KEY.test(key) || key.includes('..')) throw new Error(`Unsafe storage key: ${key}`);
+    await StoredFile.create({ _id: key, contentType, size: body.length, data: body });
+    return { url: `${this.publicPrefix}/${key}` };
+  }
+
+  async remove(url: string) {
+    const key = this.keyOf(url);
+    if (!key) return;
+    try {
+      await StoredFile.deleteOne({ _id: key });
+    } catch (err) {
+      logger.warn({ err, url }, 'Could not remove stored file');
+    }
+    await this.legacy.remove(url);
+  }
+
+  async read(key: string): Promise<{ data: Buffer; contentType: string } | null> {
+    if (!SAFE_KEY.test(key) || key.includes('..')) return null;
+    const file = await StoredFile.findById(key).lean<{ data: { buffer?: Uint8Array } | Buffer; contentType: string }>();
+    if (!file) return null;
+    const raw = file.data as { buffer?: Uint8Array };
+    return { data: Buffer.isBuffer(file.data) ? file.data : Buffer.from(raw.buffer ?? []), contentType: file.contentType };
+  }
+}
+
+export const storage = new DatabaseStorage(legacyDiskStorage);
 
 // ───────────────────────────────────────────────────────────── image sniffing
 

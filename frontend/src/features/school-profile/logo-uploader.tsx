@@ -21,7 +21,9 @@ export function LogoUploader({ school, previewName, canEdit }: { school: SchoolD
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const busy = upload.isPending || remove.isPending;
-  const shown = preview ?? school.logoUrl;
+  // A saved logo whose file can't be loaded shows the initials instead of a broken image.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const shown = preview ?? (school.logoUrl && school.logoUrl !== brokenUrl ? school.logoUrl : null);
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
@@ -43,7 +45,7 @@ export function LogoUploader({ school, previewName, canEdit }: { school: SchoolD
   return (
     <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
       <div className="relative grid size-24 shrink-0 place-items-center overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-brand-soft to-lavender-soft">
-        {shown ? <img src={shown} alt={`${previewName || school.displayName} logo`} className="size-full object-contain p-1.5" /> : <span aria-hidden="true" className="text-2xl font-extrabold text-brand">{initialsOf(previewName || school.displayName)}</span>}
+        {shown ? <img src={shown} alt={`${previewName || school.displayName} logo`} className="size-full object-contain p-1.5" onError={() => setBrokenUrl(shown)} /> : <span aria-hidden="true" className="text-2xl font-extrabold text-brand">{initialsOf(previewName || school.displayName)}</span>}
         {busy && (
           <span className="absolute inset-0 grid place-items-center bg-white/70" role="status" aria-label="Uploading logo">
             <LoaderCircle className="size-6 animate-spin text-brand" />

@@ -100,7 +100,7 @@ function PrimaryLocationForm({ school, detail, onBack, onDone }: { school: Schoo
 
   return (
     <StepCard>
-      <StepHeading eyebrow="Step 3 of 6" title="Your Primary Location">
+      <StepHeading eyebrow="Step 3 of 5" title="Your Primary Location">
         This is your main campus. It becomes the school’s Primary Location and the default for everything that follows.
       </StepHeading>
       <form onSubmit={submit} noValidate>
@@ -173,7 +173,7 @@ export function AdditionalLocationsStep({ school, others, loading, onBack, onNex
   const [editing, setEditing] = useState<string | null>(null);
   return (
     <StepCard>
-      <StepHeading eyebrow="Step 4 of 6" title="Any other campuses?">
+      <StepHeading eyebrow="Step 4 of 5" title="Any other campuses?">
         Add branches or administrative offices now, as drafts or active. You can always add more later.
       </StepHeading>
 
@@ -253,12 +253,93 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function ReviewStep({ school, candidate, others, onEdit, onBack, onNext }: { school: SchoolDTO; candidate: LocationDTO | null; others: LocationDTO[]; onEdit: (step: number) => void; onBack: () => void; onNext: () => void }) {
+/** Which wizard step owns each field the server may report as missing. */
+function stepForMissing(field: string): number {
+  if (field.startsWith('primaryLocation')) return 3;
+  if (['displayName', 'legalName', 'schoolCode'].includes(field)) return 1;
+  return 2;
+}
+
+export function ReviewStep({
+  school,
+  candidate,
+  others,
+  onEdit,
+  onBack,
+  onFinishing,
+  onFinished,
+}: {
+  school: SchoolDTO;
+  candidate: LocationDTO | null;
+  others: LocationDTO[];
+  onEdit: (step: number) => void;
+  onBack: () => void;
+  /** Tells the page not to redirect away while the celebration plays. */
+  onFinishing: (finishing: boolean) => void;
+  onFinished: () => void;
+}) {
+  const complete = useCompleteSetup();
+  const [done, setDone] = useState(false);
+  const error = complete.error;
+  const missing = error instanceof ApiError && error.code === 'SETUP_INCOMPLETE' ? Object.entries(error.fieldErrors) : [];
+
+  const finish = async () => {
+    onFinishing(true);
+    try {
+      await complete.mutateAsync({ schoolId: school.schoolId, primaryLocationId: candidate?.locationId });
+      setDone(true);
+      void celebrate();
+      setTimeout(onFinished, 3200);
+    } catch {
+      onFinishing(false); // the error is shown below
+    }
+  };
+
+  if (done) {
+    return (
+      <StepCard>
+        <div className="py-6 text-center" role="status">
+          <motion.div initial={{ scale: 0.5, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 14 }} className="mx-auto grid size-20 place-items-center rounded-3xl bg-sun-soft text-[#7a5300]">
+            <PartyPopper className="size-10" aria-hidden="true" />
+          </motion.div>
+          <h1 className="mt-5 text-[28px] font-extrabold">You’re all set! 🎉</h1>
+          <p className="mx-auto mt-2 max-w-md text-[15px] text-muted">
+            {candidate?.displayName ?? 'Your campus'} is now your Primary Location. Taking you to your School Setup overview…
+          </p>
+          <Button size="lg" className="mt-6" onClick={onFinished}>
+            Go to the overview <ArrowRight />
+          </Button>
+        </div>
+      </StepCard>
+    );
+  }
+
   return (
     <StepCard>
-      <StepHeading eyebrow="Step 5 of 6" title="Review everything">
-        Check the details below. Use Edit to change anything before you finish.
+      <StepHeading eyebrow="Step 5 of 5" title="Review and finish">
+        Check the details below. Use Edit to change anything, then complete your setup.
       </StepHeading>
+
+      {missing.length > 0 && (
+        <Alert tone="warning" title="A few things still need attention" className="mb-5">
+          <ul className="mt-1 space-y-1.5">
+            {missing.map(([field, message]) => (
+              <li key={field} className="flex flex-wrap items-center gap-2">
+                <span>{message}</span>
+                <Button variant="link" className="h-auto" onClick={() => onEdit(stepForMissing(field))}>
+                  Fix this
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      )}
+      {error && missing.length === 0 && (
+        <Alert tone="danger" className="mb-5">
+          {error instanceof Error ? error.message : 'Something went wrong.'}
+        </Alert>
+      )}
+
       <div className="space-y-4">
         <ReviewCard title="School identity" step={1} onEdit={onEdit}>
           <Row label="School name">{school.displayName}</Row>
@@ -310,108 +391,10 @@ export function ReviewStep({ school, candidate, others, onEdit, onBack, onNext }
           )}
         </ReviewCard>
       </div>
-      <StepActions>
-        <Button type="button" variant="ghost" className="sm:mr-auto" onClick={onBack}>
-          <ArrowLeft /> Back
-        </Button>
-        <Button size="lg" onClick={onNext} disabled={!candidate}>
-          Looks good <ArrowRight />
-        </Button>
-      </StepActions>
-    </StepCard>
-  );
-}
-
-// ───────────────────────────────────────────────────────────── step 6 — complete
-
-/** Which wizard step owns each field the server may report as missing. */
-function stepForMissing(field: string): number {
-  if (field.startsWith('primaryLocation')) return 3;
-  if (['displayName', 'legalName', 'schoolCode'].includes(field)) return 1;
-  return 2;
-}
-
-export function CompleteStep({
-  school,
-  candidate,
-  onBack,
-  onEdit,
-  onFinishing,
-  onFinished,
-}: {
-  school: SchoolDTO;
-  candidate: LocationDTO | null;
-  onBack: () => void;
-  onEdit: (step: number) => void;
-  /** Tells the page not to redirect away while the celebration plays. */
-  onFinishing: (finishing: boolean) => void;
-  onFinished: () => void;
-}) {
-  const complete = useCompleteSetup();
-  const [done, setDone] = useState(false);
-  const error = complete.error;
-  const missing = error instanceof ApiError && error.code === 'SETUP_INCOMPLETE' ? Object.entries(error.fieldErrors) : [];
-
-  const finish = async () => {
-    onFinishing(true);
-    try {
-      await complete.mutateAsync({ schoolId: school.schoolId, primaryLocationId: candidate?.locationId });
-      setDone(true);
-      void celebrate();
-      setTimeout(onFinished, 3200);
-    } catch {
-      onFinishing(false); // the error is shown below
-    }
-  };
-
-  if (done) {
-    return (
-      <StepCard>
-        <div className="py-6 text-center" role="status">
-          <motion.div initial={{ scale: 0.5, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 14 }} className="mx-auto grid size-20 place-items-center rounded-3xl bg-sun-soft text-[#7a5300]">
-            <PartyPopper className="size-10" aria-hidden="true" />
-          </motion.div>
-          <h1 className="mt-5 text-[28px] font-extrabold">You’re all set! 🎉</h1>
-          <p className="mx-auto mt-2 max-w-md text-[15px] text-muted">
-            {candidate?.displayName ?? 'Your campus'} is now your Primary Location. Taking you to your School Setup overview…
-          </p>
-          <Button size="lg" className="mt-6" onClick={onFinished}>
-            Go to the overview <ArrowRight />
-          </Button>
-        </div>
-      </StepCard>
-    );
-  }
-
-  return (
-    <StepCard>
-      <StepHeading eyebrow="Step 6 of 6" title="Ready to finish?">
-        {candidate ? `Completing setup activates ${candidate.displayName} as your Primary Location and opens your School Setup overview.` : 'Add a Primary Location first.'}
-      </StepHeading>
-
-      {missing.length > 0 && (
-        <Alert tone="warning" title="A few things still need attention" className="mb-5">
-          <ul className="mt-1 space-y-1.5">
-            {missing.map(([field, message]) => (
-              <li key={field} className="flex flex-wrap items-center gap-2">
-                <span>{message}</span>
-                <Button variant="link" className="h-auto" onClick={() => onEdit(stepForMissing(field))}>
-                  Fix this
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
-      {error && missing.length === 0 && (
-        <Alert tone="danger" className="mb-5">
-          {error instanceof Error ? error.message : 'Something went wrong.'}
-        </Alert>
-      )}
-
-      <div className="rounded-xl bg-brand-soft p-4 text-sm">
+      <div className="mt-5 rounded-xl bg-brand-soft p-4 text-sm">
         <p className="flex items-center gap-2 font-semibold text-ink">
-          <MapPin className="size-4 text-brand" aria-hidden="true" /> {school.displayName}
+          <MapPin className="size-4 text-brand" aria-hidden="true" />{' '}
+          {candidate ? `Completing setup activates ${candidate.displayName} as your Primary Location and opens your School Setup overview.` : 'Add a Primary Location first.'}
         </p>
         <p className="mt-1 text-muted">After this, add the rest of your campuses and continue with Academic Structure whenever you’re ready.</p>
       </div>

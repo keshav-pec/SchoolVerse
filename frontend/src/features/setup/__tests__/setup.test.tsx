@@ -151,7 +151,7 @@ describe('setup wizard (SCH-LOC-12)', () => {
       [`GET ${API}/schools/${SCHOOL_ID}/locations`]: { data: list([MOH, CHD]) },
     });
     wizard();
-    expect(await screen.findByRole('heading', { name: /review everything/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /review and finish/i })).toBeInTheDocument();
     for (const section of ['School identity', 'Contact & defaults', 'Primary Location', 'Additional locations (1)']) {
       expect(within(await screen.findByRole('region', { name: section })).getByRole('button', { name: /edit/i })).toBeInTheDocument();
     }
@@ -162,7 +162,7 @@ describe('setup wizard (SCH-LOC-12)', () => {
 
   it('completes setup with the Primary candidate and celebrates', async () => {
     const api = mockApi('SCHOOL_ADMIN', {
-      [`GET ${API}/schools/current`]: { data: unfinishedSchool(6) },
+      [`GET ${API}/schools/current`]: { data: unfinishedSchool(5) },
       [`GET ${API}/schools/${SCHOOL_ID}/locations`]: { data: list([MOH]) },
       [`POST ${API}/schools/${SCHOOL_ID}/setup/complete`]: { data: school },
     });
@@ -179,7 +179,7 @@ describe('setup wizard (SCH-LOC-12)', () => {
 
   it('explains what is missing when the server refuses to complete, and links back to the right step', async () => {
     mockApi('SCHOOL_ADMIN', {
-      [`GET ${API}/schools/current`]: { data: unfinishedSchool(6) },
+      [`GET ${API}/schools/current`]: { data: unfinishedSchool(5) },
       [`GET ${API}/schools/${SCHOOL_ID}/locations`]: { data: list([MOH]) },
       [`GET ${API}/locations/${MOH.locationId}`]: { data: MOH },
       [`POST ${API}/schools/${SCHOOL_ID}/setup/complete`]: {

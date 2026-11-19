@@ -89,7 +89,7 @@ export type LocationCreateIntent = (typeof LOCATION_CREATE_INTENTS)[number];
 // ───────────────────────────────────────────────────────────── Setup wizard & overview (PRD §12, §14)
 
 /** Wizard steps (PRD §12). */
-export const SETUP_STEPS = ['IDENTITY', 'CONTACT', 'PRIMARY_LOCATION', 'ADDITIONAL_LOCATIONS', 'REVIEW', 'COMPLETE'] as const;
+export const SETUP_STEPS = ['IDENTITY', 'CONTACT', 'PRIMARY_LOCATION', 'ADDITIONAL_LOCATIONS', 'REVIEW_AND_FINISH'] as const;
 export type SetupStep = (typeof SETUP_STEPS)[number];
 export const SETUP_STEP_COUNT = SETUP_STEPS.length;
 

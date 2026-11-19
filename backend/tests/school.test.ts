@@ -1,8 +1,5 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { storage } from '../src/core/storage/storage';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import {
   API, app, createSchool, createUserAndLogin, signupAdmin, useTestDatabase, validSchool,
@@ -210,7 +207,8 @@ describe('School logo upload', () => {
 
     const second = await agent.post(`${API}/schools/${school.schoolId}/logo`).attach('logo', PNG, 'new.png').expect(200);
     expect(second.body.data.logoUrl).not.toBe(firstUrl);
-    expect(existsSync(path.join(storage.rootDir, firstUrl.replace('/uploads/', '')))).toBe(false);
+    await request(app).get(firstUrl).expect(404); // the replaced logo is gone from the database
+    await request(app).get(second.body.data.logoUrl).expect(200);
 
     await agent.delete(`${API}/schools/${school.schoolId}/logo`).expect(200);
     const after = await agent.get(`${API}/schools/${school.schoolId}`).expect(200);
@@ -679,9 +677,9 @@ describe('setup progress (SCH-LOC-12)', () => {
     expect((await agent.get(`${API}/schools/current`)).body.data.setup.currentStep).toBe(4);
   });
 
-  it('rejects steps outside 1–6', async () => {
+  it('rejects steps outside 1–5', async () => {
     const { agent, school } = await setupSchool();
-    for (const currentStep of [0, 7, -1, 'x']) {
+    for (const currentStep of [0, 6, -1, 'x']) {
       expectError(await agent.patch(`${API}/schools/${school.schoolId}/setup`).send({ currentStep }), 400, 'VALIDATION_FAILED');
     }
   });
@@ -712,7 +710,7 @@ describe('completing setup (SCH-LOC-12)', () => {
     );
     const res = await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({ primaryLocationId: draft.locationId }).expect(200);
     expect(res.body.data.setupCompleted).toBe(true);
-    expect(res.body.data.setup).toMatchObject({ status: 'COMPLETED', currentStep: 6 });
+    expect(res.body.data.setup).toMatchObject({ status: 'COMPLETED', currentStep: 5 });
     expect(res.body.data.setup.completedAt).toBeTruthy();
 
     const moh = await getLocation(agent, draft.locationId);
@@ -772,7 +770,7 @@ describe('completing setup (SCH-LOC-12)', () => {
     const second = (await agent.post(`${API}/schools/${school.schoolId}/setup/complete`).send({}).expect(200)).body.data;
     expect(second.setup.completedAt).toBe(first.setup.completedAt);
     const rewound = await agent.patch(`${API}/schools/${school.schoolId}/setup`).send({ currentStep: 2 }).expect(200);
-    expect(rewound.body.data.setup).toMatchObject({ status: 'COMPLETED', currentStep: 6 });
+    expect(rewound.body.data.setup).toMatchObject({ status: 'COMPLETED', currentStep: 5 });
     const events = await agent.get(`${API}/audit`).query({ entityType: 'school', entityId: school.schoolId }).expect(200);
     expect(events.body.data.items.filter((e: { action: string }) => e.action === 'school.setup_completed')).toHaveLength(1);
   });

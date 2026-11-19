@@ -183,7 +183,10 @@ function SidebarContent({
   const session = useSession();
   const pending = usePendingRequestCount(can('employee:approve_changes'));
   // Same cached query the profile page updates, so a new, replaced or removed logo shows here at once.
-  const logoUrl = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
+  const savedLogo = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
+  // A logo whose file can't be loaded falls back to the icon instead of a broken image.
+  const [brokenLogo, setBrokenLogo] = useState<string | null>(null);
+  const logoUrl = savedLogo && savedLogo !== brokenLogo ? savedLogo : null;
 
   return (
     <div
@@ -210,6 +213,7 @@ function SidebarContent({
               src={logoUrl}
               alt={`${session.tenant.name} logo`}
               className="size-full object-cover object-center"
+              onError={() => setBrokenLogo(logoUrl)}
             />
           ) : (
             <Building2 className="size-[18px]" />

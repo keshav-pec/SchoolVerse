@@ -18,15 +18,14 @@ import { fetchSchoolCodeAvailability, useCreateSchool, useCurrentSchool, useUpda
 import { ContactFields, DefaultsFields, IDENTITY_FIELDS, IdentityFields, schoolFormValues, type SchoolFormValues } from '../../school-profile/school-fields';
 import { useSaveSetupProgress } from '../api';
 import { clearDraft, readDraft, writeDraft } from './draft';
-import { AdditionalLocationsStep, CompleteStep, PrimaryLocationStep, ReviewStep, StepActions, StepCard, StepHeading, pickPrimaryCandidate } from './wizard-steps';
+import { AdditionalLocationsStep, PrimaryLocationStep, ReviewStep, StepActions, StepCard, StepHeading, pickPrimaryCandidate } from './wizard-steps';
 
 const STOPS = [
   { key: 'identity', label: 'School identity' },
   { key: 'contact', label: 'Contact' },
   { key: 'primary', label: 'Primary location' },
   { key: 'more', label: 'More locations' },
-  { key: 'review', label: 'Review' },
-  { key: 'finish', label: 'Finish' },
+  { key: 'review', label: 'Review & finish' },
 ] as const;
 
 const clampStep = (n: number) => Math.min(Math.max(Math.trunc(n) || 1, 1), SETUP_STEP_COUNT);
@@ -128,7 +127,7 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
     <WizardLayout progress={<BusRoute stops={STOPS} current={effectiveStep} onJump={go} />}>
       {effectiveStep === 1 && (
         <StepCard>
-          <StepHeading eyebrow="Step 1 of 6" title="Let’s set up your school">
+          <StepHeading eyebrow="Step 1 of 5" title="Let’s set up your school">
             Start with how your school is known. You can change any of this later.
           </StepHeading>
           {formError && <Alert tone="danger" className="mb-5">{formError}</Alert>}
@@ -151,7 +150,7 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
 
       {effectiveStep === 2 && (
         <StepCard>
-          <StepHeading eyebrow="Step 2 of 6" title="How can people reach you?">
+          <StepHeading eyebrow="Step 2 of 5" title="How can people reach you?">
             Contact details and the defaults every campus will inherit.
           </StepHeading>
           {formError && <Alert tone="danger" className="mb-5">{formError}</Alert>}
@@ -177,9 +176,16 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
 
       {effectiveStep === 3 && profile && <PrimaryLocationStep school={profile} candidate={candidate} onBack={() => go(2)} onDone={() => go(4)} />}
       {effectiveStep === 4 && profile && <AdditionalLocationsStep school={profile} others={others} loading={locations.isLoading} onBack={() => go(3)} onNext={() => go(5)} />}
-      {effectiveStep === 5 && profile && <ReviewStep school={profile} candidate={candidate} others={others} onEdit={go} onBack={() => go(4)} onNext={() => go(6)} />}
-      {effectiveStep === 6 && profile && (
-        <CompleteStep school={profile} candidate={candidate} onBack={() => go(5)} onEdit={go} onFinishing={onFinishing} onFinished={() => navigate('/school-setup', { replace: true, state: { justCompleted: true } })} />
+      {effectiveStep === 5 && profile && (
+        <ReviewStep
+          school={profile}
+          candidate={candidate}
+          others={others}
+          onEdit={go}
+          onBack={() => go(4)}
+          onFinishing={onFinishing}
+          onFinished={() => navigate('/school-setup', { replace: true, state: { justCompleted: true } })}
+        />
       )}
     </WizardLayout>
   );

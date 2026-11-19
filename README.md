@@ -148,7 +148,7 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 ## Setup flow
 
 1. **Sign up** creates a workspace and its School Admin. The admin is sent to `/setup`.
-2. **Wizard** (6 steps): identity → contact & defaults → Primary Location → additional locations → review → finish.
+2. **Wizard** (5 steps): identity → contact & defaults → Primary Location → additional locations → review & finish.
    Steps 1–2 are kept in this browser until the school is created at the end of step 2. After that the step is saved on the server, so a refresh or re-login resumes where you stopped.
 3. **Finish** calls `POST /schools/:id/setup/complete`. In one transaction it validates the profile and the Primary Location, activates it, marks setup `COMPLETED` and writes an audit event. Confetti, then the **Overview**.
 4. Until then: an admin is redirected to the wizard, and Faculty/Staff see "Your school is getting set up".
