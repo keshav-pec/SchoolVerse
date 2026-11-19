@@ -221,11 +221,58 @@ describe('setup overview (SCH-LOC-13)', () => {
     expect(screen.getByText('Active Locations').parentElement).toHaveTextContent('2');
 
     const ring = screen.getByRole('progressbar', { name: /setup completion/i });
-    expect(ring).toHaveAttribute('aria-valuenow', '55');
+    expect(ring).toHaveAttribute('aria-valuenow', '88');
 
-    expect(within(screen.getByRole('region', { name: 'Completed' })).getByText('School Profile')).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Pending' })).getByText('Official Identifiers')).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Coming with later modules' })).not.toBeInTheDocument();
+    const checklist = screen.getByRole('list', { name: 'Setup checklist' });
+    expect(within(checklist).getByRole('link', { name: /School Profile: Done/ })).toHaveAttribute('href', '/school-setup/profile');
+    expect(within(checklist).getByRole('link', { name: /Official Identifiers: Needs attention/ })).toHaveAttribute('href', '/school-setup/profile');
+    expect(within(checklist).getByRole('link', { name: /Primary Location: Done/ })).toHaveAttribute('href', '/school-setup/locations');
+    // modules that aren't built yet have nothing to open and don't count towards the ring
+    expect(within(checklist).queryByText('Buildings & Rooms')).not.toBeInTheDocument();
+    expect(within(checklist).queryByText('Academic Calendar')).not.toBeInTheDocument();
+  });
+
+  it('shows 100% when everything that can be set up today is done', async () => {
+    mockApi('SCHOOL_ADMIN', {
+      [`GET ${API}/schools/current`]: { data: school },
+      [`GET ${API}/schools/${SCHOOL_ID}/setup-status`]: {
+        data: { ...setupStatus, completionPercent: 100, nextStep: null, items: setupStatus.items.map((i) => (i.status === 'pending' ? { ...i, status: 'completed' as const } : i)) },
+      },
+      [`GET ${API}/audit`]: { data: { items: [], nextCursor: null } },
+    });
+    overview();
+    expect(await screen.findByRole('progressbar', { name: /setup completion/i })).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByText(/everything available is set up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/steps done/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the 5 latest activities and the rest behind "Show more"', async () => {
+    const items = Array.from({ length: 8 }, (_, n) => ({
+      auditEventId: `a${n}`,
+      entityType: 'school_location',
+      entityId: MOH.locationId,
+      action: 'location.primary_set',
+      actor: { userId: 'u1', role: 'SCHOOL_ADMIN', name: `Actor ${n}` },
+      changes: [],
+      metadata: {},
+      occurredAt: new Date().toISOString(),
+      requestId: null,
+    }));
+    mockApi('SCHOOL_ADMIN', {
+      [`GET ${API}/schools/current`]: { data: school },
+      [`GET ${API}/schools/${SCHOOL_ID}/setup-status`]: { data: setupStatus },
+      [`GET ${API}/audit`]: { data: { items, nextCursor: null } },
+    });
+    const user = userEvent.setup();
+    overview();
+    const feed = await screen.findByRole('list', { name: 'Recent activity' });
+    expect(within(feed).getAllByRole('listitem')).toHaveLength(5);
+
+    await user.click(screen.getByRole('button', { name: /show 3 more/i }));
+    expect(within(feed).getAllByRole('listitem')).toHaveLength(8);
+
+    await user.click(screen.getByRole('button', { name: /show less/i }));
+    expect(within(feed).getAllByRole('listitem')).toHaveLength(5);
   });
 
   it('lists recent activity for admins', async () => {

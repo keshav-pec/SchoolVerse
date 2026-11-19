@@ -1,9 +1,8 @@
-import type { ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { Link, useLocation } from 'react-router';
 import { AUDIT_ACTION_LABELS, type AuditEventDTO, type SetupItemDTO } from '@shared';
-import { ArrowRight, Building2, CalendarDays, Check, CircleDashed, Clock, Crown, DoorOpen, GraduationCap, History, MapPinned, PartyPopper, Sparkles } from 'lucide-react';
+import { ArrowRight, Building2, CalendarDays, Check, ChevronDown, ChevronRight, ChevronUp, CircleDashed, Clock, Crown, DoorOpen, GraduationCap, History, MapPinned, PartyPopper, Sparkles } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,41 +36,42 @@ function Stat({ icon: Icon, label, children, hint, tone }: { icon: ComponentType
   );
 }
 
-function ChecklistGroup({ title, tone, icon: Icon, items }: { title: string; tone: string; icon: ComponentType<{ className?: string }>; items: SetupItemDTO[] }) {
-  if (items.length === 0) return null;
+/** Every item that can be worked on today. Each row opens the screen that fixes (or shows) it. */
+function Checklist({ items }: { items: SetupItemDTO[] }) {
   return (
-    <section aria-label={title}>
-      <h3 className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">
-        <Icon className="size-3.5" aria-hidden="true" /> {title} <span className="rounded-pill bg-ink/6 px-1.5 py-0.5 text-[10px]">{items.length}</span>
-      </h3>
-      <ul className="space-y-2">
-        {items.map((item) => {
-          const Glyph = item.status === 'completed' ? Check : (ITEM_ICONS[item.key] ?? CircleDashed);
-          return (
-            <li key={item.key} className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-3">
-              <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', tone)}>
-                <Glyph className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{item.label}</p>
-                <p className="truncate text-[13px] text-muted">{item.description}</p>
-              </div>
-              {item.status === 'pending' && item.href && (
-                <Button asChild variant="outline" size="sm">
-                  <Link to={item.href}>Fix</Link>
-                </Button>
-              )}
-              {item.status === 'upcoming' && item.href && (
-                <Button asChild variant="outline" size="sm">
-                  <Link to={item.href}>Start</Link>
-                </Button>
-              )}
-              {item.status === 'completed' && <Badge tone="success">Done</Badge>}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <ul className="grid gap-2.5" aria-label="Setup checklist">
+      {items.map((item) => {
+        const done = item.status === 'completed';
+        const Glyph = done ? Check : (ITEM_ICONS[item.key] ?? CircleDashed);
+        const tone = done ? 'bg-success-soft text-success' : item.status === 'pending' ? 'bg-warning-soft text-warning' : 'bg-brand-soft text-brand';
+        const state = done ? 'Done' : item.status === 'pending' ? 'Needs attention' : 'Not started';
+        const body = (
+          <>
+            <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', tone)}>
+              <Glyph className="size-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{item.label}</span>
+              <span className="block truncate text-[13px] text-muted">{item.description}</span>
+            </span>
+            <span className="hidden shrink-0 text-xs font-semibold text-muted sm:inline">{state}</span>
+            {item.href && <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden="true" />}
+          </>
+        );
+        const row = 'flex items-center gap-3 rounded-xl border border-line px-3.5 py-3';
+        return (
+          <li key={item.key} data-status={item.status}>
+            {item.href ? (
+              <Link to={item.href} className={cn(row, 'transition-colors hover:border-brand/40 hover:bg-brand-soft/40 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none')} aria-label={`${item.label}: ${state}`}>
+                {body}
+              </Link>
+            ) : (
+              <div className={row}>{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -80,9 +80,14 @@ function subjectOf(e: AuditEventDTO): string | null {
   return typeof name === 'string' ? name : null;
 }
 
+const ACTIVITY_PREVIEW = 5;
+
 function ActivityFeed() {
   const q = useRecentActivity(true);
+  const [expanded, setExpanded] = useState(false);
   const events = (q.data?.items ?? []).filter((e) => e.entityType !== 'user' && e.entityType !== 'tenant');
+  const visible = expanded ? events : events.slice(0, ACTIVITY_PREVIEW);
+  const hidden = events.length - ACTIVITY_PREVIEW;
   return (
     <Card>
       <CardHeader>
@@ -103,7 +108,7 @@ function ActivityFeed() {
       {q.isSuccess && events.length === 0 && <p className="text-sm text-muted">Nothing yet. Changes will show up here.</p>}
       {events.length > 0 && (
         <ul className="space-y-3.5" aria-label="Recent activity">
-          {events.map((e) => {
+          {visible.map((e) => {
             const subject = subjectOf(e);
             return (
               <li key={e.auditEventId} className="flex items-start gap-3">
@@ -121,6 +126,19 @@ function ActivityFeed() {
             );
           })}
         </ul>
+      )}
+      {hidden > 0 && (
+        <Button variant="ghost" size="sm" className="mt-3 w-full" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+          {expanded ? (
+            <>
+              Show less <ChevronUp />
+            </>
+          ) : (
+            <>
+              Show {hidden} more <ChevronDown />
+            </>
+          )}
+        </Button>
       )}
     </Card>
   );
@@ -154,8 +172,8 @@ export function OverviewPage() {
   const data = status.data;
   if (!data) return <ErrorState error={null} />;
 
-  const completed = data.items.filter((i) => i.status === 'completed');
-  const pending = data.items.filter((i) => i.status === 'pending');
+  // Modules that aren't built yet have nothing to open, and the percentage already ignores them.
+  const checklist = data.items.filter((i) => !(i.status === 'upcoming' && !i.href));
   const { summary, nextStep } = data;
   const NextIcon = nextStep ? (ITEM_ICONS[nextStep.key] ?? Sparkles) : Sparkles;
 
@@ -189,33 +207,25 @@ export function OverviewPage() {
         </Stat>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Setup checklist</CardTitle>
-                <CardDescription>What’s done and what needs attention.</CardDescription>
-              </div>
-            </CardHeader>
-            <div className="space-y-6">
-              <ChecklistGroup title="Completed" tone="bg-success-soft text-success" icon={Check} items={completed} />
-              <ChecklistGroup title="Pending" tone="bg-warning-soft text-warning" icon={CircleDashed} items={pending} />
-              <ChecklistGroup title="Coming next" tone="bg-brand-soft text-brand" icon={Sparkles} items={data.items.filter((i) => i.status === 'upcoming' && i.href)} />
-            </div>
-          </Card>
-          {can('audit:view') && <ActivityFeed />}
-        </div>
-
-        <div className="space-y-6">
-          <Card className="flex flex-col items-center text-center">
+      <Card className="mt-6">
+        <div className="grid items-center gap-6 md:grid-cols-[auto_minmax(0,1fr)] md:gap-10">
+          <div className="flex flex-col items-center text-center">
             <h2 className="mb-4 text-lg font-bold">Setup completion</h2>
             <CompletionRing percent={data.completionPercent} />
-            <p className="mt-4 text-sm text-muted">
-              School Setup itself is <strong className="text-ink">{data.coreCompletionPercent}%</strong> done. The rest unlocks as the next modules arrive.
+            <p className="mt-4 max-w-[200px] text-sm text-muted">
+              {data.completionPercent === 100 ? 'Everything available is set up.' : `${checklist.filter((i) => i.status === 'completed').length} of ${checklist.length} steps done.`}
             </p>
-          </Card>
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Setup checklist</h2>
+            <p className="mb-3 text-sm text-muted">Open any item to review or finish it.</p>
+            <Checklist items={checklist} />
+          </div>
+        </div>
+      </Card>
 
+      {(can('audit:view') || (nextStep && nextStep.status !== 'upcoming')) && (
+        <div className="mt-6 space-y-6">
           {nextStep && nextStep.status !== 'upcoming' && (
             <Card className="border-brand/25 bg-brand-soft">
               <p className="text-[11px] font-bold tracking-[0.14em] text-brand uppercase">Next up</p>
@@ -237,8 +247,9 @@ export function OverviewPage() {
               )}
             </Card>
           )}
+          {can('audit:view') && <ActivityFeed />}
         </div>
-      </div>
+      )}
     </>
   );
 }

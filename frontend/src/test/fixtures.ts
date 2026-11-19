@@ -92,7 +92,7 @@ export const setupStatus = {
   schoolId: SCHOOL_ID,
   setupStatus: 'COMPLETED' as const,
   currentStep: 6,
-  completionPercent: 55,
+  completionPercent: 88,
   coreCompletionPercent: 92,
   items: [
     { key: 'school_profile', label: 'School Profile', description: 'Name, legal name, code and operational defaults.', status: 'completed' as const, weight: 15, module: 'school-setup', href: '/school-setup/profile' },

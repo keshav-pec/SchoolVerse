@@ -262,7 +262,7 @@ export interface SetupStatusDTO {
   schoolId: string;
   setupStatus: SchoolSetupDTO['status'];
   currentStep: number;
-  /** Overall weighted completion across School Setup and the modules that follow it. */
+  /** Weighted completion across every item that can be completed today. Modules that aren't built yet are left out, so a fully set-up school reads 100%. */
   completionPercent: number;
   /** Completion of this module's own items only. */
   coreCompletionPercent: number;

@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { usePendingRequestCount } from '@/features/people/api';
+import { useCurrentSchool } from '@/features/school-profile/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -181,6 +182,8 @@ function SidebarContent({
   const { can } = useAuth();
   const session = useSession();
   const pending = usePendingRequestCount(can('employee:approve_changes'));
+  // Same cached query the profile page updates, so a new, replaced or removed logo shows here at once.
+  const logoUrl = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
 
   return (
     <div
@@ -196,8 +199,21 @@ function SidebarContent({
           collapsed && 'justify-center px-0',
         )}
       >
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/30 text-brand-300">
-          <Building2 className="size-[18px]" />
+        <span
+          className={cn(
+            'grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg',
+            logoUrl ? 'bg-white' : 'bg-brand/30 text-brand-300',
+          )}
+        >
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={`${session.tenant.name} logo`}
+              className="size-full object-cover object-center"
+            />
+          ) : (
+            <Building2 className="size-[18px]" />
+          )}
         </span>
         <div className={cn('min-w-0', collapsed && 'hidden')}>
           <p className="truncate text-[13px] font-semibold text-white" title={session.tenant.name}>

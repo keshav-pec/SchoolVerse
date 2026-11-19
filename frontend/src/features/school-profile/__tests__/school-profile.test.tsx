@@ -1,8 +1,11 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { school, SCHOOL_ID } from '@/test/fixtures';
 import { mockApi, renderWithApp } from '@/test/utils';
+import { AppShell } from '@/layouts/app-shell';
+import { RequireAuth } from '@/routes/guards';
 import { SchoolProfilePage } from '../school-profile-page';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -67,5 +70,33 @@ describe('School Profile page', () => {
     mockApi('SCHOOL_ADMIN', { [`GET ${API}/schools/current`]: { data: null } });
     renderWithApp(<SchoolProfilePage />, { route: '/school-setup/profile' });
     expect(await screen.findByRole('button', { name: /create school profile/i })).toBeInTheDocument();
+  });
+
+  it('shows the school logo on the sidebar card, and updates it as soon as the logo changes', async () => {
+    const LOGO = '/uploads/t1/school-logos/new.png';
+    mockApi('SCHOOL_ADMIN', {
+      ...base,
+      [`GET ${API}/schools/current`]: { data: { ...school, logoUrl: '/uploads/t1/school-logos/old.png' } },
+      [`GET ${API}/profile-change-requests`]: { data: [] },
+      [`POST ${API}/schools/${SCHOOL_ID}/logo`]: { data: { ...school, logoUrl: LOGO } },
+    });
+    const user = userEvent.setup();
+    renderWithApp(
+      <Routes>
+        <Route element={<RequireAuth />}>
+          <Route element={<AppShell />}>
+            <Route path="/school-setup/profile" element={<SchoolProfilePage />} />
+          </Route>
+        </Route>
+      </Routes>,
+      { route: '/school-setup/profile' },
+    );
+
+    // The sidebar card's image is the one labelled with the workspace name.
+    const sidebarLogo = () => screen.findByRole('img', { name: 'Greenfield logo' });
+    expect(await sidebarLogo()).toHaveAttribute('src', '/uploads/t1/school-logos/old.png');
+
+    await user.upload(await screen.findByLabelText(/choose logo file/i), new File([new Uint8Array([137, 80, 78, 71])], 'logo.png', { type: 'image/png' }));
+    await waitFor(async () => expect(await sidebarLogo()).toHaveAttribute('src', LOGO));
   });
 });

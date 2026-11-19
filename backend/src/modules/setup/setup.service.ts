@@ -224,8 +224,10 @@ export async function getSetupStatus(ctx: ServiceContext, schoolId: string): Pro
     status: upcoming ? 'upcoming' : done ? 'completed' : 'pending',
   }));
 
-  const totalWeight = items.reduce((n, i) => n + i.weight, 0);
-  const doneWeight = items.filter((i) => i.status === 'completed').reduce((n, i) => n + i.weight, 0);
+  // Items whose module isn't built yet (upcoming, no route) can't be completed, so they must not hold the ring below 100%.
+  const actionable = items.filter((i) => !(i.status === 'upcoming' && i.href === null));
+  const totalWeight = actionable.reduce((n, i) => n + i.weight, 0);
+  const doneWeight = actionable.filter((i) => i.status === 'completed').reduce((n, i) => n + i.weight, 0);
   const core = items.filter((i) => i.module === 'school-setup');
   const coreWeight = core.reduce((n, i) => n + i.weight, 0);
   const coreDone = core.filter((i) => i.status === 'completed').reduce((n, i) => n + i.weight, 0);

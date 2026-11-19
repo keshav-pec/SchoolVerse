@@ -821,7 +821,7 @@ describe('setup overview (SCH-LOC-13)', () => {
 
     const done = await status(agent, school.schoolId);
     expect(done.coreCompletionPercent).toBe(100);
-    expect(done.completionPercent).toBe(60);
+    expect(done.completionPercent).toBe(75); // 60 of the 80 weight that can be completed today; unbuilt modules don't count
     expect(done.nextStep?.key).toBe('academic_structure');
     expect(done.summary).toMatchObject({ activeLocations: 2, draftLocations: 1, totalLocations: 3, primaryLocation: { locationCode: 'MOH' } });
   });
