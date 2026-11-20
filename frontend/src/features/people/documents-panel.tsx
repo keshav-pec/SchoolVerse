@@ -7,7 +7,7 @@ import {
   type EmployeeDocumentDTO,
   type SignedFileLinkDTO,
 } from '@shared';
-import { Download, FileText, Trash2, Upload } from 'lucide-react';
+import { Download, FileText, Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,10 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<EmployeeDocumentDTO | null>(null);
+  // The upload form is open while there is nothing yet; once files exist it hides behind a button.
+  const [showForm, setShowForm] = useState<boolean | null>(null);
+  const hasDocuments = (documents.data ?? []).length > 0;
+  const formOpen = showForm ?? (!documents.isLoading && !documents.isError && !hasDocuments);
   const input = useRef<HTMLInputElement>(null);
 
   const upload = usePeopleMutation(
@@ -77,6 +81,7 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
       setFile(null);
       setName('');
       if (input.current) input.current.value = '';
+      setShowForm(false);
     } catch (err) {
       setError(messageFor(err));
     }
@@ -98,7 +103,12 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
 
   return (
     <div className="space-y-6">
-      {!readOnly && (
+      {!readOnly && !formOpen && (
+        <Button variant="outline" onClick={() => setShowForm(true)}>
+          <Plus /> Upload Document
+        </Button>
+      )}
+      {!readOnly && formOpen && (
         <form
           className="space-y-4 rounded-xl border border-dashed border-line bg-canvas/60 p-4"
           noValidate
@@ -108,6 +118,9 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
           }}
         >
           <p className="text-sm font-semibold">Upload a document</p>
+          <p className="-mt-2 text-[13px] text-muted">
+            Choose what it is, pick the file from your computer or phone, then press Upload.
+          </p>
           {error && <Alert tone="danger">{error}</Alert>}
           <div className="grid gap-4 sm:grid-cols-2">
             <ComboboxField
@@ -119,7 +132,7 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
             />
             <TextField
               label="Name"
-              hint="Optional. Defaults to the file name."
+              hint="Optional. Leave empty to use the file’s own name."
               value={displayName}
               onChange={(e) => setName(e.target.value)}
               maxLength={120}
@@ -138,12 +151,27 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
               className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-soft file:px-4 file:py-2.5 file:font-semibold file:text-brand"
             />
             <p className="text-[13px] text-muted">
-              PDF, PNG or JPEG, up to 5 MB. The file is checked on the server before it is stored.
+              A PDF or a photo (PNG or JPEG), up to 5 MB. We check every file before saving it.
             </p>
           </div>
-          <Button type="submit" loading={upload.isPending} loadingText="Uploading…">
-            <Upload /> Upload
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" loading={upload.isPending} loadingText="Uploading…">
+              <Upload /> Upload
+            </Button>
+            {hasDocuments && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowForm(false);
+                  setError(null);
+                }}
+                disabled={upload.isPending}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
         </form>
       )}
 
@@ -159,7 +187,7 @@ export function DocumentsPanel({ documents, uploadPath, canDelete, readOnly }: P
         <EmptyState
           illustration={<FileText className="size-10 text-muted" aria-hidden="true" />}
           title="No documents yet"
-          description="Uploaded documents are private. They are never shown by a permanent link."
+          description="Uploaded files are private. Nobody can open them without signing in."
         />
       ) : (
         <ul className="divide-y divide-line" aria-label="Documents">

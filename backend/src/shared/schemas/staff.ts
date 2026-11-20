@@ -22,6 +22,7 @@ const nullableUuid = z.preprocess(emptyToNull, uuidSchema.nullable()).optional()
 // ───────────────────────────────────────────────────────────── codes
 
 export const EMPLOYEE_CODE_PATTERN = /^[A-Z0-9][A-Z0-9/_-]{0,19}$/;
+export const EMPLOYEE_CODE_FORMAT_MESSAGE = 'Use up to 20 letters, numbers, hyphens or slashes, e.g. FAC-014.';
 
 /** Uppercase, trimmed, up to 20 characters. Codes are unique per school and can be edited; other modules store `employeeId`. */
 export const employeeCodeSchema = z
@@ -31,8 +32,19 @@ export const employeeCodeSchema = z
     z
       .string()
       .min(1, { message: 'Employee code is required.' })
-      .regex(EMPLOYEE_CODE_PATTERN, { message: 'Use up to 20 letters, numbers, hyphens or slashes, e.g. FAC-014.' }),
+      .regex(EMPLOYEE_CODE_PATTERN, { message: EMPLOYEE_CODE_FORMAT_MESSAGE }),
   );
+
+/**
+ * Live check for the Employee code field, plus the next free code for a category (FAC-015, STF-008).
+ * `employeeId` is sent while editing, so the employee's own code counts as free.
+ */
+export const employeeCodeAvailabilityQuerySchema = z.object({
+  code: z.string().max(40).optional(),
+  category: z.enum(EMPLOYEE_CATEGORIES).optional(),
+  employeeId: uuidSchema.optional(),
+});
+export type EmployeeCodeAvailabilityQuery = z.output<typeof employeeCodeAvailabilityQuerySchema>;
 
 export const MASTER_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{0,19}$/;
 
@@ -127,7 +139,7 @@ export const personShape = {
 
 const employeeShape = {
   employeeCode: employeeCodeSchema,
-  employeeCategory: z.enum(EMPLOYEE_CATEGORIES, { message: 'Choose Faculty or Non-teaching staff.' }),
+  employeeCategory: z.enum(EMPLOYEE_CATEGORIES, { message: 'Choose Teaching staff or Non-teaching staff.' }),
   /** Free text with suggestions (see `EMPLOYMENT_TYPE_SUGGESTIONS`). */
   employmentType: optionalText(60),
   joiningDate: requiredDateSchema,

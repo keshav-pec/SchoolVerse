@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  ListFilter,
   Plus,
   Search,
   SearchX,
@@ -157,6 +158,7 @@ export function PeoplePage() {
   const { params, setParam, page, search, setSearch, clearAll: clear } = useListParams();
   const [adding, setAdding] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const departments = useDepartments();
   const designations = useDesignations();
   const locations = useActiveLocations();
@@ -181,6 +183,9 @@ export function PeoplePage() {
     filters.locationId ||
     filters.status,
   );
+  // Category, department and designation sit behind "More Filters"; it stays open while one of them is in use.
+  const moreCount = [filters.category, filters.departmentId, filters.designationId].filter(Boolean).length;
+  const showMore = moreOpen || moreCount > 0;
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -210,56 +215,71 @@ export function PeoplePage() {
     <>
       {header}
       <Card className="p-0">
-        <div className="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="relative sm:col-span-2">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted"
-              aria-hidden="true"
+        <div className="space-y-3 border-b border-line p-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="relative sm:col-span-2 lg:col-span-1">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name or code"
+                aria-label="Search by name or employee code"
+                className="pl-10"
+              />
+            </div>
+            <Combobox
+              aria-label="Location"
+              value={filters.locationId ?? ''}
+              onChange={(v) => setParam({ locationId: v })}
+              options={[{ value: '', label: 'All locations' }, ...(locations.data ?? []).map((l) => ({ value: l.locationId, label: l.displayName }))]}
+              searchPlaceholder="Search locations…"
             />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name or code"
-              aria-label="Search by name or employee code"
-              className="pl-10"
+            <Combobox
+              aria-label="Status"
+              value={filters.status ?? ''}
+              onChange={(v) => setParam({ status: v })}
+              options={[{ value: '', label: 'Current staff' }, ...EMPLOYEE_STATUSES.map((s) => ({ value: s, label: EMPLOYEE_STATUS_LABELS[s] }))]}
+              searchPlaceholder="Search statuses…"
             />
+            <Button
+              variant="outline"
+              aria-expanded={showMore}
+              aria-controls="more-filters"
+              onClick={() => setMoreOpen((v) => !v)}
+              disabled={moreCount > 0}
+              title={moreCount > 0 ? 'Clear these filters to hide them' : undefined}
+            >
+              <ListFilter /> More Filters{moreCount > 0 ? ` (${moreCount})` : ''}
+            </Button>
           </div>
-          <Combobox
-            aria-label="Category"
-            value={filters.category ?? ''}
-            onChange={(v) => setParam({ category: v })}
-            options={[{ value: '', label: 'All categories' }, ...EMPLOYEE_CATEGORIES.map((c) => ({ value: c, label: EMPLOYEE_CATEGORY_LABELS[c] }))]}
-            searchPlaceholder="Search categories…"
-          />
-          <Combobox
-            aria-label="Department"
-            value={filters.departmentId ?? ''}
-            onChange={(v) => setParam({ departmentId: v })}
-            options={[{ value: '', label: 'All departments' }, ...(departments.data ?? []).map((d) => ({ value: d.departmentId, label: d.name }))]}
-            searchPlaceholder="Search departments…"
-          />
-          <Combobox
-            aria-label="Designation"
-            value={filters.designationId ?? ''}
-            onChange={(v) => setParam({ designationId: v })}
-            options={[{ value: '', label: 'All designations' }, ...(designations.data ?? []).map((d) => ({ value: d.designationId, label: d.name }))]}
-            searchPlaceholder="Search designations…"
-          />
-          <Combobox
-            aria-label="Location"
-            value={filters.locationId ?? ''}
-            onChange={(v) => setParam({ locationId: v })}
-            options={[{ value: '', label: 'All locations' }, ...(locations.data ?? []).map((l) => ({ value: l.locationId, label: l.displayName }))]}
-            searchPlaceholder="Search locations…"
-          />
-          <Combobox
-            aria-label="Status"
-            value={filters.status ?? ''}
-            onChange={(v) => setParam({ status: v })}
-            options={[{ value: '', label: 'Current staff' }, ...EMPLOYEE_STATUSES.map((s) => ({ value: s, label: EMPLOYEE_STATUS_LABELS[s] }))]}
-            searchPlaceholder="Search statuses…"
-            className="lg:col-start-6"
-          />
+          {showMore && (
+            <div id="more-filters" className="grid gap-3 sm:grid-cols-3">
+              <Combobox
+                aria-label="Category"
+                value={filters.category ?? ''}
+                onChange={(v) => setParam({ category: v })}
+                options={[{ value: '', label: 'All categories' }, ...EMPLOYEE_CATEGORIES.map((c) => ({ value: c, label: EMPLOYEE_CATEGORY_LABELS[c] }))]}
+                searchPlaceholder="Search categories…"
+              />
+              <Combobox
+                aria-label="Department"
+                value={filters.departmentId ?? ''}
+                onChange={(v) => setParam({ departmentId: v })}
+                options={[{ value: '', label: 'All departments' }, ...(departments.data ?? []).map((d) => ({ value: d.departmentId, label: d.name }))]}
+                searchPlaceholder="Search departments…"
+              />
+              <Combobox
+                aria-label="Designation"
+                value={filters.designationId ?? ''}
+                onChange={(v) => setParam({ designationId: v })}
+                options={[{ value: '', label: 'All designations' }, ...(designations.data ?? []).map((d) => ({ value: d.designationId, label: d.name }))]}
+                searchPlaceholder="Search designations…"
+              />
+            </div>
+          )}
         </div>
 
         {list.isLoading ? (

@@ -4,7 +4,6 @@ import { EMPLOYEE_CATEGORY_LABELS } from '@shared';
 import {
   ArrowLeft,
   BookOpenCheck,
-  Briefcase,
   Contact,
   FileText,
   History,
@@ -18,6 +17,7 @@ import { Alert } from '@/components/ui/alert';
 import { Avatar } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { InfoTip } from '@/components/ui/tooltip';
 import { EmployeeStatusPill } from '@/components/sv/employee-status';
 import { ErrorState } from '@/components/sv/error-state';
 import { formatDateOnly } from '@/lib/format';
@@ -29,12 +29,12 @@ import { AccountTab } from './tabs/account-tab';
 import { AcademicTab } from './tabs/academic-tab';
 import { ContactTab } from './tabs/contact-tab';
 import { DocumentsTab } from './tabs/documents-tab';
-import { EmploymentTab } from './tabs/employment-tab';
 import { HistoryTab } from './tabs/history-tab';
 import { OverviewTab } from './tabs/overview-tab';
 import { PersonalTab } from './tabs/personal-tab';
 import { ResponsibilitiesTab } from './tabs/responsibilities-tab';
 import { ActivateFromChecklist } from './activate-from-checklist';
+import { STATUS_HELP } from './help-copy';
 
 /** `/people/:employeeId`: one employee, with a tab for each part of their record (PRD §11). */
 export function EmployeePage() {
@@ -58,7 +58,9 @@ export function EmployeePage() {
 
   const employee = q.data;
   const isFaculty = employee.employeeCategory === 'FACULTY';
-  const tab = params.get('tab') ?? 'overview';
+  // Employment details now live on Overview; old links to ?tab=employment still land there.
+  const requested = params.get('tab') ?? 'overview';
+  const tab = requested === 'employment' ? 'overview' : requested;
   const setTab = (next: string) =>
     setParams((prev) => new URLSearchParams({ ...Object.fromEntries(prev), tab: next }), {
       replace: true,
@@ -87,6 +89,7 @@ export function EmployeePage() {
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <EmployeeStatusPill status={employee.status} />
+            <InfoTip label="What the statuses mean">{STATUS_HELP}</InfoTip>
             {employee.status === 'NOTICE_PERIOD' && exitInfo && (
               <span className="text-[13px] text-muted">
                 Leaves on {formatDateOnly(exitInfo.exitDate)}
@@ -119,12 +122,9 @@ export function EmployeePage() {
           <TabsTrigger value="overview">
             <LayoutGrid /> Overview
           </TabsTrigger>
-          <TabsTrigger value="employment">
-            <Briefcase /> Employment
-          </TabsTrigger>
           {isFaculty ? (
             <TabsTrigger value="academic">
-              <BookOpenCheck /> Academic Assignment
+              <BookOpenCheck /> Classes &amp; Subjects
             </TabsTrigger>
           ) : (
             <TabsTrigger value="responsibilities">
@@ -136,7 +136,7 @@ export function EmployeePage() {
           </TabsTrigger>
           {can('employee:view_restricted') && (
             <TabsTrigger value="personal">
-              <ShieldCheck /> Personal Information
+              <ShieldCheck /> IDs &amp; Bank
             </TabsTrigger>
           )}
           {can('employee:documents') && (
@@ -146,7 +146,7 @@ export function EmployeePage() {
           )}
           {can('user:view') && (
             <TabsTrigger value="account">
-              <KeyRound /> Account &amp; Access
+              <KeyRound /> Login
             </TabsTrigger>
           )}
           <TabsTrigger value="history">
@@ -155,9 +155,6 @@ export function EmployeePage() {
         </TabsList>
         <TabsContent value="overview">
           <OverviewTab employee={employee} />
-        </TabsContent>
-        <TabsContent value="employment">
-          <EmploymentTab employee={employee} />
         </TabsContent>
         {isFaculty ? (
           <TabsContent value="academic">

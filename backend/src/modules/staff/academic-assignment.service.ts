@@ -111,7 +111,7 @@ export async function createAcademicAssignments(ctx: ServiceContext, employeeId:
     const employee = await loadEmployee(ctx, employeeId, db);
     assertAssignable(employee);
     if (employee.employeeCategory !== 'FACULTY') {
-      throw new AppError('EMPLOYEE_CATEGORY_MISMATCH', 'Only faculty can be assigned classes and subjects. Use responsibilities for non-teaching staff.');
+      throw new AppError('EMPLOYEE_CATEGORY_MISMATCH', 'Only teaching staff can be given classes and subjects. For non-teaching staff, add a responsibility instead.');
     }
 
     const created: AcademicAssignmentDoc[] = [];

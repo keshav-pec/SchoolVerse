@@ -76,7 +76,6 @@ test('visual pass: directory, profile tabs, requests, settings, /me, colleagues 
 
       for (const [tab, name] of [
         ['overview', 'overview'],
-        ['employment', 'employment'],
         ['academic', 'academic'],
         ['contact', 'contact'],
         ['personal', 'personal-masked'],
@@ -90,6 +89,16 @@ test('visual pass: directory, profile tabs, requests, settings, /me, colleagues 
         await noOverflow(`profile ${tab}`);
         await shot(`profile-${name}`);
       }
+
+      // The Assign Classes drawer with the role cards, sections and subjects.
+      await page.goto(`/people/${employee.employeeId}?tab=academic`);
+      await page.getByRole('button', { name: /assign classes/i }).first().click();
+      const assign = page.getByRole('dialog', { name: /assign classes/i });
+      await expect(assign.getByRole('radio', { name: /subject teacher/i })).toBeChecked();
+      await page.waitForLoadState('networkidle');
+      await noOverflow('assign-classes');
+      await shot('assign-classes');
+      await page.keyboard.press('Escape');
 
       await page.goto('/people/requests');
       await expect(page.getByRole('heading', { name: 'Change requests' })).toBeVisible();

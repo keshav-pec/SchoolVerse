@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useForm, type Resolver } from 'react-hook-form';
-import { useNavigate } from 'react-router';
+import { Controller, useForm, type Resolver } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createEmployeeSchema,
@@ -11,19 +11,24 @@ import {
   type EmployeeCategory,
   type EmployeeProfileDTO,
 } from '@shared';
-import { ArrowLeft, ArrowRight, UserPlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
 import { FormComboboxField, TextField } from '@/components/ui/field';
+import { InfoTip } from '@/components/ui/tooltip';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { DrawerStepper, ReviewCard, ReviewRow, stepOfField } from '@/components/sv/drawer-steps';
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/errors';
 import { formatDateOnly } from '@/lib/format';
 import { useActiveLocations } from '../academic/api';
-import { useDepartments, useDesignations, useEmployees, usePeopleMutation } from './api';
+import { useAddSuggestedMasters, useDepartments, useDesignations, useEmployees, usePeopleMutation } from './api';
+import { EmployeeCodeField } from './employee-code-field';
+import { CATEGORY_HELP, DESIGNATION_HELP } from './help-copy';
+
+const todayIso = () => new Date().toLocaleDateString('en-CA');
 
 /** The form works with text: the shared schema turns blanks into nulls and codes into upper case. */
 export interface EmployeeFormValues {
@@ -105,12 +110,12 @@ const ALL_FIELDS = [...BASICS_FIELDS, ...PLACEMENT_FIELDS] as const;
 
 const STEPS = [
   { key: 'basics', label: 'Basics', fields: BASICS_FIELDS },
-  { key: 'placement', label: 'Placement', fields: PLACEMENT_FIELDS },
+  { key: 'placement', label: 'Where They Work', fields: PLACEMENT_FIELDS },
   { key: 'review', label: 'Review', fields: [] },
 ] as const;
 const LAST = STEPS.length - 1;
 
-/** Add employee in three steps: basics, placement, review. After saving, the profile opens with its next steps. */
+/** Add employee in three steps: basics, where they work, review. After saving, the profile opens with its next steps. */
 export function AddEmployeeDrawer({
   open,
   onOpenChange,
@@ -126,6 +131,8 @@ export function AddEmployeeDrawer({
   const departments = useDepartments(open);
   const designations = useDesignations(open);
   const managers = useEmployees({ pageSize: 100 }, open);
+  const suggestDepartments = useAddSuggestedMasters('departments');
+  const suggestDesignations = useAddSuggestedMasters('designations');
 
   const create = usePeopleMutation(
     (data: CreateEmployeeData) => api.post<EmployeeProfileDTO>('/employees', data),
@@ -144,7 +151,8 @@ export function AddEmployeeDrawer({
 
   useEffect(() => {
     if (open) {
-      form.reset(EMPTY_EMPLOYEE_FORM);
+      // Most people are added on the day they join, so today is filled in.
+      form.reset({ ...EMPTY_EMPLOYEE_FORM, joiningDate: todayIso() });
       setStep(0);
       setFormError(null);
       create.reset();
@@ -248,6 +256,7 @@ export function AddEmployeeDrawer({
                   </div>
                   <TextField
                     label="Middle name"
+                    hint="Optional."
                     autoComplete="off"
                     error={errors.legalMiddleName?.message}
                     {...register('legalMiddleName')}
@@ -256,6 +265,7 @@ export function AddEmployeeDrawer({
                     <FormComboboxField
                       label="Category"
                       required
+                      labelAside={<InfoTip label="About the category">{CATEGORY_HELP}</InfoTip>}
                       control={form.control}
                       name="employeeCategory"
                       placeholder="Choose…"
@@ -263,14 +273,18 @@ export function AddEmployeeDrawer({
                       searchPlaceholder="Search categories…"
                       error={errors.employeeCategory?.message}
                     />
-                    <TextField
-                      label="Employee code"
-                      required
-                      placeholder="FAC-014"
-                      autoComplete="off"
-                      hint="Unique in your school. You can change it later."
-                      error={errors.employeeCode?.message}
-                      {...register('employeeCode')}
+                    <Controller
+                      control={form.control}
+                      name="employeeCode"
+                      render={({ field }) => (
+                        <EmployeeCodeField
+                          value={field.value}
+                          onChange={(v) => field.onChange(v)}
+                          onBlur={field.onBlur}
+                          category={values.employeeCategory}
+                          error={errors.employeeCode?.message}
+                        />
+                      )}
                     />
                   </div>
                   <div className="grid gap-5 sm:grid-cols-2">
@@ -278,6 +292,7 @@ export function AddEmployeeDrawer({
                       label="Joining date"
                       type="date"
                       required
+                      hint="Today is filled in. Change it if they joined on another day."
                       error={errors.joiningDate?.message}
                       {...register('joiningDate')}
                     />
@@ -285,6 +300,7 @@ export function AddEmployeeDrawer({
                       label="Employment type"
                       list="employment-types"
                       placeholder="Permanent"
+                      hint="Optional. Pick from the list or type your own."
                       autoComplete="off"
                       error={errors.employmentType?.message}
                       {...register('employmentType')}
@@ -302,7 +318,7 @@ export function AddEmployeeDrawer({
                   <FormComboboxField
                     label="Primary location"
                     required
-                    hint="Where this person mainly works. Add more locations later."
+                    hint="The campus where they mainly work. You can add more campuses later."
                     control={form.control}
                     name="primaryLocationId"
                     placeholder="Choose…"
@@ -314,6 +330,7 @@ export function AddEmployeeDrawer({
                     <FormComboboxField
                       label="Department"
                       required
+                      hint="The team they belong to, e.g. Academics."
                       control={form.control}
                       name="departmentId"
                       placeholder="Choose…"
@@ -324,7 +341,8 @@ export function AddEmployeeDrawer({
                     <FormComboboxField
                       label="Designation"
                       required
-                      hint="A title only. Access comes from the login role."
+                      hint="Their job title, e.g. PGT or Accountant."
+                      labelAside={<InfoTip label="About the designation">{DESIGNATION_HELP}</InfoTip>}
                       control={form.control}
                       name="designationId"
                       placeholder="Choose…"
@@ -333,15 +351,40 @@ export function AddEmployeeDrawer({
                       error={errors.designationId?.message}
                     />
                   </div>
-                  {!departments.isLoading && activeDepartments.length === 0 && (
-                    <Alert tone="warning">
-                      There are no departments yet. Add some under Departments &amp; Designations
-                      first.
-                    </Alert>
-                  )}
+                  {(['departments', 'designations'] as const).map((kind) => {
+                    const empty =
+                      kind === 'departments'
+                        ? !departments.isLoading && activeDepartments.length === 0
+                        : !designations.isLoading && activeDesignations.length === 0;
+                    if (!empty) return null;
+                    const suggest = kind === 'departments' ? suggestDepartments : suggestDesignations;
+                    return (
+                      <Alert key={kind} tone="warning">
+                        <p>
+                          Your school has no {kind} yet, so there is nothing to choose. Add the
+                          common ones in one click, or{' '}
+                          <Link to="/people/settings" className="font-semibold text-brand underline">
+                            set up your own list
+                          </Link>
+                          .
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="mt-2"
+                          onClick={suggest.run}
+                          loading={suggest.pending}
+                          loadingText="Adding…"
+                        >
+                          <Sparkles /> Add Suggested {kind === 'departments' ? 'Departments' : 'Designations'}
+                        </Button>
+                      </Alert>
+                    );
+                  })}
                   <FormComboboxField
-                    label="Reporting manager"
-                    hint="Optional."
+                    label="Reports to"
+                    hint="Optional. The person they answer to, such as the Principal."
                     control={form.control}
                     name="reportingManagerId"
                     options={[{ value: '', label: 'No one' }, ...(managers.data?.items ?? []).map((m) => ({ value: m.employeeId, label: m.fullName, hint: m.employeeCode }))]}
@@ -381,11 +424,11 @@ export function AddEmployeeDrawer({
                     />
                     <ReviewRow label="Employment type" value={values.employmentType} />
                   </ReviewCard>
-                  <ReviewCard title="Placement" onEdit={() => setStep(1)}>
+                  <ReviewCard title="Where They Work" onEdit={() => setStep(1)}>
                     <ReviewRow label="Primary location" value={locationName} />
                     <ReviewRow label="Department" value={departmentName} />
                     <ReviewRow label="Designation" value={designationName} />
-                    <ReviewRow label="Reporting manager" value={managerName} />
+                    <ReviewRow label="Reports to" value={managerName} />
                   </ReviewCard>
                   <Alert tone="info">
                     After saving you’ll see what’s left to do: classes or responsibilities,

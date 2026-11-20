@@ -33,7 +33,7 @@ export async function createResponsibility(ctx: ServiceContext, employeeId: stri
     const employee = await loadEmployee(ctx, employeeId, db);
     assertAssignable(employee);
     if (employee.employeeCategory !== 'NON_TEACHING_STAFF') {
-      throw new AppError('EMPLOYEE_CATEGORY_MISMATCH', 'Responsibilities are for non-teaching staff. Use class assignments for faculty.');
+      throw new AppError('EMPLOYEE_CATEGORY_MISMATCH', 'Responsibilities are for non-teaching staff. For teaching staff, assign classes instead.');
     }
     await masterService.assertOperationalLocation(ctx, data.locationId, db);
 

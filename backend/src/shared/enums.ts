@@ -8,7 +8,7 @@ export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
   SCHOOL_ADMIN: 'School Admin',
-  FACULTY: 'Faculty',
+  FACULTY: 'Teacher',
   STAFF: 'Staff',
   PARENT: 'Parent',
 };
@@ -335,7 +335,7 @@ export const EMPLOYEE_CATEGORIES = ['FACULTY', 'NON_TEACHING_STAFF'] as const;
 export type EmployeeCategory = (typeof EMPLOYEE_CATEGORIES)[number];
 
 export const EMPLOYEE_CATEGORY_LABELS: Record<EmployeeCategory, string> = {
-  FACULTY: 'Faculty',
+  FACULTY: 'Teaching staff',
   NON_TEACHING_STAFF: 'Non-teaching staff',
 };
 
@@ -399,11 +399,17 @@ export const ACADEMIC_ASSIGNMENT_TYPES = ['SUBJECT_FACULTY', 'CLASS_TEACHER', 'C
 export type AcademicAssignmentType = (typeof ACADEMIC_ASSIGNMENT_TYPES)[number];
 
 export const ACADEMIC_ASSIGNMENT_TYPE_LABELS: Record<AcademicAssignmentType, string> = {
-  SUBJECT_FACULTY: 'Subject faculty',
+  SUBJECT_FACULTY: 'Subject teacher',
   CLASS_TEACHER: 'Class teacher',
   CO_CLASS_TEACHER: 'Co-class teacher',
   COORDINATOR: 'Coordinator',
   HOD: 'Head of department',
+};
+
+/** Suggested employee codes start with these: FAC-001, STF-001. Admins can still type any code. */
+export const EMPLOYEE_CODE_PREFIXES: Record<EmployeeCategory, string> = {
+  FACULTY: 'FAC',
+  NON_TEACHING_STAFF: 'STF',
 };
 
 export const EMPLOYMENT_TYPE_SUGGESTIONS = ['Permanent', 'Probation', 'Contract', 'Part-time', 'Visiting', 'Intern'] as const;

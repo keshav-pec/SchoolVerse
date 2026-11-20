@@ -6,6 +6,7 @@ import {
   createLocationAssignmentSchema,
   createMasterSchema,
   createResponsibilitySchema,
+  employeeCodeAvailabilityQuerySchema,
   employeeHistoryQuerySchema,
   endAssignmentSchema,
   exitEmployeeSchema,
@@ -76,6 +77,11 @@ staffRouter.get('/employees', requirePermission('employee:directory'), validate(
 
 staffRouter.post('/employees', requirePermission('employee:manage'), validate({ body: createEmployeeSchema }), async (req, res) => {
   created(res, await employees.createEmployee(contextOf(req), req.body));
+});
+
+// Before `/employees/:id`, which would otherwise read "code-availability" as an id.
+staffRouter.get('/employees/code-availability', requirePermission('employee:manage'), validate({ query: employeeCodeAvailabilityQuerySchema }), async (req, res) => {
+  ok(res, await employees.checkEmployeeCodeAvailability(contextOf(req), res.locals.query));
 });
 
 staffRouter.get('/employees/:id', requirePermission('employee:directory'), validate({ params: idParams }), async (req, res) => {

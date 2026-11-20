@@ -14,7 +14,7 @@ import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useChoiceGroups, useConstraints, useSubjectOfferings } from '../api';
 import { ClassPicker } from '../class-picker';
 import type { TabProps } from '../session-page';
-import { HelpHeading, TabIntro } from '../help';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { StatusToggle } from '../status-toggle';
 
 function GroupForm({ classOfferingId, offerings }: { classOfferingId: string; offerings: SubjectOfferingDTO[] }) {

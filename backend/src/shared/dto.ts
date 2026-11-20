@@ -235,6 +235,9 @@ export interface LocationCodeAvailabilityDTO {
 
 export type SchoolCodeAvailabilityDTO = LocationCodeAvailabilityDTO;
 
+/** Employee code check (unique per school) + the next free code for the chosen category. */
+export type EmployeeCodeAvailabilityDTO = LocationCodeAvailabilityDTO;
+
 /** One reason an archive is blocked (`LOCATION_HAS_DEPENDENCIES` → `details.dependencies`). */
 export interface LocationDependencyDTO {
   key: string;

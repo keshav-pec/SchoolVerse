@@ -14,7 +14,7 @@ import { api } from '@/lib/api';
 import { formatDateOnly } from '@/lib/format';
 import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useTerms } from '../api';
-import { HelpHeading, TabIntro } from '../help';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 
 const day = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
 

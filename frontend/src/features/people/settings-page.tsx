@@ -1,25 +1,19 @@
 import { useState } from 'react';
-import {
-  MASTER_STATUSES,
-  codeFromName,
-  type DepartmentDTO,
-  type DesignationDTO,
-  type SuggestedMastersDTO,
-} from '@shared';
+import { MASTER_STATUSES, codeFromName } from '@shared';
 import { Plus, Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
 import { api } from '@/lib/api';
-import { FormProblem, messageFor } from '@/lib/errors';
+import { FormProblem } from '@/lib/errors';
 import { Badge } from '@/components/ui/badge';
-import { useDepartments, useDesignations, usePeopleMutation, suggestedLabel } from './api';
+import { useAddSuggestedMasters, useDepartments, useDesignations, usePeopleMutation } from './api';
 
 interface MasterRow {
   id: string;
@@ -48,7 +42,7 @@ function AddDialog({
       open
       onOpenChange={(open) => !open && onClose()}
       title={`Add a ${noun}`}
-      description="The code is unique in your school. Names can change later; codes can't."
+      description="The code is a short ID used in exports. You can rename later, but the code can’t change."
       confirmLabel={`Add ${noun}`}
       loadingLabel="Adding…"
       onConfirm={async () => {
@@ -77,7 +71,7 @@ function AddDialog({
             setTouched(true);
             setCode(e.target.value.toUpperCase());
           }}
-          hint="Letters, numbers, hyphens or underscores."
+          hint="Filled in from the name. Letters, numbers, - or _ only."
         />
       </div>
     </ConfirmDialog>
@@ -88,6 +82,7 @@ function MasterTable({
   kind,
   title,
   description,
+  help,
   rows,
   loading,
   error,
@@ -96,54 +91,38 @@ function MasterTable({
   kind: 'departments' | 'designations';
   title: string;
   description: string;
+  help: React.ReactNode;
   rows: MasterRow[];
   loading: boolean;
   error: unknown;
   retry: () => void;
 }) {
-  const noun = kind === 'departments' ? 'department' : 'designation';
   const [adding, setAdding] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
   const toggle = usePeopleMutation(
     (v: { id: string; status: string }) => api.patch(`/${kind}/${v.id}`, { status: v.status }),
     {},
   );
-  const suggest = usePeopleMutation(
-    (_: void) =>
-      api.post<SuggestedMastersDTO<DepartmentDTO | DesignationDTO>>(`/${kind}/suggested`),
-    { quiet: true },
-  );
-
-  const runSuggest = async () => {
-    setSuggesting(true);
-    try {
-      toast.success(suggestedLabel(await suggest.mutateAsync()));
-    } catch (err) {
-      toast.error(messageFor(err));
-    } finally {
-      setSuggesting(false);
-    }
-  };
+  const suggest = useAddSuggestedMasters(kind);
 
   return (
     <Card className="min-w-0">
       <CardHeader>
         <div>
-          <CardTitle>{title}</CardTitle>
+          <HelpHeading title={title} help={help} />
           <CardDescription>{description}</CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void runSuggest()}
-            loading={suggesting}
+            onClick={suggest.run}
+            loading={suggest.pending}
             loadingText="Adding…"
           >
             <Sparkles /> Add Suggested List
           </Button>
           <Button size="sm" onClick={() => setAdding(true)}>
-            <Plus /> Add {noun}
+            <Plus /> Add {kind === 'departments' ? 'Department' : 'Designation'}
           </Button>
         </div>
       </CardHeader>
@@ -154,7 +133,7 @@ function MasterTable({
       ) : rows.length === 0 ? (
         <EmptyState
           title={`No ${kind} yet`}
-          description="Add the suggested starter list, or add your own."
+          description="Press Add Suggested List to add the common ones in one click, then add any others your school uses."
         />
       ) : (
         <div className="overflow-x-auto">
@@ -204,9 +183,6 @@ function MasterTable({
           </table>
         </div>
       )}
-      <p className="mt-3 text-[13px] text-muted">
-        Inactive entries stay on existing employees but can’t be chosen for new ones.
-      </p>
       {adding && <AddDialog kind={kind} onClose={() => setAdding(false)} />}
     </Card>
   );
@@ -221,13 +197,29 @@ export function PeopleSettingsPage() {
       <PageHeader
         eyebrow="People"
         title="Departments & Designations"
-        description="A designation is a title, not a permission. What a person can do comes from the role on their login."
+        description="The teams and job titles you file staff under."
       />
-      <div className="grid gap-6 xl:grid-cols-2">
+      <TabIntro title="Departments & Designations" className="mb-4">
+        <p>
+          A <b>department</b> is a team, like Academics or Accounts. A <b>designation</b> is a job
+          title, like PGT or Accountant. Every employee needs one of each.
+        </p>
+        <p>
+          New here? Press <b>Add Suggested List</b> on both cards to add the common ones, then add
+          anything else your school uses.
+        </p>
+      </TabIntro>
+      <div className="grid gap-4 xl:grid-cols-2">
         <MasterTable
           kind="departments"
           title="Departments"
-          description="Academics, Accounts, Library…"
+          description="Teams, e.g. Academics, Accounts, Library."
+          help={
+            <>
+              <p>The team a person belongs to. Used to filter the staff list and in exports.</p>
+              <p><b>Deactivate</b> hides an entry when adding staff. People already filed under it keep it. You can activate it again at any time.</p>
+            </>
+          }
           rows={(departments.data ?? []).map((d) => ({
             id: d.departmentId,
             code: d.code,
@@ -241,7 +233,14 @@ export function PeopleSettingsPage() {
         <MasterTable
           kind="designations"
           title="Designations"
-          description="PGT, TGT, Principal, Accountant…"
+          description="Job titles, e.g. PGT, TGT, Principal, Accountant."
+          help={
+            <>
+              <p>The job title on their profile. <b>PGT</b> = Post Graduate Teacher, <b>TGT</b> = Trained Graduate Teacher, <b>PRT</b> = Primary Teacher.</p>
+              <p>A title gives no access. What someone can do comes from the role on their login.</p>
+              <p><b>Deactivate</b> hides an entry when adding staff. People already filed under it keep it. You can activate it again at any time.</p>
+            </>
+          }
           rows={(designations.data ?? []).map((d) => ({
             id: d.designationId,
             code: d.code,

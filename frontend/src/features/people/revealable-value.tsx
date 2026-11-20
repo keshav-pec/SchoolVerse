@@ -21,6 +21,7 @@ export function RevealableValue({
 }) {
   const [value, setValue] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [seconds, setSeconds] = useState(30);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hide = () => {
@@ -35,6 +36,7 @@ export function RevealableValue({
     try {
       const result = await reveal();
       setValue(result.value);
+      setSeconds(result.hideAfterSeconds);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(hide, result.hideAfterSeconds * 1000);
     } catch (err) {
@@ -61,9 +63,9 @@ export function RevealableValue({
           onClick={() => void show()}
           loading={pending}
           loadingText="Checking…"
-          aria-label={`Reveal ${label}`}
+          aria-label={`Show ${label}`}
         >
-          <Eye /> Reveal
+          <Eye /> Show
         </Button>
       ) : (
         <>
@@ -76,7 +78,7 @@ export function RevealableValue({
           >
             <EyeOff /> Hide
           </Button>
-          <span className="text-xs text-muted">Hides itself shortly</span>
+          <span className="text-xs text-muted">Hides again in {seconds} second{seconds === 1 ? '' : 's'}</span>
         </>
       )}
     </span>

@@ -30,6 +30,7 @@ import { ComboboxField, TextField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AssignmentStatusChip, EmployeeStatusPill } from '@/components/sv/employee-status';
 import { ErrorState } from '@/components/sv/error-state';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { InfoGrid, InfoItem } from '@/components/sv/info-grid';
 import { PageHeader } from '@/components/sv/page-header';
 import { RoleBadge } from '@/components/sv/role-badge';
@@ -332,8 +333,18 @@ export function MyProfilePage() {
       <PageHeader
         eyebrow="Me"
         title="My profile"
-        description="Your own record. You can keep your contact details up to date; other changes are checked by a School Admin first."
+        description="Your own record at the school."
       />
+      <TabIntro title="What you can change" className="mb-4">
+        <p>
+          <b>Your details</b>: press Edit to update your preferred name, personal email and phone,
+          address and emergency contact. They save straight away.
+        </p>
+        <p>
+          <b>Protected details</b> (legal name, date of birth, IDs, bank): press the button for the
+          one you need to fix and send a request. A School Admin checks it first.
+        </p>
+      </TabIntro>
 
       <header className="mb-4 flex flex-col gap-3 rounded-card border border-line bg-white p-4 shadow-card sm:flex-row sm:items-center sm:gap-4 sm:px-5">
         <Avatar name={p.fullName} className="size-12 text-lg" />
@@ -356,7 +367,7 @@ export function MyProfilePage() {
             <div>
               <CardTitle>Your details</CardTitle>
               <CardDescription>
-                Only you and the administrators who may see personal details can see these.
+                Only you and School Admins can see these.
               </CardDescription>
             </div>
             {!editing && (
@@ -398,11 +409,24 @@ export function MyProfilePage() {
         <Card>
           <CardHeader>
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> Protected details
-              </CardTitle>
+              <HelpHeading
+                title={
+                  <span className="flex items-center gap-2">
+                    <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> Protected details
+                  </span>
+                }
+                helpLabel="About protected details"
+                help={
+                  <>
+                    <p>These matter for salary and official records, so a School Admin checks every change.</p>
+                    <p>Only the last few digits are shown. For IDs and bank details we ask for your password before sending.</p>
+                    <p>You can have one request waiting per detail. Cancel it if you made a mistake.</p>
+                  </>
+                }
+              />
               <CardDescription>
-                Shown masked. To change one, send a request; a School Admin approves it.
+                Only the last few digits are shown. To change one, press its button and send a
+                request.
               </CardDescription>
             </div>
           </CardHeader>
@@ -440,7 +464,7 @@ export function MyProfilePage() {
                   aria-label={`Request change: ${CHANGE_FIELD_LABELS[c]}`}
                 >
                   <Icon /> {CHANGE_FIELD_LABELS[c]}
-                  {pending && <span className="text-xs font-normal text-muted">· pending</span>}
+                  {pending && <span className="text-xs font-normal text-muted">· waiting for approval</span>}
                 </Button>
               );
             })}
@@ -468,7 +492,8 @@ export function MyProfilePage() {
             <div>
               <CardTitle>My documents</CardTitle>
               <CardDescription>
-                Upload what the school asks for. Only you and School Admins can open them.
+                Upload what the school asks for, such as ID proof or certificates. Only you and
+                School Admins can open them.
               </CardDescription>
             </div>
           </CardHeader>
@@ -479,7 +504,7 @@ export function MyProfilePage() {
           <CardHeader>
             <div>
               <CardTitle>My assignments</CardTitle>
-              <CardDescription>Where you work and what you look after.</CardDescription>
+              <CardDescription>Your campuses, the classes you teach and what you look after.</CardDescription>
             </div>
           </CardHeader>
           <div className="grid gap-6 lg:grid-cols-3">
@@ -494,7 +519,7 @@ export function MyProfilePage() {
                       className="flex flex-wrap items-center gap-2 text-sm"
                     >
                       <span className="font-semibold">{a.locationName}</span>
-                      {a.isPrimary && <span className="text-xs text-muted">(primary)</span>}
+                      {a.isPrimary && <span className="text-xs text-muted">(main campus)</span>}
                       <AssignmentStatusChip status={a.status} />
                     </li>
                   ))}

@@ -14,12 +14,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
+import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
 import { api } from '@/lib/api';
 import { FormProblem } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useChangeRequests, usePeopleMutation } from './api';
+import { useChangeRequests, usePendingRequestCount, usePeopleMutation } from './api';
 
 const FILTERS: { value: ChangeRequestStatus; label: string }[] = [
   { value: 'PENDING', label: 'Pending' },
@@ -127,6 +128,7 @@ function Decide({
 export function RequestsPage() {
   const [status, setStatus] = useState<ChangeRequestStatus>('PENDING');
   const q = useChangeRequests(status);
+  const pending = usePendingRequestCount(true);
   const [deciding, setDeciding] = useState<{
     request: ProfileChangeRequestDTO;
     mode: 'approve' | 'reject';
@@ -138,8 +140,18 @@ export function RequestsPage() {
       <PageHeader
         eyebrow="People"
         title="Change requests"
-        description="Employees ask for changes to details that need a second pair of eyes. Sensitive values are masked here."
+        description="Staff ask here to change details they can’t edit themselves."
       />
+      <TabIntro title="Change requests" className="mb-4">
+        <p>
+          Staff can’t change their legal name, date of birth, IDs or bank details on their own. They
+          send a request, and it waits here for you.
+        </p>
+        <p>
+          <b>Approve</b> updates their record straight away. <b>Reject</b> changes nothing; write a
+          short note so they know what to fix. IDs and bank numbers show only the last few digits.
+        </p>
+      </TabIntro>
       <div role="tablist" aria-label="Request status" className="mb-4 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
           <button
@@ -156,6 +168,7 @@ export function RequestsPage() {
             )}
           >
             {f.label}
+            {f.value === 'PENDING' && (pending.data ?? 0) > 0 ? ` (${pending.data})` : ''}
           </button>
         ))}
       </div>

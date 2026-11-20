@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useClassMaster, useClassOfferings, useProgrammes, useSubjectOfferingsOf } from '../api';
 import type { TabProps } from '../session-page';
-import { HelpHeading, TabIntro } from '../help';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { StatusToggle } from '../status-toggle';
 
 const REQUIREMENTS: ProgrammeRequirement[] = ['REQUIRED', 'CHOICE', 'OPTIONAL'];

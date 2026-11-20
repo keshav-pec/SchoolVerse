@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { A, useAcademicMutation, useClassMaster, useClassOfferings, useSections } from '../api';
 import type { TabProps } from '../session-page';
-import { HelpHeading, TabIntro } from '../help';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { StatusToggle } from '../status-toggle';
 
 /** "A, B c" → ["A", "B", "C"]. Codes are compared in upper case. */

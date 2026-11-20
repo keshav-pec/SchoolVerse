@@ -17,12 +17,12 @@ test('admin reveals a bank number after confirming their password, then uploads 
   await expect(page.getByRole('heading', { level: 1, name: 'Rohan Gill' })).toBeVisible();
 
   // ── masked by default
-  await page.getByRole('tab', { name: /personal information/i }).click();
+  await page.getByRole('tab', { name: /ids & bank/i }).click();
   await expect(page.getByText(/^•••• \d{4}$/)).toBeVisible();
   await expect(page.locator('[data-revealed]')).toHaveCount(0);
 
-  // ── Reveal asks for the password; a wrong one is refused, the right one shows the value
-  await page.getByRole('button', { name: 'Reveal account number' }).click();
+  // ── Show asks for the password; a wrong one is refused, the right one shows the value
+  await page.getByRole('button', { name: 'Show account number' }).click();
   const stepUp = page.getByRole('dialog', { name: /confirm your password/i });
   await stepUp.getByLabel('Password', { exact: true }).fill('not-the-password-1');
   await stepUp.getByRole('button', { name: /^confirm$/i }).click();
@@ -36,6 +36,9 @@ test('admin reveals a bank number after confirming their password, then uploads 
 
   // ── documents: upload a PDF, then download it through a signed link
   await page.getByRole('tab', { name: 'Documents' }).click();
+  // The upload form opens straight away when there are no files yet, otherwise from its button.
+  const openUpload = page.getByRole('button', { name: 'Upload Document' });
+  if (await openUpload.isVisible()) await openUpload.click();
   await page
     .locator('#document-file')
     .setInputFiles({ name: 'e2e-contract.pdf', mimeType: 'application/pdf', buffer: PDF });
@@ -58,6 +61,7 @@ test('admin reveals a bank number after confirming their password, then uploads 
   expect(body.toString('latin1', 0, 5)).toBe('%PDF-');
 
   // a fake file is turned away by the server, whatever the browser says it is
+  await page.getByRole('button', { name: 'Upload Document' }).click();
   await page
     .locator('#document-file')
     .setInputFiles({

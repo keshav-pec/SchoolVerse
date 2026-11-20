@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { ClientSession, PipelineStage } from 'mongoose';
 import {
+  EMPLOYEE_CODE_FORMAT_MESSAGE,
+  EMPLOYEE_CODE_PATTERN,
+  EMPLOYEE_CODE_PREFIXES,
   EMPLOYEE_EDITABLE_FIELDS,
   PERSON_EDITABLE_FIELDS,
   type CreateEmployeeData,
+  type EmployeeCodeAvailabilityDTO,
+  type EmployeeCodeAvailabilityQuery,
   type EmployeeDirectoryDTO,
   type EmployeeProfileDTO,
   type ListEmployeesQuery,
@@ -153,12 +158,59 @@ export async function getEmployee(ctx: ServiceContext, employeeId: string): Prom
   return toDirectoryDTO(employee, await hydrate(ctx, [employee], { today }));
 }
 
+// ───────────────────────────────────────────────────────────── employee code check + suggestion
+
+const CODE_TAKEN_MESSAGE = 'This employee code is already in use.';
+
+/** The letters a numbered code starts with: `FAC-014` → `FAC`, `T12` → `T`. Codes without a number are their own prefix. */
+function codePrefix(code: string): string {
+  const match = /^(.*?[A-Z/_])-?\d+$/.exec(code);
+  return (match?.[1] ?? code).replace(/[-/_]+$/, '').slice(0, 15) || 'EMP';
+}
+
+/** One past the highest `PREFIX-NNN` already used in this school (exited employees included, as their codes stay taken). */
+async function nextFreeCode(ctx: ServiceContext, schoolId: string, prefix: string): Promise<string> {
+  const rows = await Employee.find({ tenantId: ctx.tenantId, schoolId, employeeCode: { $regex: `^${escapeRegex(prefix)}-\\d+$` } })
+    .select('employeeCode')
+    .lean<{ employeeCode: string }[]>();
+  const used = new Set(rows.map((r) => r.employeeCode));
+  let n = rows.reduce((max, r) => Math.max(max, Number(r.employeeCode.slice(prefix.length + 1))), 0) + 1;
+  let code = `${prefix}-${String(n).padStart(3, '0')}`;
+  while (used.has(code)) code = `${prefix}-${String(++n).padStart(3, '0')}`;
+  return code;
+}
+
+/**
+ * Live check for the Employee code field. Only reads: creating or editing still refuses a duplicate on its own
+ * (`EMPLOYEE_CODE_TAKEN`). With just a category it returns the next free code for that category.
+ */
+export async function checkEmployeeCodeAvailability(ctx: ServiceContext, query: EmployeeCodeAvailabilityQuery): Promise<EmployeeCodeAvailabilityDTO> {
+  const school = await getCurrentSchool(ctx);
+  const code = query.code?.trim() ? query.code.trim().toUpperCase() : null;
+  const prefix = query.category ? EMPLOYEE_CODE_PREFIXES[query.category] : null;
+  const suggest = (base: string | null) => (school && base ? nextFreeCode(ctx, school._id, base) : Promise.resolve(null));
+
+  if (!code) return { code: null, valid: false, available: false, message: null, suggestion: await suggest(prefix) };
+  if (!EMPLOYEE_CODE_PATTERN.test(code)) return { code, valid: false, available: false, message: EMPLOYEE_CODE_FORMAT_MESSAGE, suggestion: await suggest(prefix) };
+
+  const clash = school
+    ? await Employee.exists({ tenantId: ctx.tenantId, schoolId: school._id, employeeCode: code, ...(query.employeeId ? { _id: { $ne: query.employeeId } } : {}) })
+    : null;
+  return {
+    code,
+    valid: true,
+    available: !clash,
+    message: clash ? CODE_TAKEN_MESSAGE : null,
+    suggestion: clash ? await suggest(prefix ?? codePrefix(code)) : null,
+  };
+}
+
 // ───────────────────────────────────────────────────────────── create (FSM-01)
 
 function mapDuplicate(err: unknown): never {
   const fields = duplicateKeyFields(err);
   if (fields?.includes('employeeCode')) {
-    throw new AppError('EMPLOYEE_CODE_TAKEN', undefined, { fields: { employeeCode: 'This employee code is already in use.' } });
+    throw new AppError('EMPLOYEE_CODE_TAKEN', undefined, { fields: { employeeCode: CODE_TAKEN_MESSAGE } });
   }
   if (fields?.includes('personId')) throw new AppError('PERSON_HAS_ACTIVE_EMPLOYMENT');
   throw err;

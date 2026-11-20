@@ -26,7 +26,9 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
   const drawer = page.getByRole('dialog', { name: /add employee/i });
   await drawer.getByLabel(/^first name/i).fill('Asha');
   await drawer.getByLabel(/^last name/i).fill('Verma');
-  await chooseOption(drawer.getByLabel(/^category/i), /^Faculty$/);
+  await chooseOption(drawer.getByLabel(/^category/i), /^Teaching staff$/);
+  // Picking the category suggests the next free code; typing your own replaces it.
+  await expect(drawer.getByLabel(/^employee code/i)).toHaveValue(/^FAC-\d{3}$/);
   await drawer.getByLabel(/^employee code/i).fill('fac-e2e1');
   await drawer.getByLabel(/^joining date/i).fill('2026-04-01');
   await drawer.getByRole('button', { name: /^next/i }).click();
@@ -50,29 +52,31 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
   await expectToast(page, 'Asha Verma is now active.');
 
   // ── Maths for VIII-A and VIII-B in one go
-  await page.getByRole('tab', { name: /academic assignment/i }).click();
+  await page.getByRole('tab', { name: /classes & subjects/i }).click();
   await page
     .getByRole('button', { name: /assign classes/i })
     .first()
     .click();
   const assign = page.getByRole('dialog', { name: /assign classes/i });
-  await chooseOption(assign.getByLabel(/^class/i), /^Class 8$/);
+  await expect(assign.getByRole('radio', { name: /subject teacher/i })).toBeChecked();
+  await chooseOption(assign.getByLabel(/^class\W*$/i), /^Class 8$/);
   await expect(assign.getByRole('group', { name: /sections/i })).toBeVisible();
   const boxes = assign.getByRole('checkbox');
   await boxes.nth(0).check();
   await boxes.nth(1).check();
-  await chooseOption(assign.getByLabel(/^subject/i), /Mathematics/);
-  await assign.getByRole('button', { name: /assign 2 sections/i }).click();
+  await assign.getByRole('group', { name: /subjects/i }).getByRole('checkbox', { name: /Mathematics/ }).check();
+  await expect(assign.getByText(/You are adding 2/)).toBeVisible();
+  await assign.getByRole('button', { name: /^assign 2$/i }).click();
   await expectToast(page, '2 assignments added.');
-  const table = page.getByRole('table', { name: 'Academic assignments' });
+  const table = page.getByRole('table', { name: 'Classes and subjects' });
   await expect(table.getByRole('row')).toHaveCount(3); // header + A + B
   await expect(table).toContainText('Mathematics');
   await expect(table).toContainText('Active');
 
   // ── a login with a role chosen by the admin, and no password anywhere
-  await page.getByRole('tab', { name: /account & access/i }).click();
+  await page.getByRole('tab', { name: 'Login' }).click();
   await expect(page.locator('input[type=password]')).toHaveCount(0);
-  await expect(page.getByText(/designation doesn.t grant access/i).first()).toBeVisible();
+  await expect(page.getByText(/job title doesn.t give any access/i).first()).toBeVisible();
   await page.getByLabel(/^sign-in email/i).fill('asha.e2e@greenfield.demo');
   await page.getByRole('button', { name: /create login/i }).click();
   await expectToast(page, /login created/i);
@@ -98,10 +102,10 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
 
   await login(asha, 'asha.e2e@greenfield.demo');
   // Faculty navigation: their own profile and colleagues, nothing administrative.
-  await expect(asha.getByRole('link', { name: 'My Profile' })).toBeVisible();
+  await expect(asha.getByRole('link', { name: 'My Profile', exact: true })).toBeVisible();
   await expect(asha.getByRole('link', { name: 'Faculty & Staff' })).toHaveCount(0);
   await expect(asha.getByRole('link', { name: 'Change requests' })).toHaveCount(0);
-  await asha.getByRole('link', { name: 'My Profile' }).click();
+  await asha.getByRole('link', { name: 'My Profile', exact: true }).click();
   await expect(asha.getByRole('heading', { name: 'Asha Verma' })).toBeVisible();
   await expect(asha.getByRole('list', { name: 'My classes' })).toContainText('Mathematics');
   await asha.goto('/people');
@@ -129,8 +133,8 @@ test('admin adds non-teaching staff, transfers them, gives them a responsibility
   await drawer.getByRole('button', { name: /save employee/i }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Dev Kumar' })).toBeVisible();
 
-  // Staff get Responsibilities in place of Academic Assignment.
-  await expect(page.getByRole('tab', { name: /academic assignment/i })).toHaveCount(0);
+  // Staff get Responsibilities in place of Classes & Subjects.
+  await expect(page.getByRole('tab', { name: /classes & subjects/i })).toHaveCount(0);
   await page.getByRole('button', { name: 'Activate', exact: true }).first().click();
   await page
     .getByRole('alertdialog')
@@ -187,21 +191,21 @@ test('admin exits an employee today and that person’s very next request is sig
 
   // ── the admin initiates an exit dated today
   await page.goto(`/people/${employeeId}`);
-  await page.getByRole('button', { name: /initiate exit/i }).click();
+  await page.getByRole('button', { name: /record exit/i }).click();
   const dialog = page.getByRole('alertdialog');
-  await expect(dialog).toContainText(/access ends on/i);
-  await expect(dialog).toContainText(/assignments close on that day/i);
+  await expect(dialog).toContainText(/their last day is/i);
+  await expect(dialog).toContainText(/classes and responsibilities close/i);
   await expect(dialog).toContainText(/kept for history/i);
   await chooseOption(dialog.getByLabel(/^reason/i), /^Resignation$/);
-  await dialog.getByRole('button', { name: /^initiate exit$/i }).click();
+  await dialog.getByRole('button', { name: /^record exit$/i }).click();
   await expectToast(page, /exit has been recorded/i);
   await expect(page.getByText('This employee has left the school')).toBeVisible();
-  await expect(page.getByRole('button', { name: /initiate exit|activate|suspend/i })).toHaveCount(
+  await expect(page.getByRole('button', { name: /record exit|activate|suspend/i })).toHaveCount(
     0,
   );
 
   // ── the account is disabled and Meera is signed out on her next request
-  await page.getByRole('tab', { name: /account & access/i }).click();
+  await page.getByRole('tab', { name: 'Login' }).click();
   await expect(page.getByText('Disabled').first()).toBeVisible();
   await meera.reload();
   await expect(meera).toHaveURL(/\/login$/);

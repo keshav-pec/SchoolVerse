@@ -16,7 +16,7 @@ import { messageFor } from '@/lib/errors';
 import { useAcademicMutation, useClassOfferings, useSession, useSubjectOfferings, useSubjects } from '../api';
 import { ClassPicker } from '../class-picker';
 import type { TabProps } from '../session-page';
-import { HelpHeading, TabIntro } from '../help';
+import { HelpHeading, TabIntro } from '@/components/sv/help';
 import { StatusToggle } from '../status-toggle';
 
 const OFFERING_TYPE_OPTIONS = SUBJECT_OFFERING_TYPES.map((t) => ({ value: t, label: SUBJECT_OFFERING_TYPE_LABELS[t] }));

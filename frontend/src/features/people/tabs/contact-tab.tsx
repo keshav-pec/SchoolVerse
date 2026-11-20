@@ -3,10 +3,11 @@ import type { EmployeeProfileDTO } from '@shared';
 import { Lock, Pencil, Save } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
 import { TextField } from '@/components/ui/field';
 import { Can } from '@/components/sv/can';
+import { HelpHeading } from '@/components/sv/help';
 import { InfoGrid, InfoItem } from '@/components/sv/info-grid';
 import { api, ApiError } from '@/lib/api';
 import { changedFields } from '@/lib/utils';
@@ -80,6 +81,7 @@ function EditDrawer({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
             {formError && <Alert tone="danger">{formError}</Alert>}
             <TextField
               label="Preferred name"
+              hint="Optional. The name they like to be called, e.g. “Priya” for Priyanka. Shown on lists."
               value={form.preferredName}
               onChange={set('preferredName')}
               error={errors.preferredName}
@@ -142,8 +144,16 @@ export function ContactTab({ employee }: { employee: EmployeeProfileDTO }) {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Official contact</CardTitle>
-            <CardDescription>Shown to colleagues in the directory.</CardDescription>
+            <HelpHeading
+              title="Official contact"
+              help={
+                <>
+                  <p>The email and phone the <b>school</b> gives them for work. Colleagues can see these.</p>
+                  <p>The official email is also used as the sign-in email when you create their login.</p>
+                </>
+              }
+            />
+            <CardDescription>Work email and phone. Colleagues can see these.</CardDescription>
           </div>
           <Can permission="employee:manage">
             {!employee.readOnly && (
@@ -165,10 +175,17 @@ export function ContactTab({ employee }: { employee: EmployeeProfileDTO }) {
       <Card>
         <CardHeader>
           <div>
-            <CardTitle>Personal contact</CardTitle>
-            <CardDescription>
-              Private to this person and to administrators who may see it.
-            </CardDescription>
+            <HelpHeading
+              title="Personal contact"
+              help={
+                <>
+                  <p>Their own email, phone, home address and an emergency contact. Colleagues never see these.</p>
+                  <p><b>Main email / main phone</b> are the contact details saved with their personal record when they were added.</p>
+                  <p>Staff can update their own address and emergency contact from My Profile.</p>
+                </>
+              }
+            />
+            <CardDescription>Private. Only this person and School Admins can see it.</CardDescription>
           </div>
         </CardHeader>
         {personal ? (
@@ -177,8 +194,8 @@ export function ContactTab({ employee }: { employee: EmployeeProfileDTO }) {
             <InfoItem label="Personal phone">
               {personal.personalPhone ? formatPhone(personal.personalPhone) : null}
             </InfoItem>
-            <InfoItem label="Primary email">{personal.primaryEmail}</InfoItem>
-            <InfoItem label="Primary phone">
+            <InfoItem label="Main email">{personal.primaryEmail}</InfoItem>
+            <InfoItem label="Main phone">
               {personal.primaryPhone ? formatPhone(personal.primaryPhone) : null}
             </InfoItem>
             <InfoItem label="Address" className="sm:col-span-2">

@@ -357,7 +357,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
     const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
-    for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/departments', '/designations']) {
+    for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/employees/code-availability', '/departments', '/designations']) {
       expectError(await anon.get(`${API}${url}`), 401, 'UNAUTHENTICATED');
     }
   });

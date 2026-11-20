@@ -10,7 +10,7 @@ import { messageFor } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { sessionCall, useAcademicMutation, useOverview } from '../api';
 import { LifecycleButtons } from '../lifecycle-buttons';
-import { HelpHeading } from '../help';
+import { HelpHeading } from '@/components/sv/help';
 import { TAB_FOR_ENTITY, TAB_LABELS } from '../tab-links';
 
 const GROUPS = [

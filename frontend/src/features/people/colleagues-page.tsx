@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { EMPLOYEE_CATEGORY_LABELS } from '@shared';
 import {
   Building2,
@@ -17,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
-import { useDebouncedValue } from '@/hooks/use-debounce';
+import { useListParams } from '@/hooks/use-list-params';
 import { formatPhone } from '@/lib/format';
 import { useEmployees } from './api';
 
@@ -25,10 +24,10 @@ const PAGE_SIZE = 12;
 
 /** `/colleagues`: directory fields only, for people who share a location with you. */
 export function ColleaguesPage() {
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const q = useDebouncedValue(search.trim(), 300);
-  useEffect(() => setPage(1), [q]);
+  // Search and page live in the URL, like the other lists, so Back returns to the same page.
+  const { params, setParam, page, search, setSearch } = useListParams();
+  const q = params.get('q') ?? '';
+  const setPage = (next: number) => setParam({ page: String(next) }, true);
   const list = useEmployees({ q: q || undefined, page, pageSize: PAGE_SIZE });
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));

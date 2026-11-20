@@ -5,6 +5,8 @@ import type {
   DepartmentDTO,
   DesignationDTO,
   EmployeeAccountDTO,
+  EmployeeCategory,
+  EmployeeCodeAvailabilityDTO,
   EmployeeDirectoryDTO,
   EmployeeDocumentDTO,
   EmployeeHistoryDTO,
@@ -150,6 +152,25 @@ export const usePendingRequestCount = (enabled: boolean) =>
     select: (items) => items.length,
   });
 
+/**
+ * Employee code field: the next free code for a category (FAC-015) and a live duplicate check. Kept outside the
+ * 'people' key so saving other things doesn't re-run it.
+ */
+export const useEmployeeCodeCheck = (
+  args: { code?: string; category?: EmployeeCategory | ''; employeeId?: string },
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['employee-code', args.code ?? '', args.category ?? '', args.employeeId ?? ''],
+    queryFn: () =>
+      api.get<EmployeeCodeAvailabilityDTO>(
+        `/employees/code-availability${qs({ code: args.code, category: args.category || undefined, employeeId: args.employeeId })}`,
+      ),
+    enabled: enabled && Boolean(args.code || args.category),
+    staleTime: 5_000,
+    retry: false,
+  });
+
 // ───────────────────────────────────────────────────────────── self-service
 
 export const useSelfProfile = () =>
@@ -209,6 +230,15 @@ export const suggestedLabel = <T>(r: SuggestedMastersDTO<T>) =>
   r.created.length === 0
     ? 'Everything on the starter list was already there.'
     : `Added ${r.created.length}${r.skipped ? `, skipped ${r.skipped} that already existed` : ''}.`;
+
+/** "Add Suggested List" for departments or designations (the PRD starter lists). Adds only what is missing. */
+export function useAddSuggestedMasters(kind: 'departments' | 'designations') {
+  const add = usePeopleMutation(
+    (_: void) => api.post<SuggestedMastersDTO<DepartmentDTO | DesignationDTO>>(`/${kind}/suggested`),
+    { success: (r) => suggestedLabel(r) },
+  );
+  return { run: () => add.mutate(), pending: add.isPending };
+}
 
 /** Opens a signed download link the way a browser would, without leaving the page. */
 export function openSignedLink(url: string) {

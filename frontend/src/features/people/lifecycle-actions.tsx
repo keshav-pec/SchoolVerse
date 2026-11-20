@@ -37,21 +37,21 @@ function ExitDialog({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
       onOpenChange={(open) => !open && onClose()}
       icon={<DoorOpen className="size-5" />}
       tone="danger"
-      title={`Initiate exit for ${employee.displayName}?`}
+      title={`Record that ${employee.displayName} is leaving?`}
       description={
         exitDate ? (
           <>
-            Access ends on <strong className="text-ink">{formatDateOnly(exitDate)}</strong>, open
-            assignments close on that day, and the record is kept for history.
+            Their last day is <strong className="text-ink">{formatDateOnly(exitDate)}</strong>. On
+            that day their classes and responsibilities close and the record is kept for history.
             {immediate
               ? ' Because the date is today or earlier, the exit takes effect now and their login is disabled.'
-              : ' Until then they stay on the notice period and can still sign in.'}
+              : ' Until then they are on their notice period and work and sign in as normal.'}
           </>
         ) : (
           'Choose the last working day.'
         )
       }
-      confirmLabel="Initiate exit"
+      confirmLabel="Record exit"
       loadingLabel="Recording the exit…"
       onConfirm={async () => {
         if (!exitDate) throw new FormProblem('Choose the last working day.');
@@ -82,7 +82,7 @@ function ExitDialog({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
         />
         <TextareaField
           label="Note"
-          hint="Optional. Visible to administrators."
+          hint="Optional. Only School Admins see it."
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={500}
@@ -109,7 +109,7 @@ function StatusDialog({
         employee.status === 'ONBOARDING'
           ? `Activate ${employee.displayName}?`
           : `Return ${employee.displayName} to active?`,
-      description: 'They become Active and can be given classes or responsibilities.',
+      description: 'They become a current member of staff and can be given classes or responsibilities.',
       label: 'Activate',
       loading: 'Activating…',
       success: `${employee.displayName} is now active.`,
@@ -127,7 +127,7 @@ function StatusDialog({
     suspend: {
       title: `Suspend ${employee.displayName}?`,
       description:
-        'They cannot take new classes or responsibilities while suspended. This does not suspend their login: do that on the Account & Access tab.',
+        'They can’t get new classes or responsibilities while suspended. Their login still works: to stop them signing in, suspend the login on the Login tab.',
       label: 'Suspend',
       loading: 'Suspending…',
       success: `${employee.displayName} is suspended.`,
@@ -156,7 +156,7 @@ function StatusDialog({
       {action !== 'activate' && (
         <TextField
           label="Reason"
-          hint="Optional. Visible to administrators."
+          hint="Optional. Only School Admins see it."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           maxLength={300}
@@ -229,7 +229,7 @@ export function LifecycleActions({ employee }: Props) {
             className="text-danger hover:border-danger"
             onClick={() => setOpen('exit')}
           >
-            <DoorOpen /> Initiate Exit
+            <DoorOpen /> Record Exit
           </Button>
         )}
       </div>

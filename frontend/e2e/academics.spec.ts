@@ -183,7 +183,7 @@ test('visual pass: dashboard, session tabs and subject master at 1280px and 390p
     await shot('dashboard');
 
     await page.goto(`/academics/sessions/${sessionId}`);
-    for (const tab of ['overview', 'classes & sections', 'subjects', 'choice rules', 'programmes', 'terms', 'history']) {
+    for (const tab of ['overview', 'classes & sections', 'subjects', 'subject choice rules', 'programmes', 'terms', 'history']) {
       await page.getByRole('tab', { name: new RegExp(`^${tab}$`, 'i') }).click();
       await page.waitForLoadState('networkidle');
       await noOverflow(`tab ${tab}`);

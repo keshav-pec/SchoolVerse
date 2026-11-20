@@ -75,6 +75,28 @@ describe('onboarding: person + employee master (FSM-01)', () => {
     expect(await Person.countDocuments({ tenantId: t.tenantId })).toBe(people);
   });
 
+  it('QA F2: the code check suggests the next free code per category, flags a taken code and lets an employee keep their own', async () => {
+    const t = await staffSchool();
+    const check = async (query: Record<string, string>) => (await t.agent.get(`${API}/employees/code-availability`).query(query).expect(200)).body.data;
+
+    expect(await check({ category: 'FACULTY' })).toMatchObject({ code: null, suggestion: 'FAC-001' });
+    const first = await addEmployee(t, { employeeCode: 'FAC-001' });
+    await addEmployee(t, { employeeCode: 'FAC-007' });
+    await addEmployee(t, { employeeCategory: 'NON_TEACHING_STAFF', employeeCode: 'STF-002' });
+    expect((await check({ category: 'FACULTY' })).suggestion).toBe('FAC-008');
+    expect((await check({ category: 'NON_TEACHING_STAFF' })).suggestion).toBe('STF-003');
+
+    expect(await check({ code: ' fac-001 ' })).toEqual({ code: 'FAC-001', valid: true, available: false, message: 'This employee code is already in use.', suggestion: 'FAC-008' });
+    expect(await check({ code: 'FAC-009' })).toMatchObject({ valid: true, available: true, suggestion: null });
+    expect(await check({ code: 'bad code!' })).toMatchObject({ valid: false, available: false, message: expect.stringMatching(/up to 20 letters/) });
+    // While editing, the employee's own code is not a clash.
+    expect(await check({ code: 'FAC-001', employeeId: first.employeeId })).toMatchObject({ available: true });
+
+    // Only people who add staff can call it.
+    const { agent } = await createUserAndLogin(t.tenantId, 'FACULTY');
+    expectError(await agent.get(`${API}/employees/code-availability`).query({ category: 'FACULTY' }), 403, 'FORBIDDEN');
+  });
+
   it('refuses a missing name, a non-active location and inactive masters', async () => {
     const t = await staffSchool();
     const body = { employeeCategory: 'FACULTY', employeeCode: 'X-1', joiningDate: '2020-04-01', primaryLocationId: t.moh.locationId, departmentId: t.dept, designationId: t.desig };

@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
+import { TabIntro } from '@/components/sv/help';
 import { api, ApiError } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { isStepUpCancelled, useStepUp } from '@/lib/step-up';
@@ -126,8 +127,8 @@ function EditDrawer({
   return (
     <Drawer open onOpenChange={(open) => !open && !pending && onClose()}>
       <DrawerContent
-        title="Edit personal information"
-        description="Values are encrypted when saved. Leave a box blank to keep what is on file."
+        title="Edit IDs and bank details"
+        description="Saved in locked (encrypted) form. Leave a box empty to keep what is already saved."
       >
         <form
           className="flex min-h-0 flex-1 flex-col"
@@ -147,8 +148,8 @@ function EditDrawer({
                 type="date"
                 hint={
                   restricted.dateOfBirth
-                    ? `On file: ${restricted.dateOfBirth.masked}. Pick a date only to replace it.`
-                    : 'Not on file.'
+                    ? `Saved: ${restricted.dateOfBirth.masked}. Pick a date only to replace it.`
+                    : 'Not saved yet.'
                 }
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
@@ -162,7 +163,7 @@ function EditDrawer({
                     containerClassName="flex-1"
                     label={GOVERNMENT_ID_LABELS[t]}
                     autoComplete="off"
-                    placeholder={held.has(t) ? `On file: ${held.get(t)}` : 'Not on file'}
+                    placeholder={held.has(t) ? `Saved: ${held.get(t)}` : 'Not saved yet'}
                     hint={removed.has(t) ? 'Will be removed when you save.' : undefined}
                     value={ids[t] ?? ''}
                     onChange={(e) => setIds((v) => ({ ...v, [t]: e.target.value }))}
@@ -193,8 +194,8 @@ function EditDrawer({
               <legend className="mb-1 text-sm font-bold">Bank details</legend>
               {restricted.bank && (
                 <p className="text-[13px] text-muted">
-                  On file: {restricted.bank.accountNumberMasked}. Enter the account number to
-                  replace the details.
+                  Saved: {restricted.bank.accountNumberMasked}. To change the bank details, type the
+                  account number again.
                 </p>
               )}
               <TextField
@@ -283,95 +284,107 @@ export function PersonalTab({ employee }: { employee: EmployeeProfileDTO }) {
   const nothing = !r.dateOfBirth && r.governmentIds.length === 0 && !r.bank;
 
   return (
-    <Card>
-      <CardHeader>
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> Personal information
-          </CardTitle>
-          <CardDescription>
-            Protected details. Each reveal asks for your password and is recorded.
-          </CardDescription>
-        </div>
-        <Can permission="employee:manage_restricted">
-          {!employee.readOnly && (
-            <Button variant="outline" size="sm" onClick={() => void startEdit()}>
-              <Pencil /> Edit
-            </Button>
-          )}
-        </Can>
-      </CardHeader>
+    <div className="space-y-4">
+      <TabIntro title="IDs & Bank Details" need="optional">
+        <p>
+          Date of birth, government IDs (such as PAN and Aadhaar) and bank details for salary. Add
+          them when you have them; you can skip this for now.
+        </p>
+        <p>
+          They are kept locked and show only the last few digits. Press <b>Show</b> to see one for
+          30 seconds. We ask for your password first and note who looked.
+        </p>
+      </TabIntro>
+      <Card>
+        <CardHeader>
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-5 text-brand" aria-hidden="true" /> IDs &amp; bank details
+            </CardTitle>
+            <CardDescription>
+              Locked details. Showing one asks for your password and is recorded.
+            </CardDescription>
+          </div>
+          <Can permission="employee:manage_restricted">
+            {!employee.readOnly && (
+              <Button variant="outline" size="sm" onClick={() => void startEdit()}>
+                <Pencil /> Edit
+              </Button>
+            )}
+          </Can>
+        </CardHeader>
 
-      <dl className="divide-y divide-line">
-        <Row label="Legal name">{employee.fullName}</Row>
-        <Row label="Date of birth">
-          {r.dateOfBirth ? (
-            <Can
-              permission="employee:reveal_restricted"
-              fallback={<span className="font-mono">{r.dateOfBirth.masked}</span>}
-            >
-              <RevealableValue
-                label="date of birth"
-                masked={r.dateOfBirth.masked}
-                reveal={reveal('DATE_OF_BIRTH')}
-              />
-            </Can>
-          ) : (
-            <span className="font-normal text-muted">Not on file</span>
+        <dl className="divide-y divide-line">
+          <Row label="Legal name">{employee.fullName}</Row>
+          <Row label="Date of birth">
+            {r.dateOfBirth ? (
+              <Can
+                permission="employee:reveal_restricted"
+                fallback={<span className="font-mono">{r.dateOfBirth.masked}</span>}
+              >
+                <RevealableValue
+                  label="date of birth"
+                  masked={r.dateOfBirth.masked}
+                  reveal={reveal('DATE_OF_BIRTH')}
+                />
+              </Can>
+            ) : (
+              <span className="font-normal text-muted">Not saved yet</span>
+            )}
+          </Row>
+          {GOVERNMENT_ID_TYPES.filter((t) => r.governmentIds.some((g) => g.type === t)).map((t) => {
+            const masked = r.governmentIds.find((g) => g.type === t)!.masked;
+            return (
+              <Row key={t} label={GOVERNMENT_ID_LABELS[t]}>
+                <Can
+                  permission="employee:reveal_restricted"
+                  fallback={<span className="font-mono">{masked}</span>}
+                >
+                  <RevealableValue
+                    label={GOVERNMENT_ID_LABELS[t]}
+                    masked={masked}
+                    reveal={reveal(t)}
+                  />
+                </Can>
+              </Row>
+            );
+          })}
+          {r.bank && (
+            <>
+              <Row label="Bank">
+                <span className="inline-flex items-center gap-2">
+                  <Landmark className="size-4 text-muted" aria-hidden="true" /> {r.bank.bankName} ·
+                  IFSC {r.bank.ifsc}
+                </span>
+              </Row>
+              <Row label="Account holder">{r.bank.accountHolderName}</Row>
+              <Row label="Account number">
+                <Can
+                  permission="employee:reveal_restricted"
+                  fallback={<span className="font-mono">{r.bank.accountNumberMasked}</span>}
+                >
+                  <RevealableValue
+                    label="account number"
+                    masked={r.bank.accountNumberMasked}
+                    reveal={reveal('BANK_ACCOUNT_NUMBER')}
+                  />
+                </Can>
+              </Row>
+            </>
           )}
-        </Row>
-        {GOVERNMENT_ID_TYPES.filter((t) => r.governmentIds.some((g) => g.type === t)).map((t) => {
-          const masked = r.governmentIds.find((g) => g.type === t)!.masked;
-          return (
-            <Row key={t} label={GOVERNMENT_ID_LABELS[t]}>
-              <Can
-                permission="employee:reveal_restricted"
-                fallback={<span className="font-mono">{masked}</span>}
-              >
-                <RevealableValue
-                  label={GOVERNMENT_ID_LABELS[t]}
-                  masked={masked}
-                  reveal={reveal(t)}
-                />
-              </Can>
-            </Row>
-          );
-        })}
-        {r.bank && (
-          <>
-            <Row label="Bank">
-              <span className="inline-flex items-center gap-2">
-                <Landmark className="size-4 text-muted" aria-hidden="true" /> {r.bank.bankName} ·
-                IFSC {r.bank.ifsc}
-              </span>
-            </Row>
-            <Row label="Account holder">{r.bank.accountHolderName}</Row>
-            <Row label="Account number">
-              <Can
-                permission="employee:reveal_restricted"
-                fallback={<span className="font-mono">{r.bank.accountNumberMasked}</span>}
-              >
-                <RevealableValue
-                  label="account number"
-                  masked={r.bank.accountNumberMasked}
-                  reveal={reveal('BANK_ACCOUNT_NUMBER')}
-                />
-              </Can>
-            </Row>
-          </>
+        </dl>
+
+        {nothing && (
+          <EmptyState
+            illustration={<Lock className="size-10 text-muted" aria-hidden="true" />}
+            title="Nothing saved yet"
+            description="Press Edit to add government IDs and bank details."
+          />
         )}
-      </dl>
-
-      {nothing && (
-        <EmptyState
-          illustration={<Lock className="size-10 text-muted" aria-hidden="true" />}
-          title="Nothing on file yet"
-          description="Add government IDs and bank details with Edit."
-        />
-      )}
-      {editing && (
-        <EditDrawer employee={employee} restricted={r} onClose={() => setEditing(false)} />
-      )}
-    </Card>
+        {editing && (
+          <EditDrawer employee={employee} restricted={r} onClose={() => setEditing(false)} />
+        )}
+      </Card>
+    </div>
   );
 }
