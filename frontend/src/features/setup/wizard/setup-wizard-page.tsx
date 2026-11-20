@@ -166,8 +166,8 @@ function Wizard({ school, onFinishing }: { school: SchoolDTO | null; onFinishing
               <Button type="button" variant="ghost" className="sm:mr-auto" onClick={() => go(1)}>
                 <ArrowLeft /> Back
               </Button>
-              <Button type="submit" size="lg" loading={form.formState.isSubmitting} loadingText={school ? 'Saving…' : 'Creating your school…'}>
-                Save &amp; continue <ArrowRight />
+              <Button type="submit" size="lg" loading={form.formState.isSubmitting} loadingText={school ? 'Saving…' : 'Creating Your School…'}>
+                Save &amp; Continue <ArrowRight />
               </Button>
             </StepActions>
           </form>

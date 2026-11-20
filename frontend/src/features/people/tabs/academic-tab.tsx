@@ -195,7 +195,7 @@ function AssignDrawer({
                   >
                     {sectionIds.length === activeSections.length && activeSections.length > 0
                       ? 'Clear'
-                      : 'Select all'}
+                      : 'Select All'}
                   </Button>
                 </div>
                 {sections.isLoading ? (
@@ -264,7 +264,7 @@ function AssignDrawer({
             >
               <Save />{' '}
               {needsSections && sectionIds.length > 1
-                ? `Assign ${sectionIds.length} sections`
+                ? `Assign ${sectionIds.length} Sections`
                 : 'Assign'}
             </Button>
           </DrawerFooter>
@@ -310,7 +310,7 @@ export function AcademicTab({ employee }: { employee: EmployeeProfileDTO }) {
         <Can permission="employee:manage">
           {canAssign && (
             <Button size="sm" onClick={() => setAssigning(true)}>
-              <Plus /> Assign classes
+              <Plus /> Assign Classes
             </Button>
           )}
         </Can>

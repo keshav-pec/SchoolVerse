@@ -156,8 +156,8 @@ function ProfileForm({ school }: { school: SchoolDTO | null }) {
         <SaveBar visible={isDirty} saving={isSubmitting} onDiscard={() => { form.reset(schoolFormValues(school)); setFormError(null); }} />
       ) : (
         <div className="flex justify-end">
-          <Button type="submit" size="lg" loading={isSubmitting} loadingText="Creating profile…">
-            <Rocket /> Create school profile
+          <Button type="submit" size="lg" loading={isSubmitting} loadingText="Creating Profile…">
+            <Rocket /> Create School Profile
           </Button>
         </div>
       )}

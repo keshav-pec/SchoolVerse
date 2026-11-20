@@ -140,7 +140,7 @@ function MasterTable({
             loading={suggesting}
             loadingText="Adding…"
           >
-            <Sparkles /> Add suggested list
+            <Sparkles /> Add Suggested List
           </Button>
           <Button size="sm" onClick={() => setAdding(true)}>
             <Plus /> Add {noun}

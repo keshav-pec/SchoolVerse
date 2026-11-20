@@ -6,7 +6,7 @@ import { Subject } from './subject.model';
 import { createSubject } from './subject.service';
 
 /**
- * System reference data (Module 2): the 15-class master, the built-in boards and one `2026-27` rule version for each.
+ * System reference data (Module 2): the 17-class master, the built-in boards and one `2026-27` rule version for each.
  * Idempotent (upserts by code), so it is safe to run on every seed and in tests.
  */
 
@@ -14,6 +14,8 @@ const CLASSES: { code: string; name: string; short: string; stage: EducationStag
   { code: 'PRE_NURSERY', name: 'Pre-Nursery', short: 'PN', stage: 'FOUNDATIONAL' },
   { code: 'NURSERY', name: 'Nursery', short: 'N', stage: 'FOUNDATIONAL' },
   { code: 'KG', name: 'KG', short: 'KG', stage: 'FOUNDATIONAL' },
+  { code: 'LKG', name: 'LKG', short: 'LKG', stage: 'FOUNDATIONAL' },
+  { code: 'UKG', name: 'UKG', short: 'UKG', stage: 'FOUNDATIONAL' },
   ...Array.from({ length: 12 }, (_, i) => {
     const n = i + 1;
     const stage: EducationStage = n <= 2 ? 'FOUNDATIONAL' : n <= 5 ? 'PREPARATORY' : n <= 8 ? 'MIDDLE' : 'SECONDARY';
@@ -41,7 +43,7 @@ export async function seedReferenceData() {
           shortCode: g.short,
           sequenceNumber: index + 1,
           educationStage: g.stage,
-          isPrePrimary: index < 3,
+          isPrePrimary: !/^G\d{2}$/.test(g.code), // everything before Class 1
           isBoardClass: g.code === 'G10' || g.code === 'G12',
         },
         $setOnInsert: { _id: randomUUID() },

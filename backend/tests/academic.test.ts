@@ -31,14 +31,14 @@ describe('reference data (AS-01, AS-03)', () => {
 
     for (const agent of [a.agent, b.agent]) {
       const classes = (await agent.get(`${API}/classes`).expect(200)).body.data as ClassMasterDTO[];
-      expect(classes).toHaveLength(15);
-      expect(classes.map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)]);
+      expect(classes).toHaveLength(17);
+      expect(classes.map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG', 'LKG', 'UKG', ...Array.from({ length: 12 }, (_, i) => `G${String(i + 1).padStart(2, '0')}`)]);
       const stage = (code: string) => classes.find((g) => g.canonicalCode === code)!.educationStage;
       expect([stage('KG'), stage('G02'), stage('G03'), stage('G05'), stage('G06'), stage('G08'), stage('G09'), stage('G12')]).toEqual([
         'FOUNDATIONAL', 'FOUNDATIONAL', 'PREPARATORY', 'PREPARATORY', 'MIDDLE', 'MIDDLE', 'SECONDARY', 'SECONDARY',
       ]);
       expect(classes.filter((g) => g.isBoardClass).map((g) => g.canonicalCode)).toEqual(['G10', 'G12']);
-      expect(classes.filter((g) => g.isPrePrimary).map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG']);
+      expect(classes.filter((g) => g.isPrePrimary).map((g) => g.canonicalCode)).toEqual(['PRE_NURSERY', 'NURSERY', 'KG', 'LKG', 'UKG']);
 
       const boards = (await agent.get(`${API}/boards`).expect(200)).body.data as BoardDTO[];
       expect(boards.map((x) => x.boardCode).sort()).toEqual(['CBSE', 'CISCE', 'CUSTOM', 'PSEB', 'STATE_TEST']);
@@ -268,6 +268,56 @@ describe('academic sessions (AS-02)', () => {
 });
 
 describe('class offerings and sections (AS-03, AS-04)', () => {
+  it('QA 5c: sets up the same sections for every class in one go, skipping what a class already has, then classes are adjusted one by one', async () => {
+    const t = await draftSession();
+    const classes = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.NURSERY!, t.ref.classId.G02!, t.ref.classId.G03!]);
+    const [nursery, g2, g3] = classes.map((g) => g.classOfferingId) as [string, string, string];
+    // Class 2 already has B, entered by hand.
+    await t.agent.post(`${API}/class-offerings/${g2}/sections`).send({ codes: ['B'] }).expect(201);
+
+    const url = `${t.sessionUrl}/class-offerings/sections`;
+    const result = (await t.agent.post(url).send({ locationId: t.moh.locationId, codes: ['a', 'B', 'C'] }).expect(201)).body.data;
+    expect(result).toEqual({ classes: 3, classesChanged: 3, sectionsAdded: 8, sectionsSkipped: 1 });
+
+    const codes = async (id: string) => ((await t.agent.get(`${API}/class-offerings/${id}/sections`).expect(200)).body.data as { sectionCode: string }[]).map((s) => s.sectionCode);
+    expect(await codes(nursery)).toEqual(['A', 'B', 'C']);
+    expect(await codes(g2)).toEqual(['B', 'A', 'C']); // the existing B keeps its place; new ones follow
+    expect(await codes(g3)).toEqual(['A', 'B', 'C']);
+
+    // Pressing it again changes nothing.
+    expect((await t.agent.post(url).send({ locationId: t.moh.locationId, codes: ['A', 'B', 'C'] }).expect(201)).body.data).toMatchObject({ classesChanged: 0, sectionsAdded: 0, sectionsSkipped: 9 });
+
+    // One-by-one changes still work: add D to one class only.
+    await t.agent.post(`${API}/class-offerings/${g3}/sections`).send({ codes: ['D'] }).expect(201);
+    expect(await codes(g3)).toEqual(['A', 'B', 'C', 'D']);
+    expect(await codes(nursery)).toEqual(['A', 'B', 'C']);
+
+    // Repeated codes in the request, and a location with no classes, are refused.
+    expectError(await t.agent.post(url).send({ locationId: t.moh.locationId, codes: ['A', 'a'] }), 409, 'SECTION_CODE_TAKEN');
+    expectError(await t.agent.post(url).send({ locationId: t.chd.locationId, codes: ['A'] }), 400, 'VALIDATION_FAILED');
+  });
+
+  it('QA 5b: a school can give a class its own name and code when adding it', async () => {
+    const t = await draftSession();
+    const { classId } = t.ref;
+    const created = (
+      await t.agent
+        .post(`${t.sessionUrl}/class-offerings`)
+        .send({ locationId: t.moh.locationId, classIds: [classId.NURSERY, classId.G02], labels: { [classId.NURSERY!]: { displayName: 'Playgroup', displayCode: 'PG' } } })
+        .expect(201)
+    ).body.data;
+    expect(created).toMatchObject([
+      { displayName: 'Playgroup', displayCode: 'PG', canonicalCode: 'NURSERY' }, // renamed, same master class underneath
+      { displayName: 'Class 2', displayCode: '2' }, // not renamed, standard name
+    ]);
+    // Blank names are refused.
+    expectError(
+      await t.agent.post(`${t.sessionUrl}/class-offerings`).send({ locationId: t.moh.locationId, classIds: [classId.G03], labels: { [classId.G03!]: { displayName: ' ', displayCode: '3' } } }),
+      400,
+      'VALIDATION_FAILED',
+    );
+  });
+
   it('QA 5: adds classes in bulk with default labels, then sections in bulk', async () => {
     const t = await draftSession();
     const classes = await addClasses(t.agent, t.id, t.moh.locationId, [t.ref.classId.G03!, t.ref.classId.NURSERY!, t.ref.classId.G02!]);

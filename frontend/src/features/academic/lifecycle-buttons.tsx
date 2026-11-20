@@ -75,7 +75,7 @@ export function LifecycleButtons({ session, validationErrors, only }: { session:
         )}
         {session.status === 'ACTIVE' && can('academic:publish') && (
           <Button variant="outline" onClick={() => setDialog('close')}>
-            <Lock /> Close session
+            <Lock /> Close Session
           </Button>
         )}
         {session.status === 'CLOSED' && can('academic:publish') && (

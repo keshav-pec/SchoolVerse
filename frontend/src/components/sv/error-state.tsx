@@ -16,7 +16,7 @@ export function ErrorState({ error, onRetry, retrying }: { error: unknown; onRet
       <p className="mt-1.5 text-[15px] text-muted">{messageFor(error)}</p>
       {onRetry && !notFound && (
         <Button variant="outline" className="mt-6" onClick={onRetry} loading={retrying} loadingText="Retrying…">
-          <RefreshCw /> Try again
+          <RefreshCw /> Try Again
         </Button>
       )}
     </div>

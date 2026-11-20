@@ -75,7 +75,7 @@ function BoardCodes({ subject }: { subject: SubjectDTO }) {
             }
           }}
         >
-          Save code
+          Save Code
         </Button>
       </div>
       {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
@@ -152,7 +152,7 @@ function SubjectDrawer({ open, onOpenChange, subject }: { open: boolean; onOpenC
         </DrawerBody>
         <DrawerFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} loading={save.isPending} loadingText="Saving…">{subject ? 'Save changes' : 'Add subject'}</Button>
+          <Button onClick={submit} loading={save.isPending} loadingText="Saving…">{subject ? 'Save Changes' : 'Add Subject'}</Button>
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
@@ -190,7 +190,7 @@ export function SubjectsPage() {
         actions={
           <Can permission="academic:manage">
             <Button onClick={() => { setEditing(null); setOpen(true); }}>
-              <Plus /> Add subject
+              <Plus /> Add Subject
             </Button>
           </Can>
         }

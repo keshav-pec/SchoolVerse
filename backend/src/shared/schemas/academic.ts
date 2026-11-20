@@ -180,6 +180,8 @@ export const createClassOfferingsSchema = z.object({
   locationId: uuidSchema,
   classIds: uuidList('Classes', 20),
   medium: optionalText(50),
+  /** Optional school-specific names, keyed by class id (e.g. "KG" → "Playgroup"). Classes left out keep the standard name. */
+  labels: z.record(uuidSchema, z.object({ displayName: requiredText('Display name', 60), displayCode: requiredText('Display code', 20) })).optional(),
 });
 export type CreateClassOfferingsData = z.output<typeof createClassOfferingsSchema>;
 
@@ -205,6 +207,10 @@ export const createSectionsSchema = z.object({
   capacity: optionalInt('Capacity', 1, 10000),
 });
 export type CreateSectionsData = z.output<typeof createSectionsSchema>;
+
+/** Gives every class at one location the same sections in one go. Codes a class already has are skipped. */
+export const applySectionsToAllSchema = createSectionsSchema.extend({ locationId: uuidSchema });
+export type ApplySectionsToAllData = z.output<typeof applySectionsToAllSchema>;
 
 export const SECTION_EDITABLE_FIELDS = ['displayName', 'capacity', 'sequenceOrder', 'status'] as const;
 

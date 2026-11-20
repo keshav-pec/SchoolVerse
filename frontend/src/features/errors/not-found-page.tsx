@@ -11,7 +11,7 @@ export function NotFoundPage() {
         <h1 className="mt-2 text-[28px] font-extrabold">Lost in the SchoolVerse 🪐</h1>
         <p className="mt-2 text-[15px] text-muted">The page you’re looking for drifted out of orbit. Let’s get you back to familiar ground.</p>
         <Button asChild className="mt-6">
-          <Link to="/">Take me home</Link>
+          <Link to="/">Take Me Home</Link>
         </Button>
       </div>
     </div>

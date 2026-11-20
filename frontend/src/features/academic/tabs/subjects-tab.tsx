@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Copy, Link2, Plus, Trash2, Unlink } from 'lucide-react';
+import { Link } from 'react-router';
+import { ArrowRight, Copy, Link2, Plus, Trash2, Unlink } from 'lucide-react';
 import { SUBJECT_OFFERING_TYPES, SUBJECT_OFFERING_TYPE_LABELS, type SubjectOfferingDTO, type SubjectOfferingType } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -95,12 +96,12 @@ function Offerings({ classOfferingId, sessionId, locationId, readOnly, draft }: 
                 )}
                 {!readOnly && mapping && !o.boardSubjectDefinitionId && (
                   <Button variant="outline" size="sm" onClick={() => patch.mutate({ id: o.subjectOfferingId, body: { boardSubjectDefinitionId: mapping.definitionId } })}>
-                    <Link2 /> Map to {mapping.boardSubjectCode}
+                    <Link2 /> Map To {mapping.boardSubjectCode}
                   </Button>
                 )}
                 {!readOnly && o.boardSubjectDefinitionId && (
                   <Button variant="ghost" size="sm" onClick={() => patch.mutate({ id: o.subjectOfferingId, body: { boardSubjectDefinitionId: null } })}>
-                    <Unlink /> Unlink board code
+                    <Unlink /> Unlink Board Code
                   </Button>
                 )}
                 <StatusToggle status={o.status} label={o.subjectName} disabled={readOnly} onToggle={() => patch.mutate({ id: o.subjectOfferingId, body: { status: o.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } })} />
@@ -125,7 +126,7 @@ function Offerings({ classOfferingId, sessionId, locationId, readOnly, draft }: 
                 help={
                   <>
                     <p>Tick the subjects taught in this class, choose their type, then press Add.</p>
-                    <p>The list comes from your school’s subject list (Academic Structure). Missing a subject? Add it there first.</p>
+                    <p>The list comes from your school’s Subject Master. Missing a subject? <Link to="/academics/subjects" className="font-semibold text-brand underline">Add it in the Subject Master</Link> first.</p>
                     <p><b>Board code</b>: the code your board (e.g. CBSE) uses for the subject. It links on its own when one is known.</p>
                   </>
                 }
@@ -176,24 +177,26 @@ function Offerings({ classOfferingId, sessionId, locationId, readOnly, draft }: 
                 }
               }}
             >
-              <Plus /> Add {picked.size || ''} subject{picked.size === 1 ? '' : 's'}
+              <Plus /> Add {picked.size || ''} Subject{picked.size === 1 ? '' : 's'}
             </Button>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-end gap-3 border-t border-line pt-4">
-            <ComboboxField
-              containerClassName="w-64"
-              label="Copy from another class"
-              value={copyFrom}
-              onChange={setCopyFrom}
-              hint="Only when you ask. Nothing is copied automatically."
-              placeholder="Choose a class…"
-              options={(classes.data ?? []).filter((g) => g.classOfferingId !== classOfferingId).map((g) => ({ value: g.classOfferingId, label: g.displayName }))}
-              searchPlaceholder="Search classes…"
-            />
-            <Button variant="outline" disabled={!copyFrom} loading={copy.isPending} loadingText="Copying…" onClick={() => copy.mutate(copyFrom)}>
-              <Copy /> Copy subjects
-            </Button>
+          <div className="mt-6 border-t border-line pt-4">
+            <div className="flex items-end gap-3">
+              <ComboboxField
+                containerClassName="w-64"
+                label="Copy from another class"
+                value={copyFrom}
+                onChange={setCopyFrom}
+                placeholder="Choose a class…"
+                options={(classes.data ?? []).filter((g) => g.classOfferingId !== classOfferingId).map((g) => ({ value: g.classOfferingId, label: g.displayName }))}
+                searchPlaceholder="Search classes…"
+              />
+              <Button variant="outline" size="icon" aria-label="Copy subjects" title="Copy subjects" disabled={!copyFrom} loading={copy.isPending} onClick={() => copy.mutate(copyFrom)}>
+                <Copy />
+              </Button>
+            </div>
+            <p className="mt-2 text-sm text-muted">Only when you ask. Nothing is copied automatically.</p>
           </div>
         </Card>
       )}
@@ -203,15 +206,34 @@ function Offerings({ classOfferingId, sessionId, locationId, readOnly, draft }: 
 
 export function SubjectsTab({ sessionId, locationId, readOnly, status }: TabProps) {
   const [classOfferingId, setClassOfferingId] = useState('');
+  const masterSubjects = useSubjects({ status: 'ACTIVE' }, 200);
+  const masterEmpty = !readOnly && masterSubjects.isSuccess && masterSubjects.data.items.length === 0;
   return (
     <div className="space-y-5">
       <TabIntro title="Subjects" need="required">
         <p>List the subjects taught in each class. Pick a class, then tick its subjects. Every class needs at least one subject.</p>
-        <p>Tip: once one class is done, use “Copy from another class” to save time.</p>
+        <p><b>First time?</b> Subjects are chosen from your school’s subject list (the Subject Master). Add them there first, then come back here.</p>
+        <p><b>Tip:</b> Once one class is done, use “Copy from another class” to save time.</p>
       </TabIntro>
-      <ClassPicker sessionId={sessionId} locationId={locationId} value={classOfferingId} onChange={setClassOfferingId}>
-        {(id) => <Offerings key={id} classOfferingId={id} sessionId={sessionId} locationId={locationId} readOnly={readOnly} draft={status === 'DRAFT'} />}
-      </ClassPicker>
+      {masterEmpty ? (
+        <Card>
+          <EmptyState
+            title="Add your school’s subjects first"
+            description="Your subject list is empty, so there is nothing to pick here yet. Add subjects like English or Maths to the Subject Master, then come back to this tab and choose them for each class."
+            action={
+              <Button asChild>
+                <Link to="/academics/subjects">
+                  Go To Subject Master <ArrowRight />
+                </Link>
+              </Button>
+            }
+          />
+        </Card>
+      ) : (
+        <ClassPicker sessionId={sessionId} locationId={locationId} value={classOfferingId} onChange={setClassOfferingId}>
+          {(id) => <Offerings key={id} classOfferingId={id} sessionId={sessionId} locationId={locationId} readOnly={readOnly} draft={status === 'DRAFT'} />}
+        </ClassPicker>
+      )}
     </div>
   );
 }

@@ -112,7 +112,7 @@ export function LocationsPage() {
             action={
               <Can permission="school:edit" fallback={<p className="text-sm text-muted">Your School Admin is still setting things up.</p>}>
                 <Button asChild>
-                  <Link to="/school-setup/profile">Create school profile</Link>
+                  <Link to="/school-setup/profile">Create School Profile</Link>
                 </Button>
               </Can>
             }
@@ -225,7 +225,7 @@ export function LocationsPage() {
                 variant="outline"
                 onClick={clearAll}
               >
-                <X /> Clear filters
+                <X /> Clear Filters
               </Button>
             }
           />

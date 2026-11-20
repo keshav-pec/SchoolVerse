@@ -167,7 +167,7 @@ function ProgrammeForm({ sessionId, locationId }: { sessionId: string; locationI
           }
         }}
       >
-        <Plus /> Add programme
+        <Plus /> Add Programme
       </Button>
     </Card>
   );

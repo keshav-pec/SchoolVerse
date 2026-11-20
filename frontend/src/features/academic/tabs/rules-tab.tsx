@@ -84,7 +84,7 @@ function GroupForm({ classOfferingId, offerings }: { classOfferingId: string; of
           }
         }}
       >
-        <Plus /> Add group
+        <Plus /> Add Group
       </Button>
     </Card>
   );
@@ -158,7 +158,7 @@ function ConstraintForm({ classOfferingId, offerings }: { classOfferingId: strin
           }
         }}
       >
-        <Plus /> Add rule
+        <Plus /> Add Rule
       </Button>
       {error && <Alert tone="danger" className="sm:col-span-4">{error}</Alert>}
     </div>

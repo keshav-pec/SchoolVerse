@@ -79,7 +79,7 @@ export function ForgotPasswordPage() {
               loading={isSubmitting}
               loadingText="Sending…"
             >
-              <Send /> Send reset link
+              <Send /> Send Reset Link
             </Button>
           </form>
           <DevOutboxHint />

@@ -56,7 +56,7 @@ export function NextSteps({
           variant="outline"
           onClick={() => onGoTo(isFaculty ? 'academic' : 'responsibilities')}
         >
-          {isFaculty ? 'Assign classes' : 'Add responsibility'}
+          {isFaculty ? 'Assign Classes' : 'Add Responsibility'}
         </Button>
       ),
     },
@@ -67,7 +67,7 @@ export function NextSteps({
       done: (documents.data ?? []).length > 0,
       action: (
         <Button size="sm" variant="outline" onClick={() => onGoTo('documents')}>
-          Upload documents
+          Upload Documents
         </Button>
       ),
     },
@@ -78,7 +78,7 @@ export function NextSteps({
       done: !!account.data?.account,
       action: (
         <Button size="sm" variant="outline" onClick={() => onGoTo('account')}>
-          Create login
+          Create Login
         </Button>
       ),
     },

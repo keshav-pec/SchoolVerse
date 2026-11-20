@@ -47,7 +47,7 @@ export function ValidationPanel({ result, onGoTo }: { result: ValidationResultDT
                     <span className="min-w-0 flex-1">{issue.message}</span>
                     {tab && tab !== 'overview' && (
                       <Button variant="ghost" size="sm" onClick={() => onGoTo(tab)}>
-                        Go to {TAB_LABELS[tab]} <ArrowRight />
+                        Go To {TAB_LABELS[tab]} <ArrowRight />
                       </Button>
                     )}
                   </li>

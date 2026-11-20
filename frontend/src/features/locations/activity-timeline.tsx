@@ -172,7 +172,7 @@ export function ActivityTimeline({
             loading={q.isFetchingNextPage}
             loadingText="Loading…"
           >
-            Load older activity
+            Load Older Activity
           </Button>
         </div>
       )}

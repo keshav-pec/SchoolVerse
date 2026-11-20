@@ -9,7 +9,7 @@ export function ForbiddenPage({ message }: { message?: string }) {
       <h1 className="mt-4 text-2xl font-extrabold">This area is for school administrators</h1>
       <p className="mt-2 text-[15px] text-muted">{message ?? 'Your role doesn’t include access to this page. If you think that’s a mistake, ask your School Admin.'}</p>
       <Button asChild variant="outline" className="mt-6">
-        <Link to="/">Back to home</Link>
+        <Link to="/">Back To Home</Link>
       </Button>
     </div>
   );

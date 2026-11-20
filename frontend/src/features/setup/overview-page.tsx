@@ -131,11 +131,11 @@ function ActivityFeed() {
         <Button variant="ghost" size="sm" className="mt-3 w-full" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
           {expanded ? (
             <>
-              Show less <ChevronUp />
+              Show Less <ChevronUp />
             </>
           ) : (
             <>
-              Show {hidden} more <ChevronDown />
+              Show {hidden} More <ChevronDown />
             </>
           )}
         </Button>
@@ -241,7 +241,7 @@ export function OverviewPage() {
               {nextStep.href && (
                 <Button asChild className="mt-4 w-full">
                   <Link to={nextStep.href}>
-                    Take me there <ArrowRight />
+                    Take Me There <ArrowRight />
                   </Link>
                 </Button>
               )}

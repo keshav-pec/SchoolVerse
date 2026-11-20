@@ -418,7 +418,7 @@ export function AddEmployeeDrawer({
                   loading={create.isPending}
                   loadingText="Saving…"
                 >
-                  <UserPlus /> Save employee
+                  <UserPlus /> Save Employee
                 </Button>
               )}
             </DrawerFooter>

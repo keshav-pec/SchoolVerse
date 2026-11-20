@@ -102,7 +102,7 @@ export function AcademicsPage() {
         <>
           <Button asChild variant="outline">
             <Link to="/academics/subjects">
-              <Library /> Subject master
+              <Library /> Subject Master
             </Link>
           </Button>
           <Can permission="academic:manage">
@@ -177,7 +177,7 @@ export function AcademicsPage() {
             <SessionPill status={focus.status} />
             <Button asChild>
               <Link to={`/academics/sessions/${focus.academicSessionId}`}>
-                Open setup <ArrowRight />
+                Open Setup <ArrowRight />
               </Link>
             </Button>
           </Card>

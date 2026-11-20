@@ -26,7 +26,7 @@ export function SaveBar({ visible, saving, onDiscard }: { visible: boolean; savi
                 <Undo2 /> Discard
               </Button>
               <Button type="submit" variant="sun" size="sm" loading={saving} loadingText="Saving…">
-                Save changes
+                Save Changes
               </Button>
             </div>
           </div>

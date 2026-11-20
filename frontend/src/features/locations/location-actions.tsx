@@ -139,7 +139,7 @@ export function LocationActions({ location, schoolId, deletable, currentPrimaryN
             </span>
             {allowed.choosePrimary && (
               <Button variant="secondary" size="sm" onClick={() => setDialog('choose-primary')}>
-                <Crown /> Choose new primary
+                <Crown /> Choose New Primary
               </Button>
             )}
           </div>

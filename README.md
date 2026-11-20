@@ -77,7 +77,7 @@ The seed also creates each tenant's School Master and the PRD §19 location data
 | Chandigarh Campus | CHD | No | Active |
 | Panchkula Campus | PKL | No | Draft |
 
-**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (classes Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Class VI language choice group, Class XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 15-class master are built-in reference data shared by every school.
+**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (classes Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Class VI language choice group, Class XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 17-class master are built-in reference data shared by every school.
 
 Greenfield's first-time setup is **completed**, so its admin goes straight to the app. Riverside Academy has one active campus that reuses the code `MOH` (codes only have to be unique within a school) and an unfinished setup. A workspace you create through **Sign up** always starts in the wizard.
 

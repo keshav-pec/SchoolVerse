@@ -115,6 +115,61 @@ describe('bulk section add', () => {
   });
 });
 
+describe('sections for all classes', () => {
+  it('sends the codes once for the whole location and says what changed', async () => {
+    const mock = mockApi('SCHOOL_ADMIN', {
+      [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [schoolClass, { ...schoolClass, classOfferingId: 'go2', classId: 'g9', displayName: 'Class IX' }] },
+      [`GET ${API}/classes`]: { data: [] },
+      [`POST ${API}/academic-sessions/${SID}/class-offerings/sections`]: { status: 201, data: { classes: 2, classesChanged: 2, sectionsAdded: 5, sectionsSkipped: 1 } },
+    });
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
+    await userEvent.type(await screen.findByLabelText(/sections to add to all classes/i), 'a, b c');
+    await userEvent.click(screen.getByRole('button', { name: /apply to all 2 classes/i }));
+    await waitFor(() => expect(mock.callsTo(`/academic-sessions/${SID}/class-offerings/sections`, 'POST')).toHaveLength(1));
+    expect(mock.callsTo(`/academic-sessions/${SID}/class-offerings/sections`, 'POST')[0]?.body).toEqual({ locationId: LOC, codes: ['A', 'B', 'C'] });
+  });
+
+  it('is hidden when the session is read-only or there are no classes yet', async () => {
+    mockApi('FACULTY', { [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [schoolClass] } });
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly status="ACTIVE" />);
+    await screen.findByText('Class VIII');
+    expect(screen.queryByLabelText(/sections to add to all classes/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('add classes', () => {
+  const master = ['pn', 'kg', 'lkg'].map((id, i) => ({ classId: id, canonicalCode: id.toUpperCase(), canonicalName: { pn: 'Pre-Nursery', kg: 'KG', lkg: 'LKG' }[id]!, shortCode: id.toUpperCase(), sequenceNumber: i + 1, educationStage: 'FOUNDATIONAL', isPrePrimary: true, isBoardClass: false }));
+
+  it('Select all ticks every class that is not added yet, Clear unticks them', async () => {
+    mockApi('SCHOOL_ADMIN', { [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [] }, [`GET ${API}/classes`]: { data: master } });
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
+    await userEvent.click(await screen.findByRole('button', { name: /^select all$/i }));
+    expect(screen.getByRole('button', { name: /add 3 classes/i })).toBeEnabled();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'KG' }));
+    expect(screen.getByRole('button', { name: /add 2 classes/i })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+    expect(screen.getByRole('button', { name: /^add\s+classes$/i })).toBeDisabled();
+  });
+
+  it('sends only the classes the school renamed', async () => {
+    const mock = mockApi('SCHOOL_ADMIN', {
+      [`GET ${API}/academic-sessions/${SID}/class-offerings`]: { data: [] },
+      [`GET ${API}/classes`]: { data: master },
+      [`POST ${API}/academic-sessions/${SID}/class-offerings`]: { status: 201, data: [] },
+    });
+    renderWithApp(<ClassesTab sessionId={SID} locationId={LOC} readOnly={false} status="DRAFT" />);
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Pre-Nursery' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'KG' }));
+    const name = screen.getByLabelText('Name for Pre-Nursery');
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Playgroup');
+    await userEvent.click(screen.getByRole('button', { name: /add 2 classes/i }));
+    await waitFor(() => expect(mock.callsTo(`/academic-sessions/${SID}/class-offerings`, 'POST')).toHaveLength(1));
+    expect(mock.callsTo(`/academic-sessions/${SID}/class-offerings`, 'POST')[0]?.body).toMatchObject({ classIds: ['pn', 'kg'], labels: { pn: { displayName: 'Playgroup', displayCode: 'PN' } } });
+    expect((mock.callsTo(`/academic-sessions/${SID}/class-offerings`, 'POST')[0]?.body as { labels: object }).labels).not.toHaveProperty('kg');
+  });
+});
+
 describe('plain-language help', () => {
   it('Subject Choice Rules says it is optional, and the "i" card explains a choice group on tap', async () => {
     mockApi('SCHOOL_ADMIN', {

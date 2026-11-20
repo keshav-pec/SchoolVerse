@@ -59,7 +59,7 @@ export function LogoUploader({ school, previewName, canEdit }: { school: SchoolD
           <div className="mt-2.5 flex flex-wrap gap-2">
             <input ref={input} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label="Choose logo file" onChange={(e) => void onPick(e.target.files?.[0])} />
             <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
-              <ImagePlus /> {school.logoUrl ? 'Replace logo' : 'Upload logo'}
+              <ImagePlus /> {school.logoUrl ? 'Replace Logo' : 'Upload Logo'}
             </Button>
             {school.logoUrl && (
               <Button

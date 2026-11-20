@@ -216,8 +216,8 @@ export function AddLocationDrawer({ open, onOpenChange, school, isFirst, onCreat
                 </Button>
               ) : (
                 <>
-                  <Button type="button" variant="outline" onClick={() => void submit('DRAFT')} loading={create.isPending && values.intent === 'DRAFT'} loadingText="Saving draft…" disabled={create.isPending}>
-                    <Save /> Save as Draft
+                  <Button type="button" variant="outline" onClick={() => void submit('DRAFT')} loading={create.isPending && values.intent === 'DRAFT'} loadingText="Saving Draft…" disabled={create.isPending}>
+                    <Save /> Save As Draft
                   </Button>
                   {canActivate && (
                     <Button type="button" onClick={() => void submit('ACTIVE')} loading={create.isPending && values.intent === 'ACTIVE'} loadingText="Activating…" disabled={create.isPending || missingCount > 0} title={missingCount > 0 ? 'Complete the required details first' : undefined}>

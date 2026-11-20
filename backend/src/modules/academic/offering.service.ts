@@ -4,6 +4,8 @@ import {
   SECTION_EDITABLE_FIELDS,
   SUBJECT_OFFERING_EDITABLE_FIELDS,
   type CreateClassOfferingsData,
+  type ApplySectionsResult,
+  type ApplySectionsToAllData,
   type CreateSectionsData,
   type CreateSubjectOfferingsData,
   type ClassOfferingDTO,
@@ -154,8 +156,8 @@ export async function createClassOfferings(ctx: ServiceContext, academicSessionI
             sessionId: academicSessionId,
             locationId: data.locationId,
             classId: schoolClass._id,
-            displayName: schoolClass.canonicalName,
-            displayCode: schoolClass.shortCode,
+            displayName: data.labels?.[schoolClass._id]?.displayName ?? schoolClass.canonicalName,
+            displayCode: data.labels?.[schoolClass._id]?.displayCode ?? schoolClass.shortCode,
             medium: data.medium ?? null,
             sequenceOrder: schoolClass.sequenceNumber,
             status: 'ACTIVE',
@@ -266,6 +268,44 @@ function sectionCodeTaken(codes: string[]) {
   });
 }
 
+/** Adds `codes` (already checked as free) to one class, inside the caller's transaction. */
+async function insertSections(ctx: ServiceContext, db: ClientSession, offering: ClassOfferingDoc, codes: string[], capacity: number | null, startAfter: number): Promise<SectionOfferingDoc[]> {
+  let order = startAfter;
+  const created: SectionOfferingDoc[] = [];
+  for (const code of codes) {
+    order += 1;
+    const [doc] = await SectionOffering.create(
+      [
+        {
+          tenantId: ctx.tenantId,
+          classOfferingId: offering._id,
+          sessionId: offering.sessionId,
+          locationId: offering.locationId,
+          sectionCode: code,
+          displayName: code,
+          capacity,
+          sequenceOrder: order,
+          status: 'ACTIVE',
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        },
+      ],
+      { session: db },
+    );
+    const section = doc!.toObject() as SectionOfferingDoc;
+    created.push(section);
+    await recordAcademicAudit(ctx, db, {
+      entityType: 'section_offering',
+      entityId: section._id,
+      action: 'section.created',
+      changes: [{ field: 'sectionCode', from: null, to: section.sectionCode }, ...diffFields({}, section, ['capacity'])],
+      academicSessionId: offering.sessionId,
+      metadata: { classOfferingId: offering._id, locationId: offering.locationId },
+    });
+  }
+  return created;
+}
+
 export async function createSections(ctx: ServiceContext, classOfferingId: string, data: CreateSectionsData): Promise<SectionOfferingDTO[]> {
   const repeated = data.codes.filter((c, i) => data.codes.indexOf(c) !== i);
   if (repeated.length > 0) throw sectionCodeTaken([...new Set(repeated)]);
@@ -278,41 +318,37 @@ export async function createSections(ctx: ServiceContext, classOfferingId: strin
     const taken = data.codes.filter((c) => existing.some((e) => e.sectionCode === c));
     if (taken.length > 0) throw sectionCodeTaken(taken);
 
-    let order = existing.reduce((max, e) => Math.max(max, e.sequenceOrder), 0);
-    const created: SectionOfferingDoc[] = [];
-    for (const code of data.codes) {
-      order += 1;
-      const [doc] = await SectionOffering.create(
-        [
-          {
-            tenantId: ctx.tenantId,
-            classOfferingId,
-            sessionId: offering.sessionId,
-            locationId: offering.locationId,
-            sectionCode: code,
-            displayName: code,
-            capacity: data.capacity ?? null,
-            sequenceOrder: order,
-            status: 'ACTIVE',
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
-          },
-        ],
-        { session: db },
-      );
-      const section = doc!.toObject() as SectionOfferingDoc;
-      created.push(section);
-      await recordAcademicAudit(ctx, db, {
-        entityType: 'section_offering',
-        entityId: section._id,
-        action: 'section.created',
-        changes: [{ field: 'sectionCode', from: null, to: section.sectionCode }, ...diffFields({}, section, ['capacity'])],
-        academicSessionId: offering.sessionId,
-        metadata: { classOfferingId, locationId: offering.locationId },
-      });
-    }
+    const created = await insertSections(ctx, db, offering, data.codes, data.capacity ?? null, existing.reduce((max, e) => Math.max(max, e.sequenceOrder), 0));
     return created.map(toSectionDTO);
   }).catch(onDuplicate('sectionCode', () => sectionCodeTaken(data.codes)));
+}
+
+/** Sets up the same sections for every class at a location in one step. Existing sections are never changed or duplicated. */
+export async function applySectionsToAllClasses(ctx: ServiceContext, academicSessionId: string, data: ApplySectionsToAllData): Promise<ApplySectionsResult> {
+  const repeated = data.codes.filter((c, i) => data.codes.indexOf(c) !== i);
+  if (repeated.length > 0) throw sectionCodeTaken([...new Set(repeated)]);
+
+  return withTransaction(async (db) => {
+    const session = await getSessionOrThrow(ctx, academicSessionId, db);
+    await assertEditable(session, {}, db);
+    if (!pinnedRuleVersionId(session, data.locationId)) throw new AppError('LOCATION_NOT_IN_SESSION', undefined, { locationId: data.locationId });
+
+    const classes = await ClassOffering.find({ tenantId: ctx.tenantId, sessionId: academicSessionId, locationId: data.locationId }).sort({ sequenceOrder: 1, _id: 1 }).session(db).lean<ClassOfferingDoc[]>();
+    if (classes.length === 0) throw new AppError('VALIDATION_FAILED', 'Add classes to this location first.', { fields: { codes: 'Add classes to this location first.' } });
+
+    const existing = await SectionOffering.find({ tenantId: ctx.tenantId, classOfferingId: { $in: classes.map((g) => g._id) } }).select('classOfferingId sectionCode sequenceOrder').session(db).lean<SectionOfferingDoc[]>();
+    const result: ApplySectionsResult = { classes: classes.length, classesChanged: 0, sectionsAdded: 0, sectionsSkipped: 0 };
+    for (const schoolClass of classes) {
+      const have = existing.filter((e) => e.classOfferingId === schoolClass._id);
+      const missing = data.codes.filter((c) => !have.some((e) => e.sectionCode === c));
+      result.sectionsSkipped += data.codes.length - missing.length;
+      if (missing.length === 0) continue;
+      const created = await insertSections(ctx, db, schoolClass, missing, data.capacity ?? null, have.reduce((max, e) => Math.max(max, e.sequenceOrder), 0));
+      result.classesChanged += 1;
+      result.sectionsAdded += created.length;
+    }
+    return result;
+  });
 }
 
 export async function updateSection(ctx: ServiceContext, sectionId: string, patch: UpdateSectionData): Promise<SectionOfferingDTO> {

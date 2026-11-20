@@ -156,7 +156,7 @@ function EditDrawer({ employee, onClose }: { employee: EmployeeProfileDTO; onClo
               Cancel
             </Button>
             <Button type="submit" loading={save.isPending} loadingText="Saving…">
-              <Save /> Save changes
+              <Save /> Save Changes
             </Button>
           </DrawerFooter>
         </form>

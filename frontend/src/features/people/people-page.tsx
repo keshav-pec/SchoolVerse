@@ -198,7 +198,7 @@ export function PeoplePage() {
           </Can>
           <Can permission="employee:manage">
             <Button onClick={() => setAdding(true)}>
-              <Plus /> Add employee
+              <Plus /> Add Employee
             </Button>
           </Can>
         </>
@@ -278,7 +278,7 @@ export function PeoplePage() {
             action={
               <Can permission="employee:manage">
                 <Button onClick={() => setAdding(true)}>
-                  <Plus /> Add your first team member
+                  <Plus /> Add Your First Team Member
                 </Button>
               </Can>
             }
@@ -290,7 +290,7 @@ export function PeoplePage() {
             description="Try a different search, or clear the filters."
             action={
               <Button variant="outline" onClick={clear}>
-                <X /> Clear filters
+                <X /> Clear Filters
               </Button>
             }
           />

@@ -884,3 +884,14 @@ export interface ExportResultDTO extends SignedFileLinkDTO {
   fileName: string;
   rowCount: number;
 }
+
+/** Result of giving every class at a location the same sections (AS-04). */
+export interface ApplySectionsResult {
+  /** Classes at the location. */
+  classes: number;
+  /** Classes that got at least one new section. */
+  classesChanged: number;
+  sectionsAdded: number;
+  /** Section codes that were already there and left alone. */
+  sectionsSkipped: number;
+}

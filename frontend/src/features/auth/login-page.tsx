@@ -86,9 +86,9 @@ export function LoginPage() {
           size="lg"
           className="w-full"
           loading={isSubmitting}
-          loadingText="Signing you in…"
+          loadingText="Signing You In…"
         >
-          Sign in <ArrowRight />
+          Sign In <ArrowRight />
         </Button>
       </form>
 

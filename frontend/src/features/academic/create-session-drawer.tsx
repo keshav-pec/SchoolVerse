@@ -232,7 +232,7 @@ export function CreateSessionDrawer({ open, onOpenChange, sessions, onCreated }:
             </Button>
           ) : (
             <Button onClick={submit} loading={create.isPending} loadingText="Creating…" disabled={!canCreate}>
-              Create session
+              Create Session
             </Button>
           )}
         </DrawerFooter>

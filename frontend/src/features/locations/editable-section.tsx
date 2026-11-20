@@ -102,7 +102,7 @@ export function EditableSection({ title, location, fields, view, editor, school,
               Cancel
             </Button>
             <Button type="submit" loading={update.isPending} loadingText="Saving…">
-              Save changes
+              Save Changes
             </Button>
           </div>
         </form>

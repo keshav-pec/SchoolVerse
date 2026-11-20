@@ -61,7 +61,7 @@ function EditForm({ detail, school, onClose }: { detail: LocationDetailDTO; scho
           Cancel
         </Button>
         <Button type="submit" loading={update.isPending} loadingText="Saving…">
-          Save changes
+          Save Changes
         </Button>
       </DrawerFooter>
     </form>

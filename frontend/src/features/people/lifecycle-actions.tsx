@@ -210,7 +210,7 @@ export function LifecycleActions({ employee }: Props) {
         )}
         {has('leave') && (
           <Button variant="outline" onClick={() => setOpen('leave')}>
-            <Stethoscope /> Mark on leave
+            <Stethoscope /> Mark On Leave
           </Button>
         )}
         {has('suspend') && (
@@ -220,7 +220,7 @@ export function LifecycleActions({ employee }: Props) {
         )}
         {has('cancel_exit') && (
           <Button variant="outline" onClick={() => setOpen('cancel_exit')}>
-            <RotateCcw /> Cancel exit
+            <RotateCcw /> Cancel Exit
           </Button>
         )}
         {has('exit') && (
@@ -229,7 +229,7 @@ export function LifecycleActions({ employee }: Props) {
             className="text-danger hover:border-danger"
             onClick={() => setOpen('exit')}
           >
-            <DoorOpen /> Initiate exit
+            <DoorOpen /> Initiate Exit
           </Button>
         )}
       </div>

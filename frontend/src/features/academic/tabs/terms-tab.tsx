@@ -57,9 +57,7 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
     <div className="space-y-6">
       <TabIntro title="Terms" need="optional">
         <p>
-          A <b>term</b> is a part of the school year, such as Term 1 (April to September) and Term 2 (October to March). Exams and report cards are usually planned by term.
-        </p>
-        <p>Skip this tab if you don’t split the year. You can add terms later.</p>
+          A <b>term</b> is a part of the school year, such as Term 1 (April to September) and Term 2 (October to March). Exams and report cards are usually planned by term. <b>Skip</b> this tab if you don’t split the year. You can add terms later.</p>
       </TabIntro>
       {list.length === 0 ? (
         <Card>
@@ -154,7 +152,7 @@ export function TermsTab({ session, readOnly }: { session: AcademicSessionDTO; r
               }
             }}
           >
-            <Plus /> Add term
+            <Plus /> Add Term
           </Button>
         </Card>
       )}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
-import type { ClassOfferingDTO } from '@shared';
+import type { ApplySectionsResult, ClassMasterDTO, ClassOfferingDTO } from '@shared';
 import { EmptyMap } from '@/components/illustrations/empty-map';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -87,7 +87,7 @@ function Sections({ schoolClass, readOnly, draft }: { schoolClass: ClassOffering
             )}
           </div>
           <Button type="submit" variant="secondary" loading={add.isPending} loadingText="Adding…">
-            <Plus /> Add sections
+            <Plus /> Add Sections
           </Button>
         </form>
       )}
@@ -160,7 +160,7 @@ function ClassRow({ schoolClass, readOnly, draft, queryKey }: { schoolClass: Cla
           <TextField label="Capacity" type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} hint="Most students allowed." labelAside={<InfoTip label="About capacity">The most students this class can take across all its sections. Leave it empty if there’s no limit.</InfoTip>} />
           {error && <Alert tone="danger" className="sm:col-span-4">{error}</Alert>}
           <div className="sm:col-span-4">
-            <Button type="submit" loading={save.isPending} loadingText="Saving…">Save class</Button>
+            <Button type="submit" loading={save.isPending} loadingText="Saving…">Save Class</Button>
           </div>
         </form>
       )}
@@ -179,19 +179,96 @@ function ClassRow({ schoolClass, readOnly, draft, queryKey }: { schoolClass: Cla
   );
 }
 
+/** Gives every class at this location the same sections in one step; classes that need more or fewer are adjusted one by one afterwards. */
+function SectionsForAll({ sessionId, locationId, classCount }: { sessionId: string; locationId: string; classCount: number }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const apply = useAcademicMutation((codes: string[]) => api.post<ApplySectionsResult>(`/academic-sessions/${sessionId}/class-offerings/sections`, { locationId, codes }), {
+    quiet: true,
+    success: (r) =>
+      r.sectionsAdded === 0
+        ? 'Every class already has these sections.'
+        : `Added ${r.sectionsAdded} section${r.sectionsAdded === 1 ? '' : 's'} across ${r.classesChanged} class${r.classesChanged === 1 ? '' : 'es'}.${r.sectionsSkipped > 0 ? ` ${r.sectionsSkipped} already existed and were left as they are.` : ''}`,
+  });
+
+  const submit = async () => {
+    const codes = parseCodes(text);
+    if (codes.length === 0) return setError('Enter at least one section code, e.g. A, B, C.');
+    setError(null);
+    try {
+      await apply.mutateAsync(codes);
+      setText('');
+    } catch (err) {
+      setError(messageFor(err));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <HelpHeading
+            title="Sections for all classes"
+            helpLabel="About sections for all classes"
+            help={
+              <>
+                <p>Most schools use the same sections in every class, such as A, B and C. Type them once and press <b>Apply</b> to give them to every class listed here.</p>
+                <p>Sections a class already has are left alone, so it is safe to press Apply again.</p>
+                <p>If one class needs more or fewer, open it with the arrow and add or delete sections there.</p>
+              </>
+            }
+          />
+          <CardDescription>Type the sections once and give them to all {classCount} class{classCount === 1 ? '' : 'es'} at this location.</CardDescription>
+        </div>
+      </CardHeader>
+      <form
+        className="flex flex-wrap items-start gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <div className="min-w-[220px] flex-1">
+          <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Sections: A, B, C" aria-label="Sections to add to all classes" aria-invalid={!!error || undefined} />
+          {error && (
+            <p role="alert" className="mt-1.5 text-[13px] font-medium text-danger">
+              {error}
+            </p>
+          )}
+        </div>
+        <Button type="submit" loading={apply.isPending} loadingText="Applying…">
+          <Plus /> Apply To All {classCount} Class{classCount === 1 ? '' : 'es'}
+        </Button>
+      </form>
+    </Card>
+  );
+}
+
 function AddClasses({ sessionId, locationId, taken }: { sessionId: string; locationId: string; taken: Set<string> }) {
   const master = useClassMaster();
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [medium, setMedium] = useState('');
+  // What the school typed over the standard names, by class id. Classes it never touched are absent.
+  const [typed, setTyped] = useState<Record<string, Partial<{ displayName: string; displayCode: string }>>>({});
   const [error, setError] = useState<string | null>(null);
-  const add = useAcademicMutation((_: void) => api.post(`/academic-sessions/${sessionId}/class-offerings`, { locationId, classIds: [...picked], medium: medium || null }), {
+  const all = master.data ?? [];
+  const chosen = all.filter((g) => picked.has(g.classId));
+  const nameOf = (g: ClassMasterDTO) => typed[g.classId]?.displayName ?? g.canonicalName;
+  const codeOf = (g: ClassMasterDTO) => typed[g.classId]?.displayCode ?? g.shortCode;
+  const blank = chosen.some((g) => !nameOf(g).trim() || !codeOf(g).trim());
+  // Only classes that were actually renamed are sent; the rest keep the standard name.
+  const labels = Object.fromEntries(
+    chosen.filter((g) => nameOf(g).trim() !== g.canonicalName || codeOf(g).trim() !== g.shortCode).map((g) => [g.classId, { displayName: nameOf(g).trim(), displayCode: codeOf(g).trim() }]),
+  );
+  const add = useAcademicMutation((_: void) => api.post(`/academic-sessions/${sessionId}/class-offerings`, { locationId, classIds: [...picked], medium: medium || null, labels }), {
     quiet: true,
     success: 'Classes added.',
   });
-  const all = master.data ?? [];
+  const setField = (g: ClassMasterDTO, patch: Partial<{ displayName: string; displayCode: string }>) => setTyped((cur) => ({ ...cur, [g.classId]: { ...cur[g.classId], ...patch } }));
   const toggle = (id: string) => setPicked((cur) => (cur.has(id) ? new Set([...cur].filter((x) => x !== id)) : new Set([...cur, id])));
-  // Nursery to XII: everything except Pre-Nursery.
-  const quickPick = () => setPicked(new Set(all.filter((g) => g.canonicalCode !== 'PRE_NURSERY' && !taken.has(g.classId)).map((g) => g.classId)));
+  const available = all.filter((g) => !taken.has(g.classId));
+  const selectAll = () => setPicked(new Set(available.map((g) => g.classId)));
+  const clearAll = () => setPicked(new Set());
 
   return (
     <Card>
@@ -202,7 +279,9 @@ function AddClasses({ sessionId, locationId, taken }: { sessionId: string; locat
             helpLabel="How to add classes"
             help={
               <>
-                <p>Tick every class taught at this location, or press <b>Nursery–XII</b> to tick them all at once. Then press Add.</p>
+                <p>Tick every class taught at this location. Most schools teach most of these, so press <b>Select all</b> and untick the few you don’t teach. Then press Add.</p>
+                <p>Schools with two kindergarten years can tick <b>LKG</b> and <b>UKG</b>. Use <b>KG</b> only if you have a single kindergarten year.</p>
+                <p>Your school calls a class something else, such as “Playgroup” or “Std 1”? Tick it, then type your own name in the <b>Rename</b> box that appears below. You can also rename later with the pencil.</p>
                 <p>After that, open each class with the arrow to add its sections.</p>
                 <p>Classes already added are greyed out.</p>
               </>
@@ -210,7 +289,12 @@ function AddClasses({ sessionId, locationId, taken }: { sessionId: string; locat
           />
           <CardDescription>Pick the classes taught at this location. You can rename them afterwards.</CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={quickPick}>Nursery–XII</Button>
+        {available.length > 0 && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={selectAll} disabled={picked.size === available.length}>Select All</Button>
+            <Button variant="ghost" size="sm" onClick={clearAll} disabled={picked.size === 0}>Clear</Button>
+          </div>
+        )}
       </CardHeader>
       <fieldset className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <legend className="sr-only">Classes</legend>
@@ -221,11 +305,27 @@ function AddClasses({ sessionId, locationId, taken }: { sessionId: string; locat
           </label>
         ))}
       </fieldset>
+      {chosen.length > 0 && (
+        <div className="mt-4 rounded-xl border border-line bg-canvas p-4">
+          <p className="text-sm font-bold">Rename (optional)</p>
+          <p className="mb-3 text-[13px] text-muted">Does your school use a different name? Type it here. Leave a row as it is to keep the standard name.</p>
+          <ul className="space-y-2" aria-label="Rename selected classes">
+            {chosen.map((g) => (
+              <li key={g.classId} className="grid items-center gap-2 sm:grid-cols-[8rem_1fr_7rem]">
+                <span className="text-sm text-muted">{g.canonicalName}</span>
+                <Input value={nameOf(g)} maxLength={60} onChange={(e) => setField(g, { displayName: e.target.value })} aria-label={`Name for ${g.canonicalName}`} aria-invalid={!nameOf(g).trim() || undefined} />
+                <Input value={codeOf(g)} maxLength={20} onChange={(e) => setField(g, { displayCode: e.target.value })} aria-label={`Short code for ${g.canonicalName}`} aria-invalid={!codeOf(g).trim() || undefined} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[13px] text-muted">The short code starts each section’s name: code “PG” with section A shows as PG-A.</p>
+        </div>
+      )}
       {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <TextField containerClassName="w-48" label="Medium (optional)" labelAside={<InfoTip label="About medium">The language these classes are taught in, such as English or Hindi. Leave it empty if you don’t need it.</InfoTip>} value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="English" />
         <Button
-          disabled={picked.size === 0}
+          disabled={picked.size === 0 || blank}
           loading={add.isPending}
           loadingText="Adding…"
           onClick={async () => {
@@ -233,12 +333,13 @@ function AddClasses({ sessionId, locationId, taken }: { sessionId: string; locat
             try {
               await add.mutateAsync();
               setPicked(new Set());
+              setTyped({});
             } catch (err) {
               setError(messageFor(err));
             }
           }}
         >
-          <Plus /> Add {picked.size || ''} class{picked.size === 1 ? '' : 's'}
+          <Plus /> Add {picked.size || ''} {picked.size === 1 ? 'Class' : 'Classes'}
         </Button>
       </div>
     </Card>
@@ -257,11 +358,9 @@ export function ClassesTab({ sessionId, locationId, readOnly, status }: TabProps
   return (
     <div className="space-y-6">
       <TabIntro title="Classes & Sections" need="required">
-        <p>
-          A <b>class</b> is the year of study, such as Nursery, Class 1 or Class 12. A <b>section</b> is one group of students inside a class, usually one classroom with its own class teacher.
-        </p>
-        <p>Example: Class 6 with sections A and B gives you 6-A and 6-B. Add the classes first, then open each one with the arrow to add its sections.</p>
+        <p>Add the classes first. Then give every class the same sections in one go, and open any class with the arrow if it needs more or fewer.</p>
       </TabIntro>
+      {!readOnly && list.length > 0 && <SectionsForAll sessionId={sessionId} locationId={locationId} classCount={list.length} />}
       {list.length === 0 ? (
         <Card>
           <EmptyState illustration={<EmptyMap className="w-44" />} title="No classes at this location yet" description={readOnly ? 'Nothing has been set up here.' : 'Add the classes taught here, then give each one its sections.'} />

@@ -570,7 +570,7 @@ export function MyProfilePage() {
               loading={reset.isPending}
               loadingText="Sending…"
             >
-              <MailCheck /> Email me a password reset link
+              <MailCheck /> Email Me A Password Reset Link
             </Button>
             <span className="text-[13px] text-muted">
               Your role is {ROLE_LABELS[me.account.role]}. Only a School Admin can change it.

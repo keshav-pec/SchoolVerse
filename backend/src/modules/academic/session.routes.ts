@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  applySectionsToAllSchema,
   createClassOfferingsSchema,
   createSessionSchema,
   cloneSessionSchema,
@@ -80,6 +81,15 @@ sessionRouter.post(
   validate({ params: sessionParams, body: createClassOfferingsSchema }),
   async (req, res) => {
     created(res, await offerings.createClassOfferings(contextOf(req), req.params.academicSessionId as string, req.body));
+  },
+);
+
+sessionRouter.post(
+  '/:academicSessionId/class-offerings/sections',
+  requirePermission('academic:manage'),
+  validate({ params: sessionParams, body: applySectionsToAllSchema }),
+  async (req, res) => {
+    created(res, await offerings.applySectionsToAllClasses(contextOf(req), req.params.academicSessionId as string, req.body));
   },
 );
 

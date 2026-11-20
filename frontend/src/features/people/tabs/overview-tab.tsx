@@ -269,7 +269,7 @@ export function OverviewTab({ employee }: { employee: EmployeeProfileDTO }) {
             {editable && (
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => setDialog('add')}>
-                  <MapPinPlus /> Add location
+                  <MapPinPlus /> Add Location
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setDialog('transfer')}>
                   <ArrowRightLeft /> Transfer

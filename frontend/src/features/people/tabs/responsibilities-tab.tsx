@@ -109,7 +109,7 @@ export function ResponsibilitiesTab({ employee }: { employee: EmployeeProfileDTO
         <Can permission="employee:manage">
           {canAdd && (
             <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus /> Add responsibility
+              <Plus /> Add Responsibility
             </Button>
           )}
         </Can>

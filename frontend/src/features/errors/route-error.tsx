@@ -12,7 +12,7 @@ export function RouteError() {
         <h1 className="mt-4 text-2xl font-extrabold">Something went sideways</h1>
         <p className="mt-2 text-[15px] text-muted">An unexpected error happened. Reloading usually fixes it.</p>
         <Button className="mt-6" onClick={() => window.location.reload()}>
-          Reload page
+          Reload Page
         </Button>
       </div>
     </div>

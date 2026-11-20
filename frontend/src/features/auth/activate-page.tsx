@@ -27,7 +27,7 @@ export function InvalidLink({
           'Links work once and expire after a few days. Ask your School Admin to send you a new one.'}
       </p>
       <Button asChild variant="outline" className="mt-6">
-        <Link to="/login">Back to sign in</Link>
+        <Link to="/login">Back To Sign In</Link>
       </Button>
     </div>
   );

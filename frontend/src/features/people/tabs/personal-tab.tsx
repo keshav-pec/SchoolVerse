@@ -248,7 +248,7 @@ function EditDrawer({
               Cancel
             </Button>
             <Button type="submit" loading={pending} loadingText="Saving…">
-              <Save /> Save changes
+              <Save /> Save Changes
             </Button>
           </DrawerFooter>
         </form>

@@ -98,9 +98,9 @@ export function SignupPage() {
           size="lg"
           className="w-full"
           loading={isSubmitting}
-          loadingText="Creating your workspace…"
+          loadingText="Creating Your Workspace…"
         >
-          <Rocket /> Create workspace
+          <Rocket /> Create Workspace
         </Button>
       </form>
 

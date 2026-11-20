@@ -111,7 +111,7 @@ function CreateLoginForm({
         their own.
       </p>
       <Button type="submit" loading={create.isPending} loadingText="Creating…">
-        <UserPlus /> Create login
+        <UserPlus /> Create Login
       </Button>
     </form>
   );
@@ -287,7 +287,7 @@ export function AccountTab({ employee }: { employee: EmployeeProfileDTO }) {
                     loading={resend.isPending}
                     loadingText="Sending…"
                   >
-                    <Mail /> Resend activation
+                    <Mail /> Resend Activation
                   </Button>
                 )}
                 {account.status === 'SUSPENDED' && (
@@ -306,7 +306,7 @@ export function AccountTab({ employee }: { employee: EmployeeProfileDTO }) {
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => setDialog('role')}>
-                  <UserCog /> Change role
+                  <UserCog /> Change Role
                 </Button>
                 <Button
                   variant="outline"

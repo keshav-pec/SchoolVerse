@@ -102,7 +102,7 @@ function IdentifierDrawer({ schoolId, identifier, open, onOpenChange }: { school
               Cancel
             </Button>
             <Button type="submit" loading={isSubmitting} loadingText="Saving…">
-              {editing ? 'Save changes' : 'Add identifier'}
+              {editing ? 'Save Changes' : 'Add Identifier'}
             </Button>
           </DrawerFooter>
         </form>
@@ -130,7 +130,7 @@ export function IdentifiersCard({ schoolId }: { schoolId: string }) {
         </div>
         <Can permission="school:edit">
           <Button variant="outline" size="sm" onClick={() => setDrawer((d) => ({ open: true, identifier: null, nonce: d.nonce + 1 }))}>
-            <Plus /> Add identifier
+            <Plus /> Add Identifier
           </Button>
         </Can>
       </CardHeader>

@@ -115,7 +115,7 @@ function PrimaryLocationForm({ school, detail, onBack, onDone }: { school: Schoo
             <ArrowLeft /> Back
           </Button>
           <Button type="submit" size="lg" loading={form.formState.isSubmitting} loadingText="Saving…">
-            Save &amp; continue <ArrowRight />
+            Save &amp; Continue <ArrowRight />
           </Button>
         </StepActions>
       </form>
@@ -209,7 +209,7 @@ export function AdditionalLocationsStep({ school, others, loading, onBack, onNex
 
       <div className="mt-4">
         <Button variant="secondary" onClick={() => setAdding(true)}>
-          <Plus /> Add another location
+          <Plus /> Add Another Location
         </Button>
       </div>
 
@@ -218,7 +218,7 @@ export function AdditionalLocationsStep({ school, others, loading, onBack, onNex
           <ArrowLeft /> Back
         </Button>
         <Button size="lg" onClick={onNext}>
-          {others.length === 0 ? 'Skip for now' : 'Continue'} <ArrowRight />
+          {others.length === 0 ? 'Skip For Now' : 'Continue'} <ArrowRight />
         </Button>
       </StepActions>
 
@@ -307,7 +307,7 @@ export function ReviewStep({
             {candidate?.displayName ?? 'Your campus'} is now your Primary Location. Taking you to your School Setup overview…
           </p>
           <Button size="lg" className="mt-6" onClick={onFinished}>
-            Go to the overview <ArrowRight />
+            Go To The Overview <ArrowRight />
           </Button>
         </div>
       </StepCard>
@@ -327,7 +327,7 @@ export function ReviewStep({
               <li key={field} className="flex flex-wrap items-center gap-2">
                 <span>{message}</span>
                 <Button variant="link" className="h-auto" onClick={() => onEdit(stepForMissing(field))}>
-                  Fix this
+                  Fix This
                 </Button>
               </li>
             ))}
@@ -403,7 +403,7 @@ export function ReviewStep({
         <Button type="button" variant="ghost" className="sm:mr-auto" onClick={onBack} disabled={complete.isPending}>
           <ArrowLeft /> Back
         </Button>
-        <Button size="lg" variant="sun" onClick={() => void finish()} loading={complete.isPending} loadingText="Finishing setup…" disabled={!candidate}>
+        <Button size="lg" variant="sun" onClick={() => void finish()} loading={complete.isPending} loadingText="Finishing Setup…" disabled={!candidate}>
           <Rocket /> Complete School Setup
         </Button>
       </StepActions>

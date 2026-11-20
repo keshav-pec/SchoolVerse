@@ -23,7 +23,7 @@ export function WizardLayout({ progress, children }: { progress: ReactNode; chil
                 window.location.replace('/login');
               }}
             >
-              <LogOut /> Save &amp; exit
+              <LogOut /> Save &amp; Exit
             </Button>
           </div>
         </div>
