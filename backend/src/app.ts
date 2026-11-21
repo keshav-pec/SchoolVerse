@@ -13,6 +13,7 @@ import { createDocsRouter } from './docs/swagger';
 import { registerAcademicLocationDependency } from './modules/academic/register';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
 import { registerStaffDependencies } from './modules/staff/register';
+import { registerStudentDependencies } from './modules/students/register';
 import { apiRouter } from './routes';
 
 export function createApp() {
@@ -23,6 +24,7 @@ export function createApp() {
 
   registerAcademicLocationDependency();
   registerStaffDependencies();
+  registerStudentDependencies();
 
   app.disable('x-powered-by');
   if (isProd) app.set('trust proxy', 1);

@@ -130,6 +130,30 @@ export const ERROR_CODES = {
   FILE_REJECTED: { status: 422, message: 'This file was rejected. Upload a clean PDF, PNG or JPEG.' },
   UNSUPPORTED_DOCUMENT_TYPE: { status: 415, message: 'Upload a PDF, PNG or JPEG file.' },
   DOCUMENT_TOO_LARGE: { status: 413, message: 'This file is too large. The maximum size is 5 MB.' },
+
+  // Students and parents (Module 4)
+  ADMISSION_NUMBER_TAKEN: { status: 409, message: 'This admission number is already used by another student.' },
+  POSSIBLE_DUPLICATE_STUDENT: { status: 409, message: 'This looks like a student who is already in the school. Check the matches, then confirm.' },
+  ADMISSION_NUMBER_MODE_MANUAL: { status: 422, message: 'This school types admission numbers by hand. Enter the admission number.' },
+  EXTERNAL_ID_TAKEN: { status: 409, message: 'This outside ID already belongs to another student.' },
+  ADMISSION_ALREADY_RECORDED: { status: 409, message: 'This student already has an admission record.' },
+  STUDENT_ALREADY_EXISTS: { status: 409, message: 'This person is already a student here. Use readmission instead.' },
+  STUDENT_READ_ONLY: { status: 409, message: 'This student has left the school. The record is kept for history and cannot be changed.' },
+  STUDENT_HAS_HISTORY: { status: 409, message: 'This student already has history and cannot be deleted.' },
+  STUDENT_INCOMPLETE: { status: 422, message: 'Finish the missing details before confirming this admission.' },
+  GUARDIAN_PRIMARY_EXISTS: { status: 409, message: 'This student already has a primary guardian. Make another guardian primary instead.' },
+  GUARDIAN_LINK_DUPLICATE: { status: 409, message: 'This person is already linked to the student for those dates.' },
+  GUARDIAN_LINK_CLOSED: { status: 409, message: 'This link has already ended.' },
+  ENROLLMENT_ALREADY_OPEN: { status: 409, message: 'This student is already enrolled in this session. Complete or move the current enrollment first.' },
+  ENROLLMENT_CLOSED: { status: 409, message: 'This enrollment is no longer open.' },
+  CLASS_NOT_OFFERED_AT_LOCATION: { status: 409, message: 'This class is not offered at this location in this session.' },
+  SECTION_CLASS_MISMATCH: { status: 409, message: 'This section does not belong to the student’s class.' },
+  SECTION_ALREADY_ASSIGNED: { status: 409, message: 'This student already has a section. Use Change Section instead.' },
+  SECTION_FULL: { status: 409, message: 'This section is full.' },
+  ROLL_NUMBER_TAKEN: { status: 409, message: 'Another student in this section already has this roll number.' },
+  SUBJECT_CHOICE_INVALID: { status: 422, message: 'This subject choice does not follow the class rules.' },
+  PROGRAMME_NOT_FOR_CLASS: { status: 409, message: 'This programme is not available for the student’s class.' },
+  VERSION_CONFLICT: { status: 409, message: 'Someone else changed this record. Reload it and try again.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

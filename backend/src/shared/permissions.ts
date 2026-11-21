@@ -33,6 +33,12 @@ export const PERMISSIONS = [
   'employee:documents', // upload, list, download and delete any employee's documents
   'employee:approve_changes', // approve or reject profile change requests
   'employee:export', // download staff exports
+  // Students and parents (Module 4). Faculty get none of these: their access to students is derived from their assigned sections.
+  'student:view', // directory, profile, history
+  'student:view_personal', // guardian contact, address, previous school on the profile
+  'student:manage', // add, edit, status, external IDs, admission number settings
+  'student:enroll', // enrollments, sections, roll numbers, subjects
+  'guardian:manage', // add, link and end guardians
   // Setup & governance
   'setup:manage',
   'audit:view',

@@ -19,6 +19,18 @@ import { Employee } from '../modules/staff/employee.model';
 import { Department, Designation } from '../modules/staff/master.model';
 import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
+import { seedStudentsDemo } from '../modules/students/students.seed';
+import {
+  AdmissionNumberSettings,
+  Student,
+  StudentAdmission,
+  StudentEnrollment,
+  StudentExternalId,
+  StudentGuardianLink,
+  StudentSectionAssignment,
+  StudentSubjectEnrollment,
+  StudentTransferEvent,
+} from '../modules/students/student.models';
 import { AccountToken } from '../platform/identity/account-token.model';
 import { DevOutbox } from '../platform/identity/notifier';
 import { privateStorage } from '../platform/identity/private-storage';
@@ -183,6 +195,16 @@ async function wipeTenant(tenantId: string) {
     EmployeeDocument.deleteMany({ tenantId }),
     ProfileChangeRequest.deleteMany({ tenantId }),
     StaffExport.deleteMany({ tenantId }),
+    // Students and parents (Module 4)
+    Student.deleteMany({ tenantId }),
+    StudentAdmission.deleteMany({ tenantId }),
+    AdmissionNumberSettings.deleteMany({ tenantId }),
+    StudentExternalId.deleteMany({ tenantId }),
+    StudentGuardianLink.deleteMany({ tenantId }),
+    StudentEnrollment.deleteMany({ tenantId }),
+    StudentSectionAssignment.deleteMany({ tenantId }),
+    StudentSubjectEnrollment.deleteMany({ tenantId }),
+    StudentTransferEvent.deleteMany({ tenantId }),
     AccountToken.deleteMany({ tenantId }),
     DevOutbox.deleteMany({ tenantId }),
   ]);
@@ -230,6 +252,8 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
         log('    📚 Academic session 2026-27 (active) and 2027-28 (draft, cloned)');
         const staff = await seedStaffDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail });
         log(`    🧑‍🏫 ${staff.employees} employees across Mohali and Chandigarh (faculty and staff demo logins are linked to people)`);
+        const students = await seedStudentsDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
+        log(`    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
       }
     }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);

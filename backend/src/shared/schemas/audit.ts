@@ -31,6 +31,14 @@ export const AUDIT_ENTITY_TYPES = [
   'profile_change_request',
   'employee_document',
   'export',
+  // Students and parents (Module 4)
+  'student',
+  'admission',
+  'admission_settings',
+  'guardian_link',
+  'enrollment',
+  'section_assignment',
+  'subject_enrollment',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

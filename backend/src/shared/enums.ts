@@ -326,6 +326,32 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'document.download_denied': 'Document download refused',
   'document.deleted': 'Document deleted',
   'export.created': 'Staff export created',
+  // Students and parents (Module 4)
+  'student.created': 'Student added',
+  'student.draft_saved': 'Student saved as a draft',
+  'student.updated': 'Student details updated',
+  'student.status_changed': 'Student status changed',
+  'student.activated': 'Student admission confirmed',
+  'student.deleted': 'Draft student discarded',
+  'student.external_id_added': 'Outside ID added',
+  'student.external_id_ended': 'Outside ID ended',
+  'admission.created': 'Admission recorded',
+  'admission_settings.updated': 'Admission number settings updated',
+  'guardian_link.created': 'Parent or guardian linked',
+  'guardian_link.updated': 'Parent or guardian link updated',
+  'guardian_link.primary_changed': 'Primary guardian changed',
+  'guardian_link.ended': 'Parent or guardian link ended',
+  'guardian.updated': 'Parent or guardian details updated',
+  'enrollment.created': 'Enrolled in a class',
+  'enrollment.updated': 'Enrollment updated',
+  'enrollment.programme_changed': 'Programme changed',
+  'enrollment.completed': 'Enrollment completed',
+  'section_assignment.created': 'Placed in a section',
+  'section_assignment.updated': 'Roll number changed',
+  'section_assignment.ended': 'Section placement ended',
+  'section_assignment.transferred': 'Moved to another section',
+  'subject_enrollment.created': 'Subject added',
+  'subject_enrollment.ended': 'Subject ended',
 };
 
 
@@ -430,6 +456,8 @@ export const SECURITY_EVENT_TYPES = [
   'STEP_UP_FAILED',
   'DOCUMENT_ACCESS_DENIED',
   'FILE_REJECTED',
+  // Students (Module 4)
+  'CROSS_SCOPE_DENIED',
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -506,3 +534,161 @@ export const EXPORT_PURPOSE_LABELS: Record<ExportPurpose, string> = {
 export const STEP_UP_SECONDS = 5 * 60;
 /** How long a signed download link works. */
 export const FILE_LINK_SECONDS = 60;
+
+
+// ───────────────────────────────────────────────────────────── Students and parents (Module 4)
+
+export const GENDERS = ['FEMALE', 'MALE', 'OTHER'] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export const GENDER_LABELS: Record<Gender, string> = { FEMALE: 'Female', MALE: 'Male', OTHER: 'Other' };
+
+/**
+ * DRAFT → ADMISSION_PENDING → ACTIVE ↔ INACTIVE → WITHDRAWAL_INITIATED → WITHDRAWN / TRANSFERRED_OUT / COMPLETED_SCHOOLING.
+ * The exit statuses are only ever set by the Part 3 workflows.
+ */
+export const STUDENT_STATUSES = [
+  'DRAFT',
+  'ADMISSION_PENDING',
+  'ACTIVE',
+  'INACTIVE',
+  'WITHDRAWAL_INITIATED',
+  'WITHDRAWN',
+  'TRANSFERRED_OUT',
+  'COMPLETED_SCHOOLING',
+] as const;
+export type StudentStatus = (typeof STUDENT_STATUSES)[number];
+
+export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
+  DRAFT: 'Draft',
+  ADMISSION_PENDING: 'Admission pending',
+  ACTIVE: 'Active',
+  INACTIVE: 'Inactive',
+  WITHDRAWAL_INITIATED: 'Leaving',
+  WITHDRAWN: 'Withdrawn',
+  TRANSFERRED_OUT: 'Transferred out',
+  COMPLETED_SCHOOLING: 'Finished school',
+};
+
+/** Students who have left. They are kept for history and cannot be changed (`STUDENT_READ_ONLY`). */
+export const EXITED_STUDENT_STATUSES: readonly StudentStatus[] = ['WITHDRAWN', 'TRANSFERRED_OUT', 'COMPLETED_SCHOOLING'];
+/** What the student list shows unless the caller asks for another status. */
+export const CURRENT_STUDENT_STATUSES: readonly StudentStatus[] = ['DRAFT', 'ADMISSION_PENDING', 'ACTIVE', 'INACTIVE', 'WITHDRAWAL_INITIATED'];
+
+export const STUDENT_ACTIONS = [
+  'admit',
+  'activate',
+  'deactivate',
+  'reactivate',
+  'start_withdrawal',
+  'cancel_withdrawal',
+  'complete_withdrawal',
+  'complete_schooling',
+  'readmit',
+] as const;
+export type StudentAction = (typeof STUDENT_ACTIONS)[number];
+
+/** Targets accepted by `POST /students/:id/status`. Drafts are confirmed with `/activate`; exits have their own workflows. */
+export const STUDENT_STATUS_TARGETS = ['ACTIVE', 'INACTIVE'] as const;
+export type StudentStatusTarget = (typeof STUDENT_STATUS_TARGETS)[number];
+
+export const ADMISSION_MODES = ['NEW_ADMISSION', 'MIGRATION', 'READMISSION'] as const;
+export type AdmissionMode = (typeof ADMISSION_MODES)[number];
+
+export const ADMISSION_MODE_LABELS: Record<AdmissionMode, string> = {
+  NEW_ADMISSION: 'New admission',
+  MIGRATION: 'Existing student (migration)',
+  READMISSION: 'Readmission',
+};
+
+export const ADMISSION_NUMBER_MODES = ['AUTO', 'MANUAL'] as const;
+export type AdmissionNumberMode = (typeof ADMISSION_NUMBER_MODES)[number];
+
+export const READMISSION_POLICIES = ['KEEP_OLD', 'ISSUE_NEW'] as const;
+export type ReadmissionPolicy = (typeof READMISSION_POLICIES)[number];
+
+export const SECTION_CAPACITY_POLICIES = ['WARN', 'BLOCK'] as const;
+export type SectionCapacityPolicy = (typeof SECTION_CAPACITY_POLICIES)[number];
+
+export const RELATIONSHIP_TYPES = [
+  'Father',
+  'Mother',
+  'Legal Guardian',
+  'Grandfather',
+  'Grandmother',
+  'Brother',
+  'Sister',
+  'Uncle',
+  'Aunt',
+  'Foster Guardian',
+  'Other',
+] as const;
+export type RelationshipType = (typeof RELATIONSHIP_TYPES)[number];
+
+/** Suggestions for the free-text "type" of an outside ID. */
+export const EXTERNAL_ID_TYPE_SUGGESTIONS = ['Legacy ERP ID', 'Board Reg No', 'State ID', 'PEN'] as const;
+
+export const ENROLLMENT_TYPES = ['NEW_ADMISSION', 'CONTINUING', 'PROMOTED', 'REPEATING', 'TRANSFER_IN', 'READMISSION', 'MID_SESSION_TRANSFER'] as const;
+export type EnrollmentType = (typeof ENROLLMENT_TYPES)[number];
+
+/** Stored. `PLANNED` and `ACTIVE` are only ever worked out from the dates of an OPEN enrollment. */
+export const ENROLLMENT_STATES = ['OPEN', 'COMPLETED', 'WITHDRAWN', 'TRANSFERRED', 'CANCELLED'] as const;
+export type EnrollmentState = (typeof ENROLLMENT_STATES)[number];
+
+export const ENROLLMENT_STATUSES = ['PLANNED', 'ACTIVE', 'COMPLETED', 'WITHDRAWN', 'TRANSFERRED', 'CANCELLED'] as const;
+export type EnrollmentStatus = (typeof ENROLLMENT_STATUSES)[number];
+
+export const ENROLLMENT_STATUS_LABELS: Record<EnrollmentStatus, string> = {
+  PLANNED: 'Starts later',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  WITHDRAWN: 'Withdrawn',
+  TRANSFERRED: 'Transferred',
+  CANCELLED: 'Cancelled',
+};
+
+export const ENROLLMENT_OUTCOMES = ['PROMOTED', 'REPEATED', 'PASSED_OUT'] as const;
+export type EnrollmentOutcome = (typeof ENROLLMENT_OUTCOMES)[number];
+
+export const SUBJECT_ENROLLMENT_SOURCES = ['AUTO_MANDATORY', 'ADMIN_SELECTED', 'MIGRATED', 'PROGRAMME_DERIVED'] as const;
+export type SubjectEnrollmentSource = (typeof SUBJECT_ENROLLMENT_SOURCES)[number];
+
+export const TRANSFER_EVENT_TYPES = ['SECTION', 'LOCATION'] as const;
+export type TransferEventType = (typeof TRANSFER_EVENT_TYPES)[number];
+
+export const ROLL_NUMBER_ORDERS = ['ALPHABETICAL', 'ADMISSION_NUMBER'] as const;
+export type RollNumberOrder = (typeof ROLL_NUMBER_ORDERS)[number];
+
+/** Why a possible duplicate was flagged. The check never merges anything. */
+export const DUPLICATE_REASONS = ['SAME_ADMISSION_NUMBER', 'SAME_EXTERNAL_ID', 'SAME_NAME_AND_DOB', 'SIMILAR_NAME_AND_DOB', 'SAME_GUARDIAN_PHONE_AND_FIRST_NAME'] as const;
+export type DuplicateReason = (typeof DUPLICATE_REASONS)[number];
+
+export const DUPLICATE_REASON_LABELS: Record<DuplicateReason, string> = {
+  SAME_ADMISSION_NUMBER: 'Same admission number',
+  SAME_EXTERNAL_ID: 'Same outside ID',
+  SAME_NAME_AND_DOB: 'Same name and date of birth',
+  SIMILAR_NAME_AND_DOB: 'Almost the same name and the same date of birth',
+  SAME_GUARDIAN_PHONE_AND_FIRST_NAME: 'Same parent phone and the same first name',
+};
+
+/** What a computed "needs attention" item is about (Part 2 groups them on one page). */
+export const COMPLETENESS_ITEMS = ['ADMISSION', 'ENROLLMENT', 'SECTION', 'GUARDIAN', 'PRIMARY_GUARDIAN', 'SUBJECT_CHOICE'] as const;
+export type CompletenessItem = (typeof COMPLETENESS_ITEMS)[number];
+
+export const SUBJECT_PROBLEM_CODES = [
+  'NOT_OFFERED',
+  'MISSING_MANDATORY',
+  'GROUP_TOO_FEW',
+  'GROUP_TOO_MANY',
+  'REQUIRES',
+  'EXCLUDES',
+  'PROGRAMME_REQUIRED',
+  'PROGRAMME_CHOICE_TOO_FEW',
+  'PROGRAMME_CHOICE_TOO_MANY',
+  'NOT_IN_PROGRAMME',
+] as const;
+export type SubjectProblemCode = (typeof SUBJECT_PROBLEM_CODES)[number];
+
+/** Which timeline row a history entry is. */
+export const HISTORY_KINDS = ['STUDENT', 'ADMISSION', 'ENROLLMENT', 'SECTION', 'SUBJECT', 'GUARDIAN', 'TRANSFER'] as const;
+export type HistoryKind = (typeof HISTORY_KINDS)[number];

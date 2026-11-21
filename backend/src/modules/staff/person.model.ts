@@ -1,5 +1,5 @@
 import { Schema, model } from 'mongoose';
-import { PERSON_STATUSES, type PersonStatus } from '@shared';
+import { GENDERS, PERSON_STATUSES, type Gender, type PersonStatus } from '@shared';
 import { auditFields, baseSchemaOptions, uuidPrimaryKey, type AuditFields, type BaseDoc } from '../../db/plugins/base';
 import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
 
@@ -20,7 +20,8 @@ export interface EmergencyContact {
 
 /**
  * FSM-01 — `people`: who someone is, once. Employment lives on `employees`, a login (optional) on `users`.
- * Students and Parents reuse this collection later, so nothing in it is staff-specific.
+ * Students and guardians (Module 4) use this same collection: a person is a student or a guardian because of the rows that point
+ * to them (`students`, `student_guardian_links`), so a teacher who is also a parent is still one person.
  * No uniqueness on name or date of birth: different people share them.
  */
 export interface PersonDoc extends BaseDoc, AuditFields {
@@ -29,6 +30,8 @@ export interface PersonDoc extends BaseDoc, AuditFields {
   legalMiddleName: string | null;
   legalLastName: string;
   preferredName: string | null;
+  /** Optional. Set from the student screens; staff screens do not use it yet. */
+  gender: Gender | null;
   dateOfBirth: string | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
@@ -67,8 +70,10 @@ const personSchema = new Schema<PersonDoc>(
     tenantId: { type: String, required: true, immutable: true },
     legalFirstName: { type: String, required: true, trim: true, maxlength: 100 },
     legalMiddleName: { type: String, default: null, trim: true, maxlength: 100 },
-    legalLastName: { type: String, required: true, trim: true, maxlength: 100 },
+    // May be empty: a student with a single-word name has no last name. Staff screens still require one.
+    legalLastName: { type: String, default: '', trim: true, maxlength: 100 },
     preferredName: { type: String, default: null, trim: true, maxlength: 100 },
+    gender: { type: String, enum: [...GENDERS, null], default: null },
     dateOfBirth: { type: String, default: null },
     primaryEmail: { type: String, default: null, lowercase: true, trim: true },
     primaryPhone: { type: String, default: null },
@@ -83,6 +88,9 @@ const personSchema = new Schema<PersonDoc>(
   baseSchemaOptions('people'),
 );
 personSchema.index({ tenantId: 1, legalLastName: 1, legalFirstName: 1 });
+personSchema.index({ tenantId: 1, dateOfBirth: 1 });
+personSchema.index({ tenantId: 1, primaryPhone: 1 });
+personSchema.index({ tenantId: 1, primaryEmail: 1 });
 personSchema.plugin(tenantScopePlugin);
 
 export const Person = model<PersonDoc>('Person', personSchema);

@@ -51,6 +51,57 @@ import { Person } from '../src/modules/staff/person.model';
 import type { StaffMasterDoc } from '../src/modules/staff/master.model';
 import { addDays, daysBetween } from '../src/core/dates';
 import { assignmentStatus, overlapping } from '../src/modules/staff/status';
+import {
+  STUDENT_ACTIONS,
+  STUDENT_DTO_ALLOWED_CLASSES,
+  STUDENT_STATUSES,
+  admissionNumberSchema,
+  rollNumberSchema,
+  type StudentAction,
+  type StudentStatus,
+} from '@shared';
+import type { ClassOfferingDoc, SectionOfferingDoc } from '../src/modules/academic/offering.model';
+import type { StudentHydration } from '../src/modules/students/directory';
+import {
+  ACTION_FOR_TARGET as STUDENT_ACTION_FOR_TARGET,
+  assertStudentTransition,
+  availableActions as availableStudentActions,
+  canTransition as canStudentTransition,
+} from '../src/modules/students/lifecycle';
+import { toAdmissionDTO, toDirectoryDTO as toStudentDirectoryDTO, toFacultySummaryDTO } from '../src/modules/students/mappers';
+import { pickEnrollment, pickEnrollmentIn } from '../src/modules/students/placement';
+import { endPatch } from '../src/modules/students/rows';
+import {
+  checkSubjectSelection,
+  editDistance,
+  enrollmentStatus,
+  formatAdmissionNumber,
+  isOpenOn,
+  isSimilarName,
+  mandatoryOfferingIds,
+  naturalCompare,
+  nameKey,
+  nextFreeRoll,
+  type CheckConstraint,
+  type CheckGroup,
+  type CheckOffering,
+  type CheckProgramme,
+} from '../src/modules/students/rules';
+import {
+  AdmissionNumberSettings,
+  Student,
+  StudentAdmission,
+  StudentEnrollment,
+  StudentExternalId,
+  StudentGuardianLink,
+  StudentSectionAssignment,
+  StudentSubjectEnrollment,
+  StudentTransferEvent,
+  type StudentAdmissionDoc,
+  type StudentDoc,
+  type StudentEnrollmentDoc,
+  type StudentSectionAssignmentDoc,
+} from '../src/modules/students/student.models';
 
 describe('location lifecycle state machine (SCH-LOC-06)', () => {
   const legal: Record<LocationStatus, Partial<Record<LocationAction, LocationStatus>>> = {
@@ -527,5 +578,231 @@ describe('uploads and CSV (PRD §18, §19)', () => {
     expect(csvCell(null)).toBe('');
     expect(csvCell(42)).toBe('42');
     expect(toCsv(['A', 'B'], [['=x', 'y']])).toBe("A,B\r\n'=x,y\r\n");
+  });
+});
+
+// ───────────────────────────────────────────────────────────── students and parents (Module 4, Part 1)
+
+describe('student lifecycle state machine (SPM-33)', () => {
+  const statuses = STUDENT_STATUSES;
+  const expected: Record<string, Partial<Record<StudentAction, StudentStatus>>> = {
+    DRAFT: { admit: 'ADMISSION_PENDING', activate: 'ACTIVE' },
+    ADMISSION_PENDING: { activate: 'ACTIVE' },
+    ACTIVE: { deactivate: 'INACTIVE', start_withdrawal: 'WITHDRAWAL_INITIATED', complete_schooling: 'COMPLETED_SCHOOLING' },
+    INACTIVE: { reactivate: 'ACTIVE', start_withdrawal: 'WITHDRAWAL_INITIATED' },
+    WITHDRAWAL_INITIATED: { cancel_withdrawal: 'ACTIVE', complete_withdrawal: 'WITHDRAWN' },
+    WITHDRAWN: { readmit: 'ACTIVE' },
+    TRANSFERRED_OUT: { readmit: 'ACTIVE' },
+    COMPLETED_SCHOOLING: { readmit: 'ACTIVE' },
+  };
+
+  it('allows exactly the documented moves and refuses everything else', () => {
+    for (const from of statuses) {
+      for (const action of STUDENT_ACTIONS) {
+        const to = expected[from]![action];
+        expect(canStudentTransition(from, action), `${from} ${action}`).toBe(Boolean(to));
+        if (to) expect(assertStudentTransition(from, action)).toBe(to);
+        else expect(() => assertStudentTransition(from, action)).toThrowError(expect.objectContaining({ code: 'INVALID_STATUS_TRANSITION' }));
+      }
+    }
+  });
+
+  it('says why a move is refused, in plain words', () => {
+    expect(() => assertStudentTransition('WITHDRAWN', 'deactivate')).toThrowError(/left the school/);
+    expect(() => assertStudentTransition('WITHDRAWAL_INITIATED', 'deactivate')).toThrowError(/Cancel the withdrawal/);
+    expect(() => assertStudentTransition('DRAFT', 'deactivate')).toThrowError(/not confirmed/);
+  });
+
+  it('offers the buttons that fit a status, and the status endpoint maps its two targets', () => {
+    expect(availableStudentActions('ACTIVE').sort()).toEqual(['complete_schooling', 'deactivate', 'start_withdrawal']);
+    expect(availableStudentActions('WITHDRAWN')).toEqual(['readmit']);
+    expect(STUDENT_ACTION_FOR_TARGET).toEqual({ ACTIVE: 'reactivate', INACTIVE: 'deactivate' });
+  });
+});
+
+describe('student rules without a database (Module 4, Part 1)', () => {
+  it('works out the shown status of an enrollment from its dates', () => {
+    expect(enrollmentStatus({ state: 'OPEN', effectiveFrom: '2026-04-01' }, '2026-03-31')).toBe('PLANNED');
+    expect(enrollmentStatus({ state: 'OPEN', effectiveFrom: '2026-04-01' }, '2026-04-01')).toBe('ACTIVE');
+    for (const state of ['COMPLETED', 'WITHDRAWN', 'TRANSFERRED', 'CANCELLED'] as const) expect(enrollmentStatus({ state, effectiveFrom: '2026-04-01' }, '2026-06-01')).toBe(state);
+    expect(isOpenOn({ effectiveFrom: '2026-04-01', effectiveTo: '2026-09-30' }, '2026-09-30')).toBe(true);
+    expect(isOpenOn({ effectiveFrom: '2026-04-01', effectiveTo: '2026-09-30' }, '2026-10-01')).toBe(false);
+    expect(isOpenOn({ effectiveFrom: '2026-04-01', cancelledAt: new Date() }, '2026-06-01')).toBe(false);
+    expect(endPatch({ effectiveFrom: '2026-06-01' }, '2026-05-31')).toHaveProperty('cancelledAt');
+    expect(endPatch({ effectiveFrom: '2026-04-01' }, '2026-05-31')).toEqual({ effectiveTo: '2026-05-31' });
+  });
+
+  it('picks where a student is from the rows: the one running, then the next, then the latest', () => {
+    const row = (id: string, effectiveFrom: string, effectiveTo: string | null = null, state: StudentEnrollmentDoc['state'] = 'OPEN') =>
+      ({ _id: id, effectiveFrom, effectiveTo, state, cancelledAt: null, academicSessionId: 's' }) as unknown as StudentEnrollmentDoc;
+    expect(pickEnrollment([row('old', '2025-04-01', '2026-03-31', 'COMPLETED'), row('now', '2026-04-01')], '2026-08-01')?._id).toBe('now');
+    expect(pickEnrollment([row('old', '2025-04-01', '2026-03-31', 'COMPLETED'), row('next', '2027-04-01')], '2026-08-01')?._id).toBe('next');
+    expect(pickEnrollment([row('old', '2025-04-01', '2026-03-31', 'COMPLETED'), row('bad', '2026-04-01', null, 'CANCELLED')], '2026-08-01')?._id).toBe('old');
+    expect(pickEnrollment([], '2026-08-01')).toBeNull();
+    expect(pickEnrollmentIn([row('a', '2026-04-01', '2026-06-30', 'TRANSFERRED'), row('b', '2026-07-01')], 's')?._id).toBe('b');
+  });
+
+  it('builds admission numbers from the pattern and leaves empty parts out', () => {
+    const pattern = { prefix: 'GPS', includeLocationCode: false, includeYear: true, padding: 5 };
+    expect(formatAdmissionNumber(pattern, { locationCode: 'MOH', year: 2027, sequence: 482 })).toBe('GPS/2027/00482');
+    expect(formatAdmissionNumber({ ...pattern, includeLocationCode: true }, { locationCode: 'MOH', year: 2027, sequence: 7 })).toBe('GPS/MOH/2027/00007');
+    expect(formatAdmissionNumber({ ...pattern, includeYear: false, padding: 3 }, { locationCode: null, year: 2027, sequence: 12 })).toBe('GPS/012');
+    expect(formatAdmissionNumber({ prefix: '', includeLocationCode: true, includeYear: false, padding: 4 }, { locationCode: null, year: null, sequence: 1 })).toBe('0001');
+    expect(formatAdmissionNumber({ ...pattern, prefix: 'gps' }, { locationCode: null, year: 2026, sequence: 123456 })).toBe('GPS/2026/123456');
+    expect(admissionNumberSchema.parse(' gps/2026/00482 ')).toBe('GPS/2026/00482');
+    expect(admissionNumberSchema.safeParse('has space').success).toBe(false);
+  });
+
+  it('hands out the next free roll number', () => {
+    expect(nextFreeRoll([])).toBe('1');
+    expect(nextFreeRoll(['1', '2', '3'])).toBe('4');
+    expect(nextFreeRoll(['1', '5', null])).toBe('6');
+    expect(nextFreeRoll(['A1', 'B2'])).toBe('1');
+    expect(['A-10', 'A-2', 'A-1'].sort(naturalCompare)).toEqual(['A-1', 'A-2', 'A-10']);
+    expect(rollNumberSchema.parse(' a-7 ')).toBe('A-7');
+    expect(rollNumberSchema.safeParse('too long for a roll').success).toBe(false);
+  });
+
+  it('compares names ignoring order, case and accents, and spots near misses', () => {
+    expect(nameKey('Riya', null, 'Sharma')).toBe(nameKey('sharma', 'RIYA'));
+    expect(nameKey('Zoë', 'Müller')).toBe('muller zoe');
+    expect(editDistance('kitten', 'sitting')).toBe(3);
+    expect(isSimilarName('simran kaur', 'simrann kaur')).toBe(true);
+    expect(isSimilarName('riya sharma', 'riya sharma')).toBe(false);
+    expect(isSimilarName('riya sharma', 'tina verma')).toBe(false);
+    expect(isSimilarName('amit', 'amir')).toBe(true);
+  });
+
+  describe('subject choice check', () => {
+    const o = (id: string, name: string, type: CheckOffering['type'] = 'ELECTIVE'): CheckOffering => ({ id, name, type, active: true });
+    const offerings = [o('m', 'Maths', 'MANDATORY'), o('e', 'English', 'MANDATORY'), o('h', 'Hindi'), o('p', 'Punjabi'), o('c', 'Computer'), o('b', 'Biology'), o('u', 'Urdu'), o('x', 'Retired')];
+    offerings[7]!.active = false;
+    const groups: CheckGroup[] = [
+      { id: 'g1', name: 'Language', ruleType: 'CHOOSE_ONE', min: 1, max: 1, subjectOfferingIds: ['h', 'p'], active: true },
+      { id: 'g2', name: 'Activity', ruleType: 'CHOOSE_N', min: 1, max: 2, subjectOfferingIds: ['c', 'b', 'u'], active: true },
+    ];
+    const constraints: CheckConstraint[] = [
+      { type: 'REQUIRES', subjectOfferingId: 'b', otherSubjectOfferingId: 'c' },
+      { type: 'EXCLUDES', subjectOfferingId: 'p', otherSubjectOfferingId: 'u' },
+    ];
+    const check = (selected: string[], extra: Partial<Parameters<typeof checkSubjectSelection>[0]> = {}) =>
+      checkSubjectSelection({ offerings, groups, constraints, programme: null, selected, addMandatory: true, ...extra });
+
+    it('adds the always-taken subjects itself when saving, and asks for them when checking what a student takes', () => {
+      expect(check(['h', 'c']).selectedOfferingIds.sort()).toEqual(['c', 'e', 'h', 'm']);
+      const today = check(['h', 'c'], { addMandatory: false });
+      expect(today.problems).toEqual([expect.objectContaining({ code: 'MISSING_MANDATORY', message: 'Required: Maths and English.' })]);
+    });
+
+    it('counts each group and explains it in words', () => {
+      expect(check(['h', 'p', 'c']).problems).toEqual([expect.objectContaining({ code: 'GROUP_TOO_MANY', message: 'Pick only 1 from Language. You picked 2.' })]);
+      expect(check(['h']).problems).toEqual([expect.objectContaining({ code: 'GROUP_TOO_FEW', message: 'Pick 1 from Activity. You picked 0.' })]);
+      expect(check(['h', 'c', 'u']).valid).toBe(true);
+      expect(check(['h', 'c', 'b', 'u']).problems.map((p) => p.code)).toContain('GROUP_TOO_MANY');
+      expect(check(['h', 'c']).groups).toEqual([expect.objectContaining({ summary: 'Choose 1 of Hindi, Punjabi', picked: 1, satisfied: true }), expect.objectContaining({ summary: 'Choose 1 to 2 of Computer, Biology, Urdu', satisfied: true })]);
+    });
+
+    it('applies requires and excludes pairs, and refuses subjects the class does not offer', () => {
+      expect(check(['h', 'b']).problems).toEqual([expect.objectContaining({ code: 'REQUIRES', message: 'Biology needs Computer too.' })]);
+      expect(check(['p', 'u']).problems).toEqual([expect.objectContaining({ code: 'EXCLUDES', message: 'Punjabi and Urdu cannot be taken together.' })]);
+      expect(check(['h', 'c', 'x']).problems).toEqual([expect.objectContaining({ code: 'NOT_OFFERED' })]);
+      expect(check(['h', 'c', 'nope']).problems[0]!.message).toBe('One of the subjects is not offered in this class.');
+    });
+
+    it('applies a stream’s own rules, and leaves a flexible combination to the class rules', () => {
+      const stream: CheckProgramme = {
+        name: 'Science',
+        kind: 'STREAM',
+        subjectRules: [
+          { subjectOfferingId: 'h', requirement: 'REQUIRED' },
+          { subjectOfferingId: 'c', requirement: 'CHOICE' },
+          { subjectOfferingId: 'b', requirement: 'CHOICE' },
+        ],
+        choiceMin: 1,
+        choiceMax: 1,
+      };
+      expect(check(['h', 'c'], { programme: stream }).valid).toBe(true);
+      expect(check(['p', 'c'], { programme: stream }).problems.map((p) => p.code)).toEqual(expect.arrayContaining(['PROGRAMME_REQUIRED', 'NOT_IN_PROGRAMME']));
+      expect(check(['h', 'u'], { programme: stream }).problems.map((p) => p.code)).toEqual(expect.arrayContaining(['PROGRAMME_CHOICE_TOO_FEW', 'NOT_IN_PROGRAMME']));
+      expect(check(['h', 'c', 'b'], { programme: stream }).problems.map((p) => p.code)).toContain('PROGRAMME_CHOICE_TOO_MANY');
+      expect(check(['p', 'u'], { programme: { ...stream, kind: 'FLEXIBLE' } }).problems.map((p) => p.code)).not.toContain('PROGRAMME_REQUIRED');
+      expect(mandatoryOfferingIds(offerings, [{ id: 'g3', name: 'All', ruleType: 'REQUIRED_ALL', min: 2, max: 2, subjectOfferingIds: ['h', 'x'], active: true }])).toEqual(['m', 'e', 'h']);
+    });
+  });
+});
+
+describe('student data classification (SEC-SPM-02)', () => {
+  const systemFields: readonly string[] = SYSTEM_FIELDS;
+  const businessPaths = (schema: { paths: Record<string, unknown> }) => [...new Set(Object.keys(schema.paths).map((p) => p.split('.')[0]!))].filter((p) => !systemFields.includes(p));
+  const classified = (entity: keyof typeof DATA_CLASSIFICATION) => Object.keys(DATA_CLASSIFICATION[entity]).sort();
+
+  it('every field of every student collection has a class, and nothing in the map is stale', () => {
+    const cases: [keyof typeof DATA_CLASSIFICATION, { schema: { paths: Record<string, unknown> } }][] = [
+      ['student', Student],
+      ['student_admission', StudentAdmission],
+      ['admission_number_settings', AdmissionNumberSettings],
+      ['student_external_id', StudentExternalId],
+      ['student_guardian_link', StudentGuardianLink],
+      ['student_enrollment', StudentEnrollment],
+      ['student_section_assignment', StudentSectionAssignment],
+      ['student_subject_enrollment', StudentSubjectEnrollment],
+      ['student_transfer_event', StudentTransferEvent],
+    ];
+    for (const [entity, model] of cases) expect(businessPaths(model.schema).sort(), entity).toEqual(classified(entity));
+    // The people table gained a gender column, and it is classed too.
+    expect(classOf('person', 'gender')).toBe('PERSONAL');
+  });
+
+  it('puts contact, previous school, outside IDs and the photo key out of every list, and never in a DTO', () => {
+    expect(classOf('student', 'photoKey')).toBe('SECRET');
+    expect(classOf('student_external_id', 'value')).toBe('PERSONAL');
+    expect(classOf('student_admission', 'previousSchool')).toBe('PERSONAL');
+    expect(classOf('student', 'bloodGroup')).toBe('PERSONAL');
+    for (const kind of ['directory', 'facultySummary', 'parentSummary', 'adminProfile'] as const) expect(STUDENT_DTO_ALLOWED_CLASSES[kind]).toEqual(['INTERNAL']);
+    for (const allowed of Object.values(STUDENT_DTO_ALLOWED_CLASSES) as readonly (readonly DataClass[])[]) expect(allowed).not.toContain('SECRET');
+  });
+
+  it('the student mappers leak only the classes they are allowed to carry', () => {
+    const canary = (field: string) => `CANARY_${field}`;
+    const person = {
+      _id: 'p1', tenantId: 't', legalFirstName: 'Riya', legalMiddleName: null, legalLastName: 'Sharma', preferredName: null,
+      gender: canary('gender'), dateOfBirth: canary('dateOfBirth'), primaryEmail: canary('primaryEmail'), primaryPhone: canary('primaryPhone'),
+      personalEmail: canary('personalEmail'), personalPhone: canary('personalPhone'), address: { line1: canary('address'), line2: null, city: null, state: null, postalCode: null, country: null },
+      emergencyContact: null, profilePhotoKey: canary('profilePhotoKey'),
+    } as unknown as PersonDoc;
+    const student = { _id: 's1', tenantId: 't', personId: 'p1', status: 'ACTIVE', photoKey: canary('photoKey'), bloodGroup: canary('bloodGroup'), notes: canary('notes'), version: 1 } as unknown as StudentDoc;
+    const admission = {
+      _id: 'a1', studentId: 's1', admissionNumber: 'GPS/1', admissionDate: '2026-04-01', mode: 'NEW_ADMISSION', admissionSessionId: 'x', admissionLocationId: 'y', admissionClassOfferingId: 'c1',
+      isCurrent: true, category: canary('category'), previousSchool: { name: canary('previousSchool'), board: null, className: null, tcNumber: null }, remarks: canary('remarks'),
+    } as unknown as StudentAdmissionDoc;
+    const klass = { _id: 'c1', displayName: 'Class VIII', displayCode: 'VIII' } as unknown as ClassOfferingDoc;
+    const section = { _id: 'sec1', sectionCode: 'A', displayName: 'A' } as unknown as SectionOfferingDoc;
+    const enrollment = { _id: 'e1', studentId: 's1', classOfferingId: 'c1', academicSessionId: 'x', locationId: 'y', state: 'OPEN', effectiveFrom: '2026-04-01' } as unknown as StudentEnrollmentDoc;
+    const assignment = { _id: 'as1', sectionId: 'sec1', rollNumber: '7' } as unknown as StudentSectionAssignmentDoc;
+    const h: StudentHydration = {
+      today: '2026-11-15',
+      people: new Map([['p1', person]]),
+      admissions: new Map([['s1', admission]]),
+      placements: new Map([['s1', { enrollment, assignment }]]),
+      classes: new Map([['c1', klass]]),
+      sections: new Map([['sec1', section]]),
+      primaryGuardianNames: new Map([['s1', 'Priya Sharma']]),
+    };
+    const directory = JSON.stringify(toStudentDirectoryDTO(student, h));
+    const faculty = JSON.stringify(toFacultySummaryDTO(student, h, [{ subjectOfferingId: 'o1', subjectName: 'Maths' }]));
+    const withoutPersonal = JSON.stringify(toAdmissionDTO(admission, 'Class VIII', false));
+    const withPersonal = JSON.stringify(toAdmissionDTO(admission, 'Class VIII', true));
+
+    const fields = [...Object.entries(DATA_CLASSIFICATION.student), ...Object.entries(DATA_CLASSIFICATION.student_admission), ...Object.entries(DATA_CLASSIFICATION.person)] as [string, DataClass][];
+    for (const [field, cls] of fields) {
+      if (cls === 'INTERNAL') continue;
+      for (const [name, dto] of [['directory', directory], ['faculty summary', faculty]] as const) expect(dto, `${field} must not be in the ${name}`).not.toContain(canary(field));
+      if (cls === 'PERSONAL' || cls === 'RESTRICTED') expect(withoutPersonal, `${field} needs student:view_personal`).not.toContain(canary(field));
+      if (cls === 'SECRET') expect(withPersonal, `${field} is never sent`).not.toContain(canary(field));
+    }
+    for (const field of ['category', 'previousSchool', 'remarks']) expect(withPersonal, field).toContain(canary(field));
+    expect(directory).toContain('Priya Sharma');
+    expect(faculty).not.toContain('Priya Sharma');
+    expect(directory).toContain('VIII-A');
   });
 });

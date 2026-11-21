@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type EmployeeProfileDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
+import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type CreateStudentResultDTO, type EmployeeProfileDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
 import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
@@ -468,4 +468,39 @@ export async function download(url: string) {
       r.on('end', () => cb(null, Buffer.concat(chunks)));
     });
   return { status: res.status, headers: res.headers, body: res.body as Buffer, error: res.status >= 400 ? (JSON.parse((res.body as Buffer).toString()) as { error: { code: string } }).error : null };
+}
+
+// ───────────────────────────────────────────────────────────── students and parents (Module 4)
+
+/** The staff school (Class VIII at Mohali with sections A, B, C and Mathematics + Science as required subjects, ACTIVE session). */
+export const studentSchool = staffSchool;
+export type StudentSchool = StaffSchool;
+
+let studentSeq = 0;
+/** A valid Quick Add body: a new student in VIII-A with a new mother, fresh names and phone each call. */
+export function studentBody(t: StudentSchool, overrides: Record<string, unknown> = {}) {
+  studentSeq += 1;
+  return {
+    legalFirstName: `Kid${studentSeq}`,
+    legalLastName: 'Learner',
+    locationId: t.moh.locationId,
+    classOfferingId: t.classOfferingId,
+    sectionId: t.sections.A,
+    guardian: { legalFirstName: `Parent${studentSeq}`, legalLastName: 'Learner', phone: nextPhone(), email: `parent${studentSeq}.${Date.now()}@greenfield.demo`, relationshipType: 'Mother' },
+    ...overrides,
+  };
+}
+
+export async function addStudent(t: { agent: Agent } & StudentSchool, overrides: Record<string, unknown> = {}): Promise<CreateStudentResultDTO> {
+  const res = await t.agent.post(`${API}/students`).send(studentBody(t, overrides));
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return res.body.data as CreateStudentResultDTO;
+}
+
+/** A faculty login linked to a new teacher who has the given academic assignments (items of `POST /employees/:id/academic-assignments`). */
+export async function teacherWith(t: StaffSchool, items: Record<string, unknown>[]) {
+  const employee = await addActiveEmployee(t);
+  await t.agent.post(`${API}/employees/${employee.employeeId}/academic-assignments`).send({ items }).expect(201);
+  const login = await loginAs(t, 'FACULTY', employee);
+  return { ...login, employee };
 }

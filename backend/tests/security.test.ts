@@ -13,6 +13,7 @@ import { Department, Designation } from '../src/modules/staff/master.model';
 import { EmployeeDocument, ProfileChangeRequest } from '../src/modules/staff/identity.models';
 import { Person } from '../src/modules/staff/person.model';
 import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
+import { Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent } from '../src/modules/students/student.models';
 import { User } from '../src/platform/users/user.model';
 import { School } from '../src/modules/school/school.model';
 import {
@@ -71,7 +72,17 @@ interface StaffIds {
   userId: string;
 }
 
-type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds };
+interface StudentIds {
+  studentId: string;
+  enrollmentId: string;
+  sectionAssignmentId: string;
+  subjectEnrollmentId: string;
+  guardianLinkId: string;
+  guardianPersonId: string;
+  externalIdId: string;
+}
+
+type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds };
 
 /** Every School, Location, Setup, Master, Academic and Staff route that takes an id, pointed at the given ids. */
 function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
@@ -84,6 +95,8 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
   const board = `${API}/boards/${x.boardId}`;
   const st = ids.staff;
   const employee = `${API}/employees/${st.employeeId}`;
+  const kid = ids.students;
+  const student = `${API}/students/${kid.studentId}`;
   return {
     reads: [
       { name: 'GET school', send: (a) => a.get(s) },
@@ -118,6 +131,16 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET restricted profile', send: (c) => c.get(`${employee}/restricted`) },
       { name: 'GET user account', send: (c) => c.get(`${employee}/user-account`) },
       { name: 'GET documents', send: (c) => c.get(`${employee}/documents`) },
+      // Students and parents (Module 4)
+      { name: 'GET student', send: (c) => c.get(student) },
+      { name: 'GET student history', send: (c) => c.get(`${student}/history`) },
+      { name: 'GET student guardians', send: (c) => c.get(`${student}/guardians`) },
+      { name: 'GET student enrollments', send: (c) => c.get(`${student}/enrollments`) },
+      { name: 'GET student completeness', send: (c) => c.get(`${student}/completeness`) },
+      { name: 'GET student academic context', send: (c) => c.get(`${student}/academic-context`) },
+      { name: 'GET student external IDs', send: (c) => c.get(`${student}/external-ids`) },
+      { name: 'GET student subjects', send: (c) => c.get(`${API}/student-enrollments/${kid.enrollmentId}/subjects`) },
+      { name: 'GET parent and children', send: (c) => c.get(`${API}/guardians/${kid.guardianPersonId}/children`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -202,6 +225,31 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'reactivate user', send: (c) => c.post(`${API}/users/${st.userId}/reactivate`) },
       { name: 'disable user', send: (c) => c.post(`${API}/users/${st.userId}/disable`) },
       { name: 'change user role', send: (c) => c.patch(`${API}/users/${st.userId}/role`).send({ role: 'STAFF' }) },
+      // Students and parents (Module 4)
+      { name: 'PATCH student', send: (c) => c.patch(student).send({ version: 1, notes: 'Hijacked' }) },
+      { name: 'DELETE student', send: (c) => c.delete(student) },
+      { name: 'student status', send: (c) => c.post(`${student}/status`).send({ to: 'INACTIVE' }) },
+      { name: 'activate student', send: (c) => c.post(`${student}/activate`) },
+      { name: 'record admission', send: (c) => c.post(`${student}/admission`).send({ locationId: ids.locationId, classOfferingId: x.classOfferingId }) },
+      { name: 'POST external ID', send: (c) => c.post(`${student}/external-ids`).send({ type: 'Board Reg No', value: 'MATRIX-1' }) },
+      { name: 'end external ID', send: (c) => c.post(`${API}/external-ids/${kid.externalIdId}/end`).send({}) },
+      { name: 'POST guardian', send: (c) => c.post(`${student}/guardians`).send({ legalFirstName: 'Matrix', relationshipType: 'Father' }) },
+      { name: 'link existing guardian', send: (c) => c.post(`${student}/link-existing-guardian`).send({ guardianPersonId: kid.guardianPersonId, relationshipType: 'Father' }) },
+      { name: 'PATCH guardian link', send: (c) => c.patch(`${API}/guardian-links/${kid.guardianLinkId}`).send({ version: 1, pickupAllowed: true }) },
+      { name: 'end guardian link', send: (c) => c.post(`${API}/guardian-links/${kid.guardianLinkId}/end`).send({}) },
+      { name: 'PATCH guardian person', send: (c) => c.patch(`${API}/guardians/${kid.guardianPersonId}`).send({ legalFirstName: 'Hijacked' }) },
+      { name: 'POST enrollment', send: (c) => c.post(`${student}/enrollments`).send({ academicSessionId: x.sessionId, locationId: ids.locationId, classOfferingId: x.otherClassOfferingId }) },
+      { name: 'PATCH enrollment', send: (c) => c.patch(`${API}/student-enrollments/${kid.enrollmentId}`).send({ version: 1, programmeId: null }) },
+      { name: 'complete enrollment', send: (c) => c.post(`${API}/student-enrollments/${kid.enrollmentId}/complete`).send({}) },
+      { name: 'assign section', send: (c) => c.post(`${API}/student-enrollments/${kid.enrollmentId}/section-assignment`).send({ sectionId: x.sectionId }) },
+      { name: 'PATCH roll number', send: (c) => c.patch(`${API}/student-section-assignments/${kid.sectionAssignmentId}`).send({ rollNumber: '9' }) },
+      { name: 'section transfer', send: (c) => c.post(`${student}/section-transfer`).send({ toSectionId: x.sectionId, effectiveDate: '2026-06-01', reason: 'Matrix' }) },
+      { name: 'initialize subjects', send: (c) => c.post(`${API}/student-enrollments/${kid.enrollmentId}/subjects/initialize`) },
+      { name: 'validate subject choice', send: (c) => c.post(`${API}/student-enrollments/${kid.enrollmentId}/subjects/validate-selection`).send({ subjectOfferingIds: [] }) },
+      { name: 'save subject choice', send: (c) => c.post(`${API}/student-enrollments/${kid.enrollmentId}/subjects`).send({ subjectOfferingIds: [] }) },
+      { name: 'end subject', send: (c) => c.post(`${API}/student-subject-enrollments/${kid.subjectEnrollmentId}/end`).send({}) },
+      { name: 'bulk roll numbers', send: (c) => c.post(`${API}/sections/roll-numbers/bulk`).send({ sectionId: x.sectionId, order: 'ALPHABETICAL', apply: true }) },
+      { name: 'recommend sections', send: (c) => c.post(`${API}/sections/recommend`).send({ classOfferingId: x.classOfferingId }) },
     ],
   };
 }
@@ -272,6 +320,35 @@ async function victim() {
   };
   const ruleVersion = (await b.agent.post(`${API}/boards/${board.boardId}/rule-versions`).send({ name: 'v1' }).expect(201)).body.data;
 
+  // Students: one in section A of class 6 with a parent, an outside ID and one chosen subject (the class has a choose-one group).
+  const kid = (
+    await b.agent
+      .post(`${API}/students`)
+      .send({
+        legalFirstName: 'Vic',
+        legalLastName: 'Kid',
+        locationId: b.moh.locationId,
+        classOfferingId: g6!.classOfferingId,
+        sectionId: section.sectionOfferingId,
+        rollNumber: '1',
+        guardian: { legalFirstName: 'Vic', legalLastName: 'Parent', phone: '+91 98140 19999', relationshipType: 'Mother' },
+      })
+      .expect(201)
+  ).body.data.student as { studentId: string };
+  await b.agent.post(`${API}/students/${kid.studentId}/external-ids`).send({ type: 'Legacy ERP ID', value: 'VIC-1' }).expect(201);
+  const kidEnrollment = (await StudentEnrollment.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!;
+  await b.agent.post(`${API}/student-enrollments/${kidEnrollment._id}/subjects`).send({ subjectOfferingIds: [offering.subjectOfferingId] }).expect(200);
+  const link = (await StudentGuardianLink.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!;
+  const students: StudentIds = {
+    studentId: kid.studentId,
+    enrollmentId: kidEnrollment._id,
+    sectionAssignmentId: (await StudentSectionAssignment.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!._id,
+    subjectEnrollmentId: (await StudentSubjectEnrollment.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!._id,
+    guardianLinkId: link._id,
+    guardianPersonId: link.guardianPersonId,
+    externalIdId: (await StudentExternalId.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!._id,
+  };
+
   const academic: AcademicIds = {
     sessionId: session.academicSessionId,
     locationId: b.moh.locationId,
@@ -287,12 +364,12 @@ async function victim() {
     boardId: board.boardId,
     ruleVersionId: ruleVersion.ruleVersionId,
   };
-  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff };
+  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students };
 }
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
@@ -306,7 +383,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
     const academicBefore = await academicSnapshot(b.tenantId);
 
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
     for (const call of [...reads, ...mutations]) {
       const res = await call.send(attacker.agent);
       expect(res.status, `${call.name} → ${res.status} ${JSON.stringify(res.body)}`).toBe(404);
@@ -354,7 +431,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('every protected route rejects an anonymous caller with 401', async () => {
     const b = await victim();
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
     for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/employees/code-availability', '/departments', '/designations']) {
@@ -375,7 +452,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
 
   it('Faculty, Staff and Parents are refused every mutation, even calling the API directly', async () => {
     const b = await victim();
-    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
+    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
     for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
       const user = await createUserAndLogin(b.tenantId, role);
       for (const call of mutations) {
@@ -392,7 +469,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('Parents cannot read any school or location data', async () => {
     const b = await victim();
     const parent = await createUserAndLogin(b.tenantId, 'PARENT');
-    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff });
+    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
     for (const call of reads) expect((await call.send(parent.agent)).status, call.name).toBe(403);
   });
 
