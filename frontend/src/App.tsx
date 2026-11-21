@@ -10,7 +10,15 @@ import { EmployeePage } from '@/features/people/employee-page';
 import { PeoplePage } from '@/features/people/people-page';
 import { RequestsPage } from '@/features/people/requests-page';
 import { PeopleSettingsPage } from '@/features/people/settings-page';
+import { ParentLayout } from '@/features/parent/parent-layout';
+import { ParentChildPage, ParentDocumentsPage, ParentHomePage } from '@/features/parent/parent-pages';
+import { ParentRequestsPage } from '@/features/parent/parent-requests-page';
 import { AttentionPage } from '@/features/students/attention-page';
+import { ExitsPage } from '@/features/students/exits-page';
+import { ImportPage } from '@/features/students/import-page';
+import { ImportsPage } from '@/features/students/imports-page';
+import { PromotionPage } from '@/features/students/promotion-page';
+import { StudentRequestsPage } from '@/features/students/requests-page';
 import { FamiliesPage } from '@/features/students/families-page';
 import { FamilyPage } from '@/features/students/family-page';
 import { MyStudentsPage } from '@/features/students/my-students-page';
@@ -34,7 +42,7 @@ import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OverviewPage } from '@/features/setup/overview-page';
 import { SetupWizardPage } from '@/features/setup/wizard/setup-wizard-page';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useSession } from '@/lib/auth';
 import {
   GuestOnly,
   RequireAcademicAccess,
@@ -42,7 +50,9 @@ import {
   RequireAuth,
   RequireDirectoryAccess,
   RequireFaculty,
+  RequireParent,
   RequireStudentAccess,
+  RequireStudentPermission,
   RequireStudentAdmin,
   RequirePeopleAdmin,
   RequireSetupAccess,
@@ -58,6 +68,12 @@ function SetupHome() {
 function AcademicsHome() {
   const { can } = useAuth();
   return can('academic:view_config') ? <AcademicsPage /> : <AcademicStructurePage />;
+}
+
+/** Parents have their own portal; everyone else gets the dashboard. */
+function Home() {
+  const session = useSession();
+  return session.user.role === 'PARENT' ? <Navigate to="/parent" replace /> : <HomePage />;
 }
 
 const router = createBrowserRouter([
@@ -91,6 +107,22 @@ const router = createBrowserRouter([
         children: [
           // First-time setup runs full screen, outside the app shell.
           { path: '/setup', element: <SetupWizardPage /> },
+          // The parent portal has its own simple layout (no admin sidebar).
+          {
+            path: '/parent',
+            element: <RequireParent />,
+            children: [
+              {
+                element: <ParentLayout />,
+                children: [
+                  { index: true, element: <ParentHomePage /> },
+                  { path: 'children/:studentId', element: <ParentChildPage /> },
+                  { path: 'documents', element: <ParentDocumentsPage /> },
+                  { path: 'requests', element: <ParentRequestsPage /> },
+                ],
+              },
+            ],
+          },
           {
             element: <AppShell />,
             children: [
@@ -98,7 +130,7 @@ const router = createBrowserRouter([
               {
                 element: <RequireSetupComplete />,
                 children: [
-                  { index: true, path: '/', element: <HomePage /> },
+                  { index: true, path: '/', element: <Home /> },
                   {
                     path: '/school-setup',
                     element: <RequireSetupAccess />,
@@ -148,6 +180,22 @@ const router = createBrowserRouter([
                               { index: true, element: <StudentsPage /> },
                               { path: 'new', element: <StudentsPage /> },
                               { path: 'attention', element: <AttentionPage /> },
+                              { path: 'exits', element: <ExitsPage /> },
+                              {
+                                element: <RequireStudentPermission permission="student:lifecycle" />,
+                                children: [{ path: 'promotion', element: <PromotionPage /> }],
+                              },
+                              {
+                                element: <RequireStudentPermission permission="student:import" />,
+                                children: [
+                                  { path: 'imports', element: <ImportsPage /> },
+                                  { path: 'imports/:importId', element: <ImportPage /> },
+                                ],
+                              },
+                              {
+                                element: <RequireStudentPermission permission="student:approve_changes" />,
+                                children: [{ path: 'requests', element: <StudentRequestsPage /> }],
+                              },
                             ],
                           },
                         ],

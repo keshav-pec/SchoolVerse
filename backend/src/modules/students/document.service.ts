@@ -134,15 +134,19 @@ export async function createDocumentInTx(
 // ───────────────────────────────────────────────────────────── list and completeness
 
 /** "5 of 6 done. Missing: Previous school TC". The certificate from the old school is only expected from a student who joined from another school. */
-async function completenessOf(ctx: ServiceContext, studentId: string, docs: StudentDocumentDoc[]): Promise<DocumentCompletenessDTO> {
-  const admission = await StudentAdmission.findOne({ tenantId: ctx.tenantId, studentId, isCurrent: true }).select('previousSchool').lean<{ previousSchool: { name: string } | null }>();
-  const required: StudentDocumentType[] = [...REQUIRED_STUDENT_DOCUMENT_TYPES, ...(admission?.previousSchool ? (['TRANSFER_CERTIFICATE'] as const) : [])];
+export function documentCompleteness(joinedFromAnotherSchool: boolean, docs: Pick<StudentDocumentDoc, 'documentType' | 'generatedForCertificateId'>[]): DocumentCompletenessDTO {
+  const required: StudentDocumentType[] = [...REQUIRED_STUDENT_DOCUMENT_TYPES, ...(joinedFromAnotherSchool ? (['TRANSFER_CERTIFICATE'] as const) : [])];
   // A certificate this school issued is not the old school's.
   const have = new Set(docs.filter((d) => !d.generatedForCertificateId).map((d) => d.documentType));
   const missing = required.filter((t) => !have.has(t)).map((documentType) => ({ documentType, label: documentType === 'TRANSFER_CERTIFICATE' ? 'Previous school TC' : STUDENT_DOCUMENT_TYPE_LABELS[documentType] }));
   const done = required.length - missing.length;
   const message = missing.length === 0 ? `All ${required.length} documents are in.` : `${done} of ${required.length} done. Missing: ${missing.map((m) => m.label).join(', ')}`;
   return { total: required.length, done, missing, message };
+}
+
+async function completenessOf(ctx: ServiceContext, studentId: string, docs: StudentDocumentDoc[]): Promise<DocumentCompletenessDTO> {
+  const admission = await StudentAdmission.findOne({ tenantId: ctx.tenantId, studentId, isCurrent: true }).select('previousSchool').lean<{ previousSchool: { name: string } | null }>();
+  return documentCompleteness(Boolean(admission?.previousSchool), docs);
 }
 
 async function activeDocuments(ctx: ServiceContext, studentId: string): Promise<StudentDocumentDoc[]> {

@@ -129,3 +129,17 @@ export function RequireFaculty() {
   if (session.user.role !== 'FACULTY') return <NotFoundPage />;
   return <Outlet />;
 }
+
+/** The parent portal is for parents only. Anyone else is shown Not Found. */
+export function RequireParent() {
+  const session = useSession();
+  if (session.user.role !== 'PARENT') return <NotFoundPage />;
+  return <Outlet />;
+}
+
+/** Student lifecycle pages need their own permission (promotion, imports, change requests). Others see Not Found. */
+export function RequireStudentPermission({ permission }: { permission: Permission }) {
+  const { can } = useAuth();
+  if (!can(permission)) return <NotFoundPage />;
+  return <Outlet />;
+}

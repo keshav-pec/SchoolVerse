@@ -12,6 +12,7 @@ import type {
   RepeatResultDTO,
   SignedFileLinkDTO,
   StudentAdminProfileDTO,
+  StudentAttentionDTO,
   StudentContextDTO,
   StudentDocumentsDTO,
   StudentHistoryDTO,
@@ -36,6 +37,7 @@ import {
   expectError,
   forceStatus,
   guardianLinks,
+  inviteParent,
   nextPhone,
   offer,
   promotionSchool,
@@ -570,5 +572,48 @@ describe('Student context for other modules (Module 4, Part 3 · F)', () => {
     const draft = (await t.agent.post(`${API}/students`).send({ draft: true, legalFirstName: 'Draft', legalLastName: 'Kid' }).expect(201)).body.data.student;
     await expect(studentService.assertStudentUsable(ctx, draft.studentId, 'NEW_RECORD')).rejects.toMatchObject({ code: 'STUDENT_INCOMPLETE' });
     await expect(studentService.getStudentContext(serviceContextFor('another-tenant', t.ctx.userId), { studentId: a.student.studentId })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// ───────────────────────────────────────────────────────────── Needs Attention (Part 4)
+
+describe('Needs Attention for parent access, exits, duplicates and follow-up work (Module 4, Part 4)', () => {
+  it('lists invitations not accepted, removed access, certificates on their way, possible duplicate students, missing documents and promotion review; the badge counts only the fix-now groups', async () => {
+    const t = await promotionSchool();
+    const guardian = (first: string) => ({ legalFirstName: first, legalLastName: 'Parent', phone: nextPhone(), email: `${first.toLowerCase()}.p4@greenfield.demo`, relationshipType: 'Mother' });
+    const invited = await addStudent(t, { ...ADMITTED, legalFirstName: 'Invited', guardian: guardian('Ivy') });
+    const revoked = await addStudent(t, { ...ADMITTED, legalFirstName: 'Revoked', guardian: guardian('Rhea') });
+    const signedIn = await addStudent(t, { ...ADMITTED, legalFirstName: 'Signed', guardian: guardian('Sana') });
+    const leaving = await addStudent(t, { ...ADMITTED, legalFirstName: 'Leaving' });
+    await addStudent(t, { ...ADMITTED, legalFirstName: 'Stuck', classOfferingId: t.nine.classOfferingId, sectionId: t.nine.sections.A }); // no Class X next year
+    await addStudent(t, { ...ADMITTED, legalFirstName: 'Same', legalLastName: 'Child', dateOfBirth: '2014-05-10' });
+    await addStudent(t, { ...ADMITTED, legalFirstName: 'Same', legalLastName: 'Child', dateOfBirth: '2014-05-10', confirmNotDuplicate: true });
+
+    await inviteParent(t, invited.student.studentId, 'ivy.p4@greenfield.demo');
+    const { linkId } = await inviteParent(t, revoked.student.studentId, 'rhea.p4@greenfield.demo');
+    await post(t.agent, `/guardian-links/${linkId}/revoke-portal`);
+    await activatedParent(t, signedIn.student.studentId, 'sana.p4@greenfield.demo');
+    await post(t.agent, `/students/${leaving.student.studentId}/transfer-certificates`, { reasonForLeaving: 'Moving' }, 201);
+
+    const attention = await get<StudentAttentionDTO>(t.agent, `/students/attention?academicSessionId=${t.sessionId}&locationId=${t.moh.locationId}`);
+    const group = (key: string) => attention.groups.find((g) => g.key === key)!;
+    const first = (key: string) => group(key).items.map((i) => i.fullName.split(' ')[0]);
+
+    expect(group('PARENT_ACCESS').items.map((i) => [i.fullName.split(' ')[0], i.fix])).toEqual([['Invited', 'INVITE_PARENT'], ['Revoked', 'INVITE_PARENT']]);
+    expect(group('PARENT_ACCESS').items[0]!.message).toMatch(/Ivy Parent was invited but has not signed in/);
+    expect(first('EXIT')).toEqual(['Leaving']);
+    expect(group('EXIT').items[0]).toMatchObject({ fix: 'FINISH_EXIT', message: expect.stringMatching(/transfer certificate/i) });
+    expect(first('DATA_QUALITY')).toEqual(['Same', 'Same']);
+    expect(group('DATA_QUALITY').items[0]!.fix).toBe('OPEN_STUDENT');
+
+    // Follow-up: nobody has documents yet, and the Class IX student has no class next year.
+    expect(group('DOCUMENTS').followUp).toBe(true);
+    expect(group('DOCUMENTS').items).toHaveLength(7);
+    expect(group('DOCUMENTS').items[0]).toMatchObject({ fix: 'UPLOAD_DOCUMENT', message: expect.stringMatching(/^0 of 4 done\. Missing: Birth certificate/) });
+    expect(group('PROMOTION').items.map((i) => [i.fullName.split(' ')[0], i.fix])).toEqual([['Stuck', 'REVIEW_PROMOTION']]);
+    expect(group('PROMOTION').items[0]!.message).toMatch(/next year/i);
+
+    // Invited, Revoked, Leaving and the two Same children; documents and promotion are follow-up only.
+    expect(attention.counts).toMatchObject({ activeStudents: 7, needsAttention: 5, followUp: 8, portalActivationPercent: 14, withdrawalsThisYear: 0 });
   });
 });

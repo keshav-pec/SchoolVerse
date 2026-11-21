@@ -317,7 +317,7 @@ describe('Student list and profile (Module 4, Part 2)', () => {
     mockApi('SCHOOL_ADMIN', {
       ...schoolHandlers(),
       [`GET ${API}/students`]: { data: { items: [], page: 1, pageSize: 20, total: 0 } },
-      [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 0, newThisYear: 0, needsAttention: 0 }, groups: [] } },
+      [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 0, newThisYear: 0, needsAttention: 0, followUp: 0, portalActivationPercent: null, withdrawalsThisYear: 0 }, groups: [] } },
     });
     renderWithApp(
       <Ready>
@@ -335,7 +335,7 @@ describe('Student list and profile (Module 4, Part 2)', () => {
     mockApi('SCHOOL_ADMIN', {
       ...schoolHandlers(),
       [`GET ${API}/students`]: { data: { items: [directoryRow()], page: 1, pageSize: 20, total: 1 } },
-      [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 38, newThisYear: 6, needsAttention: 4 }, groups: [] } },
+      [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 38, newThisYear: 6, needsAttention: 4, followUp: 0, portalActivationPercent: null, withdrawalsThisYear: 0 }, groups: [] } },
     });
     renderWithApp(
       <Ready>
@@ -353,7 +353,7 @@ describe('Student list and profile (Module 4, Part 2)', () => {
     const strip = await screen.findByLabelText('Student summary');
     const items = within(strip).getAllByText(/attention|active students|new this year/i);
     expect(items[0]).toHaveTextContent(/need attention/i);
-    expect(within(strip).getByRole('link')).toHaveAttribute('href', '/students/attention');
+    expect(within(strip).getAllByRole('link')[0]).toHaveAttribute('href', '/students/attention');
   });
 
   it('the profile says what is still to do, with a Fix button; a missing section also turns Roll Number off with its reason', async () => {
@@ -506,11 +506,11 @@ describe('Faculty access (Module 4, Part 2)', () => {
 describe('Needs Attention (Module 4, Part 2)', () => {
   it('groups what is unfinished and each row\'s Fix button goes to the right place', async () => {
     const data: StudentAttentionDTO = {
-      counts: { activeStudents: 3, newThisYear: 1, needsAttention: 3 },
+      counts: { activeStudents: 3, newThisYear: 1, needsAttention: 3, followUp: 0, portalActivationPercent: null, withdrawalsThisYear: 0 },
       groups: [
-        { key: 'SETUP', title: 'Student setup', items: [{ key: 'a:SECTION', studentId: 'stu-a', personId: null, fullName: 'Neha Gill', admissionNumber: 'GPS/2026/00003', classSection: directoryRow().classSection, message: 'No section yet.', fix: 'ADD_SECTION' }] },
-        { key: 'FAMILY', title: 'Family', items: [{ key: 'b:GUARDIAN', studentId: 'stu-b', personId: null, fullName: 'Draftie Learner', admissionNumber: null, classSection: null, message: 'No parent or guardian is linked.', fix: 'ADD_GUARDIAN' }, { key: 'parent:p1', studentId: null, personId: 'p1', fullName: 'Asha One', admissionNumber: null, classSection: null, message: 'Has the same phone number as Asha Two. They may be the same parent.', fix: 'OPEN_FAMILY' }] },
-        { key: 'SUBJECTS', title: 'Subjects', items: [] },
+        { key: 'SETUP', title: 'Student setup', followUp: false, items: [{ key: 'a:SECTION', studentId: 'stu-a', personId: null, fullName: 'Neha Gill', admissionNumber: 'GPS/2026/00003', classSection: directoryRow().classSection, message: 'No section yet.', fix: 'ADD_SECTION' }] },
+        { key: 'FAMILY', title: 'Family', followUp: false, items: [{ key: 'b:GUARDIAN', studentId: 'stu-b', personId: null, fullName: 'Draftie Learner', admissionNumber: null, classSection: null, message: 'No parent or guardian is linked.', fix: 'ADD_GUARDIAN' }, { key: 'parent:p1', studentId: null, personId: 'p1', fullName: 'Asha One', admissionNumber: null, classSection: null, message: 'Has the same phone number as Asha Two. They may be the same parent.', fix: 'OPEN_FAMILY' }] },
+        { key: 'SUBJECTS', title: 'Subjects', followUp: false, items: [] },
       ],
     };
     mockApi('SCHOOL_ADMIN', { ...schoolHandlers(), [`GET ${API}/students/attention`]: { data } });
@@ -525,12 +525,12 @@ describe('Needs Attention (Module 4, Part 2)', () => {
     expect(await screen.findByRole('link', { name: 'Choose Section' })).toHaveAttribute('href', '/students/stu-a?fix=ADD_SECTION');
     expect(screen.getByRole('link', { name: 'Add Parent' })).toHaveAttribute('href', '/students/stu-b?fix=ADD_GUARDIAN');
     expect(screen.getByRole('link', { name: 'Open Family' })).toHaveAttribute('href', '/families/p1');
-    const subjects = screen.getByLabelText('Subjects');
-    expect(within(subjects).getByText(/nothing to fix here/i)).toBeInTheDocument();
+    // Empty groups collapse into one "all clear" line instead of a card each.
+    expect(screen.getByTestId('all-clear')).toHaveTextContent(/nothing to fix in: subjects/i);
   });
 
   it('says everything is in order when nothing needs attention', async () => {
-    mockApi('SCHOOL_ADMIN', { ...schoolHandlers(), [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 5, newThisYear: 0, needsAttention: 0 }, groups: [] } } });
+    mockApi('SCHOOL_ADMIN', { ...schoolHandlers(), [`GET ${API}/students/attention`]: { data: { counts: { activeStudents: 5, newThisYear: 0, needsAttention: 0, followUp: 0, portalActivationPercent: null, withdrawalsThisYear: 0 }, groups: [] } } });
     renderWithApp(
       <Ready>
         <StudentContextProvider>

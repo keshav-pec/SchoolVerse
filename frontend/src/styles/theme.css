@@ -117,3 +117,25 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Minimal scrollbar: thin, invisible until the area is hovered. */
+.scrollbar-minimal {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-minimal:hover {
+  scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-minimal::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+.scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.25);
+}

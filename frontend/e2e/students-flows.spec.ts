@@ -23,9 +23,9 @@ test('admin adds a student with a new parent: a class, an automatic section, an 
 
   await drawer.getByLabel(/^first name/i).fill('Mira');
   await drawer.getByLabel(/^last name/i).fill('Dosanjh');
-  await chooseOption(drawer.getByLabel(/^class\W*$/i), /VIII/);
+  await chooseOption(drawer.getByLabel(/^class\W*$/i), /^Class 8/);
   // The best section is suggested with its free seats, the number is automatic, and the required subjects are announced.
-  await expect(drawer.getByText(/suggested: viii-/i)).toBeVisible();
+  await expect(drawer.getByText(/suggested: 8-/i)).toBeVisible();
   await expect(drawer.getByText(/will be created automatically/i)).toBeVisible();
   await expect(drawer.getByText(/required subjects?/i).first()).toBeVisible();
 
@@ -51,7 +51,7 @@ test('admin adds a brother by reusing the same parent: no parent details are typ
 
   await drawer.getByLabel(/^first name/i).fill('Veer');
   await drawer.getByLabel(/^last name/i).fill('Dosanjh');
-  await chooseOption(drawer.getByLabel(/^class\W*$/i), /VIII/);
+  await chooseOption(drawer.getByLabel(/^class\W*$/i), /^Class 8/);
   await drawer.getByLabel(/^parent phone/i).fill(PARENT_PHONE);
 
   // The phone is recognised: the card names the parent and the child already in the school.
@@ -82,15 +82,15 @@ test('admin changes a section and the History tab names both sections', async ({
 
   await page.getByRole('button', { name: /^change section$/i }).first().click();
   const dialog = page.getByRole('alertdialog');
-  await expect(dialog.getByText(/now in viii-/i)).toBeVisible();
-  await chooseOption(dialog.getByLabel(/^new section/i), /VIII-/);
+  await expect(dialog.getByText(/now in 8-/i)).toBeVisible();
+  await chooseOption(dialog.getByLabel(/^new section/i), /^8-/);
   await dialog.getByLabel(/^reason/i).fill('Parent request');
   await dialog.getByRole('button', { name: /^change section$/i }).click();
-  await expectToast(page, /Moved to VIII-/);
+  await expectToast(page, /Moved to 8-/);
 
   await page.getByRole('tab', { name: /history/i }).click();
   const timeline = page.getByRole('list', { name: /^history$/i });
-  await expect(timeline.getByText(/Moved from VIII-[ABC] to VIII-[ABC]/)).toBeVisible();
+  await expect(timeline.getByText(/Moved from 8-[ABC] to 8-[ABC]/)).toBeVisible();
   await expect(timeline).toContainText('Parent request');
 });
 

@@ -3,15 +3,20 @@ import { Link } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
 import {
   ArrowRight,
+  DoorOpen,
+  FileUp,
   GraduationCap,
   Inbox,
   LayoutDashboard,
   Library,
+  ListChecks,
   ListTree,
   MapPinned,
+  Rocket,
   School,
   Sparkles,
   UserRound,
+  Users,
   UsersRound,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -27,7 +32,7 @@ interface QuickLink {
   text: string;
   Icon: ComponentType<{ className?: string }>;
   tint: string;
-  permission: Permission;
+  permission?: Permission;
   /** Hidden for users who hold this permission (they get a richer link instead). */
   hideWith?: Permission;
   when?: (user: { role: string; personId: string | null }) => boolean;
@@ -109,6 +114,70 @@ const QUICK_LINKS: QuickLink[] = [
     permission: 'employee:manage',
   },
   {
+    to: '/students',
+    title: 'Students',
+    text: 'Find students, view their records and add new admissions.',
+    Icon: Users,
+    tint: 'bg-sun-soft text-warning',
+    permission: 'student:view',
+  },
+  {
+    to: '/students/attention',
+    title: 'Needs attention',
+    text: 'See students whose records are missing details or need a follow-up.',
+    Icon: ListChecks,
+    tint: 'bg-coral-soft text-coral',
+    permission: 'student:view',
+  },
+  {
+    to: '/families',
+    title: 'Families',
+    text: 'See each family’s guardians and the children linked to them.',
+    Icon: UsersRound,
+    tint: 'bg-mint-soft text-success',
+    permission: 'student:view',
+  },
+  {
+    to: '/students/requests',
+    title: 'Review parent requests',
+    text: 'Approve or decline changes parents have asked for on their child’s record.',
+    Icon: Inbox,
+    tint: 'bg-coral-soft text-coral',
+    permission: 'student:approve_changes',
+  },
+  {
+    to: '/students/promotion',
+    title: 'Promote students',
+    text: 'Move students to next year’s class when the school year ends.',
+    Icon: Rocket,
+    tint: 'bg-lavender-soft text-lavender',
+    permission: 'student:lifecycle',
+  },
+  {
+    to: '/students/exits',
+    title: 'Transfers & exits',
+    text: 'Record students who leave and issue transfer certificates.',
+    Icon: DoorOpen,
+    tint: 'bg-sun-soft text-warning',
+    permission: 'student:lifecycle',
+  },
+  {
+    to: '/students/imports',
+    title: 'Import students',
+    text: 'Add many students at once from a spreadsheet.',
+    Icon: FileUp,
+    tint: 'bg-brand-soft text-brand',
+    permission: 'student:import',
+  },
+  {
+    to: '/my-students',
+    title: 'My students',
+    text: 'See the students in the classes you teach.',
+    Icon: Users,
+    tint: 'bg-sun-soft text-warning',
+    when: (u) => u.role === 'FACULTY',
+  },
+  {
     to: '/me',
     title: 'My profile',
     text: 'Check your details and ask for changes if something is out of date.',
@@ -133,7 +202,7 @@ export function HomePage() {
   const { can } = useAuth();
   const links = QUICK_LINKS.filter(
     (l) =>
-      can(l.permission) &&
+      (!l.permission || can(l.permission)) &&
       !(l.hideWith && can(l.hideWith)) &&
       (!l.when || l.when(session.user)),
   );

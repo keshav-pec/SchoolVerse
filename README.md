@@ -32,7 +32,7 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 | 1 | Student and admission master, admission numbers, guardians and sibling reuse, enrollments, sections and roll numbers, subjects with the choice checker, history, faculty-scoped access (API) | ✅ Done |
 | 2 | Student & Family screens: persistent year and campus, Quick Add and Full Admission Form, student profile, Families, subject choice checker, Needs Attention, My Students | ✅ Done |
 | 3 | Parent access, documents, transfers, promotion, exit and TC, readmission, CSV import, student context service (API) | ✅ Done |
-| 4 | Parent portal, lifecycle screens, e2e, child-data security gate | Not started |
+| 4 | Parent portal, lifecycle screens (documents, parent access, transfers and exit with TC, promotion, imports, change requests), full Needs Attention, e2e, child-data security gate | ✅ Done |
 
 ## Layout
 
@@ -73,7 +73,7 @@ Demo password for every seeded account: `Welcome@123`.
 | admin@greenfield.demo | School Admin |
 | faculty@greenfield.demo | Faculty (read-only) |
 | staff@greenfield.demo | Staff (read-only) |
-| parent@greenfield.demo | Parent (no config access) |
+| parent@greenfield.demo | Parent: the parent portal at `/parent`, with two children (Riya and Arjun Kaur) |
 | admin@riverside.demo | School Admin of a second, isolated tenant. Its setup is **left mid-wizard** (step 5), so this login shows the wizard resuming. |
 
 Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open the web app's **/dev/outbox** page (on the sign-in page: forgot password → "Open the dev outbox"), follow her link, choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
@@ -87,14 +87,15 @@ Greenfield's people (Module 3, all synthetic): about ten employees across Mohali
 | A section change in the middle of the year | Kabir Singh moved from VIII-A to VIII-B on 1 September. Open his **History** tab. |
 | Drafts | Tara Mehra (a name only) and Ishaan Gill (admission pending, no section, no parent). Both are on **Needs Attention**. |
 | A subject choice not made yet | Zoya Khan (VI-A) has no first language. Open **Change Subjects**: pick Hindi and Punjabi together to see the checker say what is wrong. |
-| A parent with two children, already signed in | `parent@greenfield.demo` (Simran Kaur) has portal access to Riya and Arjun. Sign in and call `GET /api/v1/parent/children`. |
-| A pending invitation | Farah Khan (Zoya's mother) was invited and has not activated. Her link is in the dev outbox (`GET /api/v1/dev/outbox?to=farah.khan@greenfield.demo`). |
-| Access removed for one child | Meena Malhotra (Aarav's mother) was invited, then her access was removed. She keeps her login. |
+| A parent with two children, already signed in | `parent@greenfield.demo` (Simran Kaur) has portal access to Riya and Arjun. Sign in: the portal opens with a switcher for the two children. |
+| A pending invitation | Farah Khan (Zoya's mother) was invited and has not activated. Her link is in the dev outbox (`/dev/outbox`). Zoya is on **Needs Attention → Parent access**. |
+| Access removed for one child | Meena Malhotra (Aarav's mother) was invited, then her access was removed. She keeps her login. Aarav's **Parent Access** tab shows “Access removed”. |
 | A student who is leaving | A Chandigarh Class VIII student leaves on 31 March 2027 (moving to another school); their Transfer Certificate has not been requested yet. |
 | A Transfer Certificate waiting for dues | Another Chandigarh student's certificate is in **Pending clearance** (dues not cleared). |
-| Promotion to 2027-28 | 2027-28 is **published**, so `GET /api/v1/promotions/readiness` and `POST /api/v1/promotions/bulk` can be tried. |
+| Promotion to 2027-28 | 2027-28 is **published**: open **Students → Promotion**. |
+| An import file | `backend/seed/students-sample.csv` has a few mistakes on purpose: upload it on **Students → Imports**. |
 
-There is no student login. `faculty@greenfield.demo` sees only students in the sections they teach, on **My Students**. A parent login sees only their own children (Part 3 API; the parent screens arrive in Part 4).
+There is no student login. `faculty@greenfield.demo` sees only students in the sections they teach, on **My Students**. A parent login sees only their own children, in the parent portal.
 
 The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
 
@@ -182,7 +183,7 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 |---|---|---|
 | `/students` | School Admin | The student list with search, Class, Section, Status and More Filters. A strip above it puts **Needs attention** first. `/students/new` opens the same page with **Add Student** open. |
 | `/students/attention` | School Admin | **Needs Attention**, grouped as Student setup, Family and Subjects. Each row has a **Fix** button that opens the right drawer on the student (`?fix=`). A count badge sits in the sidebar. |
-| `/students/:studentId` | School Admin (full record) · Faculty (short summary) | Tabs `?tab=`: `overview`, `academic` (Class & Subjects), `guardians` (Parents & Guardians), `admission`, `history`. A student outside a teacher's sections shows **Not found**. |
+| `/students/:studentId` | School Admin (full record) · Faculty (short summary) | Tabs `?tab=`: `overview`, `academic` (Class & Subjects), `guardians` (Parents & Guardians), `access` (Parent Access), `documents`, `admission`, `exit` (Transfers & Exit), `history`. A student outside a teacher's sections shows **Not found**. |
 | `/families`, `/families/:personId` | School Admin | Every parent once, with all their children. Parent details are edited once. **Link Existing Student** and **Add New Child** reuse the parent. |
 | `/my-students` | Faculty | Cards with name, class, roll and the subjects the teacher teaches. No contact, address or birth date. |
 
@@ -190,9 +191,35 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 
 **Things that differ from the plan.** The **Full Admission Form** has 11 steps: Student, Personal, Admission, Previous School, Class, Subjects, Parent, Emergency, Address, Notes, Review. The "Subject choice pending" list filter is not a filter: those students are on Needs Attention → Subjects. Part 2 added two read-only backend routes the screens need: `GET /students/attention` and `GET /guardians`.
 
-## Parent access, lifecycle and import (Module 4, Part 3, API only)
+## Lifecycle screens and the parent portal (Module 4, Part 4)
 
-The screens for these arrive in Part 4. All routes are under `/api/v1` and return the standard `{ data }` / `{ error }` envelopes.
+| Route | Who | What |
+|---|---|---|
+| `/students/:id?tab=access` | `parent_access:manage` | Each parent's portal state (Not invited, Invited, Has access, Access removed). **Invite Parent** reuses an existing login ("Priya already has a login. We'll use it."), **Resend**, **Remove Access** (this child only). |
+| `/students/:id?tab=documents` | `student:documents` | Completeness line ("0 of 4 done. Missing: …") with an Upload button, upload (open by itself while there are no files), download by a one-minute link, delete. |
+| `/students/:id?tab=exit` | `student:lifecycle` | Moves (history), **Move To Another Campus** (check first, board change → choose subjects again), **Start Withdrawal** with its checklist, **Finish Exit**, the Transfer Certificate steps (Requested → Waiting for dues → Approved → Issued, locked after issue, **Issue Duplicate** with a reason), **Re-admit** for students who left (then confirm the parents). |
+| `/students/requests` | `student:approve_changes` | **Parent requests**: changes parents asked for, values masked, **Approve** / **Reject** with a note. Sidebar badge with the pending count. |
+| `/students/promotion` | `student:lifecycle` | Exception first: "N checked. N ready. N need a look." Needs-a-look rows grouped by reason with Promote / Repeat / Leaving / Hold and a section picker; the ready group is collapsed. **Promote All Ready Students** confirms, then shows done / skipped / failed with the reason. Safe to run again. |
+| `/students/exits` | `student:lifecycle` | To finish (TCs and due withdrawals), leaving soon, left this year. |
+| `/students/imports`, `/students/imports/:id` | `student:import` | Upload a CSV (Existing Students or New Admissions), sample template, match only the unmatched columns, "N rows: N ready, N need attention", problems grouped by kind with the fix, **Download Error Report**, **Import Ready Rows** (never duplicates). |
+| `/parent`, `/parent/children/:studentId`, `/parent/documents`, `/parent/requests` | Parent | Mobile-first portal with its own layout (no admin sidebar): child switcher (kept in the URL as `?child=`), class and section, roll number, subjects, primary parent, documents the school shared, **Ask For A Change**. Another family's child is "Not found"; a child whose access was removed during the visit says "You no longer have access to this child". |
+
+**Needs Attention** now also has Parent access (invited but not signed in, access removed), Transfers (subjects to choose after a campus move), Leaving school (due withdrawals, TCs on their way) and Possible duplicates (same name and birth date; parents with the same phone). Missing documents and promotion review are listed under **Follow up**: they are not counted in the sidebar badge. The `/students` strip adds the share of active students with a parent login and the withdrawals this year. Parents who sign in land on `/parent`; staff and admins who open `/parent` see Not Found.
+
+## Student context for other modules
+
+Attendance, fees, timetable, exams and every later module must read students through `studentService` (`backend/src/modules/students/context.service.ts`), never by querying the student collections or building their own roster:
+
+- `studentService.getStudentContext(ctx, { studentId, academicSessionId?, date? })` — where the student is on that date: status, admission number, session, enrollment, campus, class and section, roll number, programme and subjects. Worked out from the effective-dated rows, so a past date gives the old section.
+- `studentService.listStudentsForSection(ctx, sectionId, date?)` — the section's roster on a date.
+- `studentService.listGuardiansForStudent(ctx, studentId)` — the student's guardian links.
+- `studentService.assertStudentUsable(ctx, studentId, 'NEW_RECORD' | 'HISTORICAL_READ')` — refuses new records for a student who has left, while history stays readable.
+
+The UI gets the same data from `GET /api/v1/student-context?studentId=&academicSessionId=&date=`, with the same access rules (admin, a teacher in scope, or a parent allowed to see academics).
+
+## Parent access, lifecycle and import (Module 4, Part 3, API)
+
+All routes are under `/api/v1` and return the standard `{ data }` / `{ error }` envelopes.
 
 | Area | Routes | Needs |
 |---|---|---|
@@ -226,7 +253,7 @@ A sample file for the import is `backend/seed/students-sample.csv` (with a few m
 |---|---|---|
 | Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students`, `parent-access` and `student-lifecycle` (Module 4), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
-| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice). The `people-*` and `students-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice; parent portal and lifecycle: invite → activation link → the parent sees only that child, a sibling on one login, removing one child's access, another child's URL is Not found, teacher scope, sample CSV import with a safe re-run, promotion to 2027-28, withdraw → TC (locked) → re-admit, campus move; students visual pass at 1280px and 390px). The `people-*` and `students-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
 
 Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
 Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).

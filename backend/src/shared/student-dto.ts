@@ -488,7 +488,24 @@ export type FacultyStudentListDTO = PaginatedDTO<FacultyStudentSummaryDTO>;
 // ───────────────────────────────────────────────────────────── needs attention and dashboard counts
 
 /** Where "Fix" should take the person: the profile tab or drawer that solves it. */
-export type AttentionFix = 'ADD_SECTION' | 'ADD_GUARDIAN' | 'CHOOSE_PRIMARY' | 'CHOOSE_SUBJECTS' | 'ADD_ADMISSION' | 'ADD_CLASS' | 'OPEN_FAMILY';
+export type AttentionFix =
+  | 'ADD_SECTION'
+  | 'ADD_GUARDIAN'
+  | 'CHOOSE_PRIMARY'
+  | 'CHOOSE_SUBJECTS'
+  | 'ADD_ADMISSION'
+  | 'ADD_CLASS'
+  | 'OPEN_FAMILY'
+  /** Part 4: the Parent Access tab (resend or invite again). */
+  | 'INVITE_PARENT'
+  /** Part 4: the Documents tab. */
+  | 'UPLOAD_DOCUMENT'
+  /** Part 4: the Transfers & Exit tab (finish a withdrawal, move a Transfer Certificate on). */
+  | 'FINISH_EXIT'
+  /** Part 4: the promotion workspace. */
+  | 'REVIEW_PROMOTION'
+  /** Part 4: open the student to compare with a possible duplicate. */
+  | 'OPEN_STUDENT';
 
 export interface AttentionItemDTO {
   /** `studentId` or `studentId:problem`, stable for React keys. */
@@ -503,19 +520,31 @@ export interface AttentionItemDTO {
   fix: AttentionFix;
 }
 
-export type AttentionGroupKey = 'SETUP' | 'FAMILY' | 'SUBJECTS';
+export type AttentionGroupKey = 'SETUP' | 'FAMILY' | 'SUBJECTS' | 'PARENT_ACCESS' | 'TRANSFERS' | 'EXIT' | 'DATA_QUALITY' | 'DOCUMENTS' | 'PROMOTION';
 
 export interface AttentionGroupDTO {
   key: AttentionGroupKey;
   title: string;
   items: AttentionItemDTO[];
+  /**
+   * Follow-up work (missing documents, promotion review) that is shown on the page but not counted in `needsAttention`, so the
+   * sidebar badge stays about things that block a student's setup today.
+   */
+  followUp: boolean;
 }
 
 /** The strip above the student list, and the numbers behind the sidebar badge. */
 export interface StudentSummaryCountsDTO {
   activeStudents: number;
   newThisYear: number;
+  /** Students (and parent records) with something to fix now. Follow-up groups are not counted. */
   needsAttention: number;
+  /** Rows in the follow-up groups (documents, promotion review). */
+  followUp: number;
+  /** Share of active students with at least one parent who has signed in to the portal (0–100), or null with no active students. */
+  portalActivationPercent: number | null;
+  /** Students who left this year, or are leaving (withdrawal started). */
+  withdrawalsThisYear: number;
 }
 
 export interface StudentAttentionDTO {

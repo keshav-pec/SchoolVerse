@@ -16,6 +16,8 @@ import { ATTENTION_INTRO, FIX_LABELS } from './help-copy';
 /** Where "Fix" goes: the student's page with the right drawer open, or the parent's page. */
 export function fixLink(item: AttentionItemDTO): string {
   if (item.fix === 'OPEN_FAMILY' && item.personId) return `/families/${item.personId}`;
+  if (item.fix === 'REVIEW_PROMOTION') return '/students/promotion';
+  if (item.fix === 'OPEN_STUDENT') return `/students/${item.studentId}`;
   return `/students/${item.studentId}?fix=${item.fix}`;
 }
 
@@ -66,6 +68,10 @@ function Group({ group }: { group: AttentionGroupDTO }) {
 export function AttentionPage() {
   const ctx = useStudentContext();
   const q = useAttention({ academicSessionId: ctx.sessionId, locationId: ctx.locationId }, Boolean(ctx.sessionId));
+  const groups = q.data?.groups ?? [];
+  const fixNow = groups.filter((g) => !g.followUp);
+  const clear = fixNow.filter((g) => g.items.length === 0);
+  const followUp = groups.filter((g) => g.followUp && g.items.length > 0);
 
   return (
     <>
@@ -80,26 +86,42 @@ export function AttentionPage() {
         </div>
       ) : q.isError || !q.data ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} />
-      ) : q.data.counts.needsAttention === 0 ? (
-        <Card>
-          <EmptyState
-            illustration={<ListChecks className="size-14 text-success" aria-hidden="true" />}
-            title="Everything is in order"
-            description="No student needs attention for this year and campus."
-            action={
-              <Button asChild variant="outline">
-                <Link to="/students">
-                  <Users /> Go To Students
-                </Link>
-              </Button>
-            }
-          />
-        </Card>
       ) : (
         <div className="space-y-4">
-          {q.data.groups.map((g) => (
-            <Group key={g.key} group={g} />
-          ))}
+          {q.data.counts.needsAttention === 0 ? (
+            <Card>
+              <EmptyState
+                illustration={<ListChecks className="size-14 text-success" aria-hidden="true" />}
+                title="Everything is in order"
+                description="No student needs attention for this year and campus."
+                action={
+                  <Button asChild variant="outline">
+                    <Link to="/students">
+                      <Users /> Go To Students
+                    </Link>
+                  </Button>
+                }
+              />
+            </Card>
+          ) : (
+            fixNow.filter((g) => g.items.length > 0).map((g) => <Group key={g.key} group={g} />)
+          )}
+          {q.data.counts.needsAttention > 0 && clear.length > 0 && (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-muted" data-testid="all-clear">
+              <CircleCheck className="size-4 text-success" aria-hidden="true" /> Nothing to fix in: {clear.map((g) => g.title).join(' · ')}
+            </p>
+          )}
+          {followUp.length > 0 && (
+            <section aria-label="Follow up" className="space-y-4 pt-2">
+              <div>
+                <h2 className="text-lg font-bold">Follow up</h2>
+                <p className="text-sm text-muted">Not urgent, and not counted in the badge. Work through these when you have time.</p>
+              </div>
+              {followUp.map((g) => (
+                <Group key={g.key} group={g} />
+              ))}
+            </section>
+          )}
         </div>
       )}
     </>

@@ -122,7 +122,7 @@ export const EMERGENCY_FLAG_HELP: ReactNode = (
 );
 
 export const PORTAL_FLAG_HELP: ReactNode = (
-  <p>Logins for parents come in a later step. For now, you can decide what each person is allowed to see.</p>
+  <p>Logins for parents are given on the <b>Parent Access</b> tab. Here you decide what each person is allowed to see once they have one.</p>
 );
 
 // ───────────────────────────────────────────────────────────── labels
@@ -141,4 +141,91 @@ export const FIX_LABELS: Record<string, string> = {
   ADD_ADMISSION: 'Finish Admission',
   ADD_CLASS: 'Choose Class',
   OPEN_FAMILY: 'Open Family',
+  INVITE_PARENT: 'Open Parent Access',
+  UPLOAD_DOCUMENT: 'Upload Documents',
+  FINISH_EXIT: 'Open Exit',
+  REVIEW_PROMOTION: 'Open Promotion',
+  OPEN_STUDENT: 'Compare',
 };
+
+// ───────────────────────────────────────────────────────────── Part 4: profile tabs
+
+export const DOCUMENTS_INTRO: ReactNode = (
+  <>
+    <p>Papers the school keeps for this student, such as the birth certificate and a photo. Files are private: nobody can open them without signing in.</p>
+    <p>The line at the top shows which required papers are still missing.</p>
+  </>
+);
+
+export const ACCESS_INTRO: ReactNode = (
+  <>
+    <p>Which parents can sign in to the parent portal and see this child. A parent signs in with their email address.</p>
+    <p>Removing access here is for <b>this child only</b>. The parent keeps their login and their other children.</p>
+  </>
+);
+
+export const PORTAL_STATE_HELP: ReactNode = (
+  <>
+    <p><b>Not invited</b>: no login for this child yet. <b>Invited</b>: we sent an email; the parent has not set a password yet.</p>
+    <p><b>Has access</b>: the parent can sign in and see this child. <b>Access removed</b>: the parent can no longer see this child.</p>
+  </>
+);
+
+export const EXIT_INTRO: ReactNode = (
+  <>
+    <p>Moves between campuses, leaving the school, the transfer certificate, and coming back later.</p>
+    <p>Nothing here deletes the student. Old classes and campuses stay in History.</p>
+  </>
+);
+
+export const MOVE_CAMPUS_HELP: ReactNode = (
+  <>
+    <p>The student keeps the same admission number and the same parents. Only the campus, class and section change.</p>
+    <p>If the new campus follows a <b>different board</b>, the subjects are chosen again for the new class.</p>
+  </>
+);
+
+export const WITHDRAWAL_HELP: ReactNode = (
+  <>
+    <p>Start a withdrawal when a parent says the child is leaving. The student stays in class until the leaving date.</p>
+    <p>On the leaving date the class and section close, and parent access ends. History is kept.</p>
+  </>
+);
+
+export const TC_HELP: ReactNode = (
+  <>
+    <p>A transfer certificate (TC) goes through four steps: <b>Requested → Waiting for dues → Approved → Issued</b>.</p>
+    <p>It can only be approved when dues are cleared. Once issued it is locked. If the parent loses it, issue a duplicate.</p>
+  </>
+);
+
+export const READMIT_HELP: ReactNode = (
+  <p>Use this when a student who left comes back. We use the same student record and history, and you confirm the parents again.</p>
+);
+
+// ───────────────────────────────────────────────────────────── Part 4: pages
+
+export const REQUESTS_INTRO: ReactNode = (
+  <>
+    <p>Parents can’t change their child’s legal name, date of birth or their own phone number by themselves. They send a request, and it waits here.</p>
+    <p><b>Approve</b> updates the record straight away. <b>Reject</b> changes nothing; write a short note so the parent knows why. Values are partly hidden.</p>
+  </>
+);
+
+export const PROMOTION_INTRO: ReactNode = (
+  <>
+    <p>The system suggests the next class and a section. Running it again is safe: nobody is promoted twice.</p>
+  </>
+);
+
+export const IMPORTS_INTRO: ReactNode = (
+  <>
+    <p>Add many students at once from a CSV file, for example a list from your old software.</p>
+    <p>We check every row first. Only rows that are ready are imported; the others wait here so you can fix them. Importing again never adds anyone twice.</p>
+  </>
+);
+
+export const EXITS_INTRO: ReactNode = (
+  <p>Students who are leaving or have left this year, and transfer certificates still in progress. Open a student to finish their exit or issue their certificate.</p>
+);
+

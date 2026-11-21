@@ -64,7 +64,7 @@ export function ChangeSectionDialog({ student, onClose }: { student: StudentAdmi
       description={
         existing ? (
           <span className="flex items-center gap-1.5">
-            Now in {existing.sectionName}. <InfoTip label="What happens when the section changes">{SECTION_CHANGE_HELP}</InfoTip>
+            Now in {student.classSection?.label ?? existing.sectionName}. <InfoTip label="What happens when the section changes">{SECTION_CHANGE_HELP}</InfoTip>
           </span>
         ) : (
           `${student.fullName} is in ${enrollment.className} but has no section yet.`
@@ -78,11 +78,11 @@ export function ChangeSectionDialog({ student, onClose }: { student: StudentAdmi
         if (existing) {
           if (!reason.trim()) throw new FormProblem('Write a short reason, for example “Parent request”.');
           const result = await transfer.mutateAsync({ toSectionId: chosen, effectiveDate: date, reason: reason.trim(), ...(rollNumber ? { rollNumber } : {}) });
-          toast.success(`Moved to ${result.to.sectionName}. The old section stays in History.`);
+          toast.success(`Moved to ${enrollment.classCode}-${result.to.sectionCode}. The old section stays in History.`);
           for (const w of result.warnings) toast.warning(w.message);
         } else {
           const result = await assign.mutateAsync({ sectionId: chosen, effectiveFrom: date, ...(rollNumber ? { rollNumber } : {}) });
-          toast.success(`Placed in ${result.assignment.sectionName}.`);
+          toast.success(`Placed in ${enrollment.classCode}-${result.assignment.sectionCode}.`);
           for (const w of result.warnings) toast.warning(w.message);
         }
       }}

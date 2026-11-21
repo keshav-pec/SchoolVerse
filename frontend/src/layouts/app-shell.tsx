@@ -1,17 +1,20 @@
-import { useState, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { ROLE_LABELS, type Permission } from '@shared';
 import {
   Building2,
   ChevronDown,
+  ChevronRight,
   GraduationCap,
-  House,
   Inbox,
   LayoutDashboard,
   Library,
   ListTree,
   ListChecks,
   LogOut,
+  DoorOpen,
+  FileUp,
+  Rocket,
   MapPinned,
   Menu,
   PanelLeftClose,
@@ -34,6 +37,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { usePendingRequestCount } from '@/features/people/api';
 import { useCurrentSchool } from '@/features/school-profile/api';
 import { useAttentionCount } from '@/features/students/api';
+import { usePendingStudentRequests } from '@/features/students/lifecycle-api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +52,7 @@ interface NavItem {
   /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
   when?: (user: { role: string; personId: string | null }) => boolean;
   /** Shows the pending change-request count beside the label. */
-  badge?: 'requests' | 'attention';
+  badge?: 'requests' | 'attention' | 'student-requests';
 }
 
 interface NavSection {
@@ -61,7 +65,6 @@ interface NavSection {
  * (PRD §13: hide unavailable sections rather than exposing broken placeholders).
  */
 const NAV: NavSection[] = [
-  { items: [{ to: '/', label: 'Home', Icon: House, end: true }] },
   {
     label: 'School Setup',
     items: [
@@ -118,6 +121,10 @@ const NAV: NavSection[] = [
       { to: '/students', label: 'Students', Icon: Users, permission: 'student:view', end: true },
       { to: '/students/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'student:view', badge: 'attention' },
       { to: '/families', label: 'Families', Icon: UsersRound, permission: 'student:view' },
+      { to: '/students/requests', label: 'Parent requests', Icon: Inbox, permission: 'student:approve_changes', badge: 'student-requests' },
+      { to: '/students/promotion', label: 'Promotion', Icon: Rocket, permission: 'student:lifecycle' },
+      { to: '/students/exits', label: 'Transfers & Exits', Icon: DoorOpen, permission: 'student:lifecycle' },
+      { to: '/students/imports', label: 'Imports', Icon: FileUp, permission: 'student:import' },
       { to: '/my-students', label: 'My Students', Icon: Users, when: (u) => u.role === 'FACULTY' },
     ],
   },
@@ -170,6 +177,11 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
   ['/students/attention', ['Students', 'Needs Attention']],
+  ['/students/requests', ['Students', 'Parent requests']],
+  ['/students/promotion', ['Students', 'Promotion']],
+  ['/students/exits', ['Students', 'Transfers & Exits']],
+  ['/students/imports/', ['Students', 'Imports', 'Import']],
+  ['/students/imports', ['Students', 'Imports']],
   ['/students/new', ['Students', 'Add Student']],
   ['/students/', ['Students', 'Student']],
   ['/students', ['Students', 'Students']],
@@ -191,6 +203,18 @@ function crumbsFor(pathname: string): string[] {
   return CRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? ['Page'];
 }
 
+/** Which groups are open lasts for one sign-in only (sessionStorage, cleared on sign-out), so every new login starts collapsed. */
+const GROUPS_KEY = 'sv.sidebar.openGroups';
+
+function readOpenGroups(): string[] {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(GROUPS_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function SidebarContent({
   onNavigate,
   collapsed = false,
@@ -200,8 +224,28 @@ function SidebarContent({
 }) {
   const { can } = useAuth();
   const session = useSession();
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState<string[]>(readOpenGroups);
+  const setGroupOpen = (label: string, isOpen: boolean) =>
+    setOpen((prev) => {
+      const next = isOpen ? [...new Set([...prev, label])] : prev.filter((l) => l !== label);
+      sessionStorage.setItem(GROUPS_KEY, JSON.stringify(next));
+      return next;
+    });
+  // Opening a page (by link, bookmark or back button) reveals the group it lives in.
+  useEffect(() => {
+    const active = NAV.find(
+      (section) =>
+        section.label &&
+        section.items.some((item) =>
+          item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`),
+        ),
+    )?.label;
+    if (active) setOpen((prev) => (prev.includes(active) ? prev : [...prev, active]));
+  }, [pathname]);
   const pending = usePendingRequestCount(can('employee:approve_changes'));
   const attention = useAttentionCount(can('student:view'), {});
+  const studentRequests = usePendingStudentRequests(can('student:approve_changes'));
   // Same cached query the profile page updates, so a new, replaced or removed logo shows here at once.
   const savedLogo = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
   // A logo whose file can't be loaded falls back to the icon instead of a broken image.
@@ -215,12 +259,20 @@ function SidebarContent({
         collapsed ? 'px-2' : 'px-3',
       )}
     >
-      <div
-        title={collapsed ? session.tenant.name : undefined}
-        className={cn(
-          'mx-1 flex items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3',
-          collapsed && 'justify-center px-0',
-        )}
+      {/* The school card is the Home link. */}
+      <NavLink
+        to="/"
+        end
+        onClick={onNavigate}
+        title={collapsed ? `${session.tenant.name} – Home` : 'Home'}
+        aria-label={`${session.tenant.name} – Home`}
+        className={({ isActive }) =>
+          cn(
+            'mx-1 flex items-center gap-2.5 rounded-[10px] border bg-navy-700 px-3 py-3 transition-colors hover:bg-navy-600 focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:outline-none',
+            isActive ? 'border-[#5084ff]' : 'border-[#284469]',
+            collapsed && 'justify-center px-0',
+          )
+        }
       >
         <span
           className={cn(
@@ -247,11 +299,11 @@ function SidebarContent({
         </div>
         <span
           className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')}
-          title="Workspace active"
+          aria-hidden="true"
         />
-      </div>
+      </NavLink>
 
-      <nav className="mt-2 flex-1 overflow-y-auto" aria-label="Main">
+      <nav className="scrollbar-minimal mt-2 flex-1 overflow-y-auto" aria-label="Main">
         {NAV.map((section, i) => {
           const items = section.items.filter(
             (item) =>
@@ -260,22 +312,67 @@ function SidebarContent({
               (!item.when || item.when(session.user)),
           );
           if (items.length === 0) return null;
+          const label = section.label;
+          // Icon-only mode has no headers, so every item stays visible.
+          const isOpen = !label || collapsed || open.includes(label);
+          const groupId = `nav-group-${i}`;
+          const hiddenBadgeTotal = !isOpen
+            ? items.reduce(
+                (sum, item) =>
+                  sum +
+                  (item.badge === 'attention'
+                    ? (attention.data ?? 0)
+                    : item.badge === 'student-requests'
+                      ? (studentRequests.data ?? 0)
+                      : item.badge === 'requests'
+                        ? (pending.data ?? 0)
+                        : 0),
+                0,
+              )
+            : 0;
           return (
-            <div key={section.label ?? i}>
-              {section.label && !collapsed && (
-                <p className="px-3.5 pt-3 pb-1.5 text-[11px] font-semibold tracking-[0.12em] text-navy-muted uppercase">
-                  {section.label}
-                </p>
+            <div key={label ?? i}>
+              {label && !collapsed && (
+                <button
+                  type="button"
+                  onClick={() => setGroupOpen(label, !isOpen)}
+                  aria-expanded={isOpen}
+                  aria-controls={groupId}
+                  className={cn(
+                    'mt-2.5 flex min-h-9 w-full items-center gap-1.5 rounded-lg border px-3 text-left text-[11px] font-semibold tracking-[0.12em] uppercase transition-colors hover:bg-navy-600 hover:text-white focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:outline-none',
+                    isOpen
+                      ? 'border-[#284469] bg-navy-700 text-white'
+                      : 'border-transparent bg-white/[0.04] text-navy-muted',
+                  )}
+                >
+                  <ChevronRight
+                    className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-90')}
+                    aria-hidden="true"
+                  />
+                  {label}
+                  {hiddenBadgeTotal > 0 && (
+                    <span
+                      className="ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold tracking-normal text-navy"
+                      aria-label={`${hiddenBadgeTotal} waiting`}
+                    >
+                      {hiddenBadgeTotal}
+                    </span>
+                  )}
+                </button>
               )}
-              <ul className={cn('space-y-0.5', collapsed ? 'mt-3' : 'mt-1.5')}>
-                {items.map(({ to, label, Icon, end, badge }) => (
+              <ul
+                id={groupId}
+                hidden={!isOpen}
+                className={cn('space-y-0.5', collapsed ? 'mt-3' : 'mt-1.5')}
+              >
+                {items.map(({ to, label: itemLabel, Icon, end, badge }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
                       end={end}
                       onClick={onNavigate}
-                      title={collapsed ? label : undefined}
-                      aria-label={collapsed ? label : undefined}
+                      title={collapsed ? itemLabel : undefined}
+                      aria-label={collapsed ? itemLabel : undefined}
                       className={({ isActive }) =>
                         cn(
                           collapsed && 'justify-center px-0',
@@ -286,7 +383,7 @@ function SidebarContent({
                       }
                     >
                       <Icon className="size-[18px] shrink-0" />
-                      {!collapsed && label}
+                      {!collapsed && itemLabel}
                       {badge === 'attention' && (attention.data ?? 0) > 0 && (
                         <span
                           className={cn(
@@ -296,6 +393,17 @@ function SidebarContent({
                           aria-label={`${attention.data} need attention`}
                         >
                           {attention.data}
+                        </span>
+                      )}
+                      {badge === 'student-requests' && (studentRequests.data ?? 0) > 0 && (
+                        <span
+                          className={cn(
+                            'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
+                            collapsed && 'absolute top-1.5 right-1.5 ml-0',
+                          )}
+                          aria-label={`${studentRequests.data} pending`}
+                        >
+                          {studentRequests.data}
                         </span>
                       )}
                       {badge === 'requests' && (pending.data ?? 0) > 0 && (
@@ -326,6 +434,7 @@ function UserMenu() {
   const { logout } = useAuth();
 
   const handleLogout = async () => {
+    sessionStorage.removeItem(GROUPS_KEY);
     await logout();
     // Hard redirect so no stale in-memory state can bounce the user back to '/'.
     window.location.replace('/login');

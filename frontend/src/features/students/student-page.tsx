@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { EXITED_STUDENT_STATUSES, type AttentionFix, type CompletenessEntryDTO } from '@shared';
-import { ArrowLeft, BookOpen, FileText, History, LayoutGrid, Lock, MoveRight, UserPlus, UsersRound } from 'lucide-react';
+import { ArrowLeft, BookOpen, DoorOpen, FileText, Files, History, KeyRound, LayoutGrid, Lock, MoveRight, UserPlus, UsersRound } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,12 +23,18 @@ import { ChangeSectionDialog, currentSection, RollNumberDialog } from './section
 import { placementText, StudentStatusPill } from './student-bits';
 import { SubjectsDrawer } from './subjects-drawer';
 import { AcademicTab } from './tabs/academic-tab';
+import { AccessTab } from './tabs/access-tab';
 import { AdmissionTab } from './tabs/admission-tab';
+import { DocumentsTab } from './tabs/documents-tab';
+import { ExitTab } from './tabs/exit-tab';
 import { GuardiansTab } from './tabs/guardians-tab';
 import { HistoryTab } from './tabs/history-tab';
 import { OverviewTab } from './tabs/overview-tab';
 
 type Dialog = 'section' | 'roll' | 'subjects' | 'guardian-new' | 'guardian-link' | 'edit' | 'place' | null;
+
+/** Fixes that are a whole tab rather than a drawer. */
+const FIX_TO_TAB: Partial<Record<AttentionFix, string>> = { CHOOSE_PRIMARY: 'guardians', INVITE_PARENT: 'access', UPLOAD_DOCUMENT: 'documents', FINISH_EXIT: 'exit' };
 
 const FIX_TO_DIALOG: Partial<Record<AttentionFix, Dialog>> = {
   ADD_SECTION: 'section',
@@ -40,6 +46,7 @@ const FIX_TO_DIALOG: Partial<Record<AttentionFix, Dialog>> = {
 
 function AdminStudentPage({ studentId }: { studentId: string }) {
   const q = useStudent(studentId);
+  const { can } = useAuth();
   const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<Dialog>(null);
   const student = q.data;
@@ -51,7 +58,7 @@ function AdminStudentPage({ studentId }: { studentId: string }) {
   const fix = params.get('fix') as AttentionFix | null;
   useEffect(() => {
     if (!fix || !student) return;
-    if (fix === 'CHOOSE_PRIMARY') setTab('guardians');
+    if (FIX_TO_TAB[fix]) setTab(FIX_TO_TAB[fix]!);
     else if (FIX_TO_DIALOG[fix]) setDialog(FIX_TO_DIALOG[fix]!);
     setParams((prev) => { const n = new URLSearchParams(prev); n.delete('fix'); return n; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,8 +130,13 @@ function AdminStudentPage({ studentId }: { studentId: string }) {
 
       {readOnly && (
         <Alert tone="warning" title="This student has left the school" className="mb-4">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex flex-wrap items-center gap-1.5">
             <Lock className="size-4" aria-hidden="true" /> The record is read-only{student.enrollment?.effectiveTo ? ` (left on ${formatDateOnly(student.enrollment.effectiveTo)})` : ''}. Everything stays visible for history, but nothing can be changed.
+            {can('student:lifecycle') && (
+              <button type="button" className="font-semibold text-brand underline-offset-2 hover:underline" onClick={() => setTab('exit')}>
+                Re-admit on the Transfers &amp; Exit tab
+              </button>
+            )}
           </span>
         </Alert>
       )}
@@ -140,9 +152,24 @@ function AdminStudentPage({ studentId }: { studentId: string }) {
           <TabsTrigger value="guardians">
             <UsersRound /> Parents &amp; Guardians
           </TabsTrigger>
+          {can('parent_access:manage') && (
+            <TabsTrigger value="access">
+              <KeyRound /> Parent Access
+            </TabsTrigger>
+          )}
+          {can('student:documents') && (
+            <TabsTrigger value="documents">
+              <Files /> Documents
+            </TabsTrigger>
+          )}
           <TabsTrigger value="admission">
             <FileText /> Admission
           </TabsTrigger>
+          {can('student:lifecycle') && (
+            <TabsTrigger value="exit">
+              <DoorOpen /> Transfers &amp; Exit
+            </TabsTrigger>
+          )}
           <TabsTrigger value="history">
             <History /> History
           </TabsTrigger>
@@ -156,9 +183,24 @@ function AdminStudentPage({ studentId }: { studentId: string }) {
         <TabsContent value="guardians">
           <GuardiansTab student={student} readOnly={readOnly} onAdd={(mode) => setDialog(mode === 'new' ? 'guardian-new' : 'guardian-link')} />
         </TabsContent>
+        {can('parent_access:manage') && (
+          <TabsContent value="access">
+            <AccessTab student={student} readOnly={readOnly} />
+          </TabsContent>
+        )}
+        {can('student:documents') && (
+          <TabsContent value="documents">
+            <DocumentsTab student={student} readOnly={readOnly} />
+          </TabsContent>
+        )}
         <TabsContent value="admission">
           <AdmissionTab student={student} readOnly={readOnly} />
         </TabsContent>
+        {can('student:lifecycle') && (
+          <TabsContent value="exit">
+            <ExitTab student={student} readOnly={readOnly} />
+          </TabsContent>
+        )}
         <TabsContent value="history">
           <HistoryTab studentId={student.studentId} />
         </TabsContent>

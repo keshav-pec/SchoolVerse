@@ -108,13 +108,13 @@ function StudentTable({ items, dimmed }: { items: StudentDirectoryDTO[]; dimmed?
 function SummaryStrip({ academicSessionId, locationId }: { academicSessionId?: string; locationId?: string }) {
   const q = useAttention({ academicSessionId, locationId }, Boolean(academicSessionId));
   if (!q.data) return null;
-  const { needsAttention, activeStudents, newThisYear } = q.data.counts;
+  const { needsAttention, activeStudents, newThisYear, portalActivationPercent, withdrawalsThisYear } = q.data.counts;
   return (
-    <div className="mb-4 grid gap-3 sm:grid-cols-3" aria-label="Student summary">
+    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Student summary">
       <Link
         to="/students/attention"
         className={cn(
-          'flex items-center gap-3 rounded-card border p-3.5 transition-colors',
+          'col-span-2 flex items-center gap-3 rounded-card border p-3.5 transition-colors lg:col-span-1',
           needsAttention > 0 ? 'border-warning/40 bg-warning-soft hover:bg-warning-soft/70' : 'border-line bg-white hover:bg-canvas',
         )}
       >
@@ -132,6 +132,14 @@ function SummaryStrip({ academicSessionId, locationId }: { academicSessionId?: s
         <span className="block text-2xl leading-none font-extrabold">{newThisYear}</span>
         <span className="text-sm text-muted">New this year</span>
       </div>
+      <div className="rounded-card border border-line bg-white p-3.5">
+        <span className="block text-2xl leading-none font-extrabold">{portalActivationPercent === null ? '—' : `${portalActivationPercent}%`}</span>
+        <span className="text-sm text-muted">Have a parent login</span>
+      </div>
+      <Link to="/students/exits" className="rounded-card border border-line bg-white p-3.5 hover:bg-canvas">
+        <span className="block text-2xl leading-none font-extrabold">{withdrawalsThisYear}</span>
+        <span className="text-sm text-muted">Leaving or left this year</span>
+      </Link>
     </div>
   );
 }

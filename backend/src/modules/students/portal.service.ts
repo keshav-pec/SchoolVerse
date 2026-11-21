@@ -30,7 +30,7 @@ function isLive(link: StudentGuardianLinkDoc, today: string): boolean {
   return isOpenOn(link, today);
 }
 
-function stateOf(link: StudentGuardianLinkDoc, user: Pick<UserDoc, 'status'> | null): PortalState {
+export function stateOf(link: Pick<StudentGuardianLinkDoc, 'portalEnabled' | 'portalRevokedAt'>, user: Pick<UserDoc, 'status'> | null): PortalState {
   if (link.portalEnabled) return user?.status === 'PENDING_ACTIVATION' ? 'INVITED' : 'ACTIVE';
   return link.portalRevokedAt ? 'REVOKED' : 'NOT_INVITED';
 }
