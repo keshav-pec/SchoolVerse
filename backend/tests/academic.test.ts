@@ -1664,15 +1664,15 @@ describe('audit trail for rules and lifecycle (AS-17)', () => {
 });
 
 describe('the PRD §23 demo dataset', () => {
-  it('seeds Greenfield with an ACTIVE 2026-27 session, a cloned DRAFT 2027-28, and a full academic context', async () => {
+  it('seeds Greenfield with an ACTIVE 2026-27 session, a cloned 2027-28 (published for promotion), and a full academic context', async () => {
     await seedDemo({ quiet: true });
     const admin = request.agent(app);
     await admin.post(`${API}/auth/login`).send({ email: 'admin@greenfield.demo', password: 'Welcome@123' }).expect(200);
 
     const sessions = (await admin.get(`${API}/academic-sessions`).expect(200)).body.data as AcademicSessionDTO[];
-    expect(sessions.map((s) => `${s.code}:${s.status}`)).toEqual(['2027-28:DRAFT', '2026-27:ACTIVE']);
+    expect(sessions.map((s) => `${s.code}:${s.status}`)).toEqual(['2027-28:PUBLISHED', '2026-27:ACTIVE']); // Module 4 Part 3 publishes the clone so promotion can be tried
     const active = sessions.find((s) => s.status === 'ACTIVE')!;
-    const next = sessions.find((s) => s.status === 'DRAFT')!;
+    const next = sessions.find((s) => s.status === 'PUBLISHED')!;
     expect(active.locations.map((l) => `${l.locationCode}:${l.boardCode}`)).toEqual(['MOH:CBSE', 'CHD:STATE_TEST']);
     expect(next.previousSessionId).toBe(active.academicSessionId);
 

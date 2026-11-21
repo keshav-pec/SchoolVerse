@@ -9,6 +9,8 @@ import { locationRouter } from './modules/locations/location.routes';
 import { masterRouter } from './modules/master/master.routes';
 import { schoolRouter } from './modules/school/school.routes';
 import { staffRouter } from './modules/staff/staff.routes';
+import { lifecycleRouter } from './modules/students/lifecycle.routes';
+import { parentRouter } from './modules/students/parent.routes';
 import { studentRouter } from './modules/students/student.routes';
 import { setupRouter } from './modules/setup/setup.routes';
 import { authRouter } from './platform/auth/auth.routes';
@@ -37,6 +39,9 @@ mount(apiRouter, '/audit', auditRouter);
 mount(apiRouter, '/master', masterRouter);
 mount(apiRouter, '', academicRouter);
 mount(apiRouter, '', staffRouter);
+// The Part 3 routers come first: fixed paths such as `/students/imports` must not be read as `/students/:id`.
+mount(apiRouter, '', lifecycleRouter);
+mount(apiRouter, '', parentRouter);
 mount(apiRouter, '', studentRouter);
 mount(apiRouter, '/files', filesRouter);
 // The dev outbox shows the emails that would have been sent. Only when DEV_OUTBOX is on, and before the (authenticated) dev router.

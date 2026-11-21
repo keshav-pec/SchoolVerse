@@ -154,6 +154,28 @@ export const ERROR_CODES = {
   SUBJECT_CHOICE_INVALID: { status: 422, message: 'This subject choice does not follow the class rules.' },
   PROGRAMME_NOT_FOR_CLASS: { status: 409, message: 'This programme is not available for the student’s class.' },
   VERSION_CONFLICT: { status: 409, message: 'Someone else changed this record. Reload it and try again.' },
+
+  // Parent access, documents, lifecycle and import (Module 4, Part 3)
+  GUARDIAN_EMAIL_REQUIRED: { status: 422, message: 'This parent needs an email address before they can be invited. Parents sign in with their email.' },
+  PARENT_EMAIL_IN_USE: { status: 409, message: 'This email already belongs to a login that is not a parent login. Use a different email for this parent.' },
+  PORTAL_ALREADY_ENABLED: { status: 409, message: 'This parent already has access to this child.' },
+  PORTAL_NOT_ENABLED: { status: 409, message: 'This parent does not have access to this child.' },
+  GUARDIAN_LINK_NOT_ACTIVE: { status: 409, message: 'This parent is no longer linked to the child, so they cannot be invited.' },
+  SUBJECT_MAPPING_REQUIRED: { status: 409, message: 'The new campus follows a different board. Choose the student’s subjects again for the new class.' },
+  TRANSFER_NOT_POSSIBLE: { status: 409, message: 'This move is not possible. Check the details and try again.' },
+  PROMOTION_TARGET_NOT_OPEN: { status: 409, message: 'The next session must be published or active before students can be promoted into it.' },
+  PROMOTION_SESSIONS_INVALID: { status: 409, message: 'Choose two different sessions, with the next one starting after the first.' },
+  WITHDRAWAL_ALREADY_STARTED: { status: 409, message: 'A withdrawal has already been started for this student.' },
+  WITHDRAWAL_NOT_STARTED: { status: 409, message: 'No withdrawal has been started for this student.' },
+  WITHDRAWAL_NOT_DUE: { status: 409, message: 'The leaving date has not come yet. The student stays active until then.' },
+  STUDENT_NOT_EXITED: { status: 409, message: 'Only a student who has left can be readmitted.' },
+  TC_ISSUED_LOCKED: { status: 409, message: 'This transfer certificate has been issued and can no longer be changed. Issue a duplicate instead.' },
+  TC_NOT_READY: { status: 409, message: 'This transfer certificate is not ready for that step yet.' },
+  TC_ALREADY_OPEN: { status: 409, message: 'This student already has a transfer certificate in progress.' },
+  IMPORT_FILE_INVALID: { status: 422, message: 'This file could not be read. Upload a CSV file with a header row.' },
+  IMPORT_NOT_READY: { status: 409, message: 'Check the file first. It has not been validated yet.' },
+  IMPORT_MAPPING_INCOMPLETE: { status: 422, message: 'Match the required columns before checking the file.' },
+  EXPORT_TOO_LARGE: { status: 413, message: 'This export has too many rows. Narrow the filters and try again.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

@@ -19,7 +19,7 @@ const PAGE_SIZE = 20;
 
 function Children({ family }: { family: FamilySummaryDTO }) {
   return (
-    <span className="flex flex-wrap gap-1.5">
+    <span className="flex flex-wrap gap-1.5 sm:justify-end">
       {family.children.map((c) => (
         <Link key={c.studentId} to={`/students/${c.studentId}`} className="rounded-pill bg-brand-soft px-2.5 py-0.5 text-[13px] font-semibold text-brand hover:underline" onClick={(e) => e.stopPropagation()}>
           {c.fullName}
@@ -89,7 +89,7 @@ export function FamiliesPage() {
                       <p className="text-xs text-muted">{[f.phone ? formatPhone(f.phone) : null, f.email].filter(Boolean).join(' · ') || 'No contact shown'}</p>
                     </div>
                   </div>
-                  <div className="sm:max-w-[50%]">
+                  <div className="sm:max-w-[50%] sm:text-right">
                     <p className="mb-1 text-xs text-muted">
                       {f.childCount} {f.childCount === 1 ? 'child' : 'children'}
                     </p>

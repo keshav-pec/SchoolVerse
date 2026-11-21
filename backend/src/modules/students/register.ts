@@ -1,6 +1,8 @@
 import { academicService } from '../academic/academic.service';
 import { registerLocationDependency } from '../dependencies/registry';
 import { todayForTenant } from '../staff/status';
+import { registerStudentHistoryCheck } from './hooks';
+import { StudentChangeRequest, StudentDocument, StudentTransferCertificate } from './records.models';
 import { StudentAdmission, StudentEnrollment, StudentSectionAssignment, StudentSubjectEnrollment } from './student.models';
 
 let registered = false;
@@ -13,6 +15,17 @@ let registered = false;
 export function registerStudentDependencies() {
   if (registered) return;
   registered = true;
+
+  // Part 3: a document, a transfer certificate or a change request is history, so a draft that has one is kept, not deleted.
+  registerStudentHistoryCheck('records', async ({ tenantId, studentId, session }) => {
+    const db = session ?? null;
+    const [document, certificate, request] = await Promise.all([
+      StudentDocument.exists({ tenantId, studentId }).session(db),
+      StudentTransferCertificate.exists({ tenantId, studentId }).session(db),
+      StudentChangeRequest.exists({ tenantId, studentId }).session(db),
+    ]);
+    return Boolean(document || certificate || request);
+  });
 
   registerLocationDependency({
     key: 'students.enrollments',

@@ -39,6 +39,13 @@ export const AUDIT_ENTITY_TYPES = [
   'enrollment',
   'section_assignment',
   'subject_enrollment',
+  // Part 3
+  'student_document',
+  'change_request',
+  'transfer_certificate',
+  'promotion',
+  'import',
+  'student_export',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

@@ -39,6 +39,12 @@ export const PERMISSIONS = [
   'student:manage', // add, edit, status, external IDs, admission number settings
   'student:enroll', // enrollments, sections, roll numbers, subjects
   'guardian:manage', // add, link and end guardians
+  'parent_access:manage', // invite parents to the portal, remove or resend access
+  'student:documents', // upload, list, download and delete a student's documents
+  'student:lifecycle', // transfers, promotion, repeat, withdrawal, transfer certificates, readmission
+  'student:approve_changes', // approve or reject changes parents ask for
+  'student:import', // import students from a file
+  'student:export', // download student exports
   // Setup & governance
   'setup:manage',
   'audit:view',

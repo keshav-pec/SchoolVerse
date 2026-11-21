@@ -14,4 +14,6 @@ export * from './schemas/academic';
 export * from './schemas/staff';
 export * from './schemas/identity';
 export * from './schemas/students';
+export * from './schemas/student-lifecycle';
+export * from './student-lifecycle-dto';
 export * from './data-classification';

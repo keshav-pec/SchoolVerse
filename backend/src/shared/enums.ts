@@ -352,6 +352,37 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'section_assignment.transferred': 'Moved to another section',
   'subject_enrollment.created': 'Subject added',
   'subject_enrollment.ended': 'Subject ended',
+  // Part 3
+  'guardian_link.portal_enabled': 'Parent invited to the portal',
+  'guardian_link.portal_revoked': 'Parent access removed',
+  'guardian_link.invitation_resent': 'Invitation sent again',
+  'enrollment.closed': 'Enrollment closed',
+  'student.promoted': 'Promoted to the next class',
+  'student.repeated': 'Repeating the class',
+  'student.completed_schooling': 'Finished school',
+  'student.location_transferred': 'Moved to another campus',
+  'student.withdrawal_started': 'Withdrawal started',
+  'student.withdrawal_updated': 'Withdrawal details changed',
+  'student.withdrawal_cancelled': 'Withdrawal cancelled',
+  'student.withdrawal_completed': 'Student left the school',
+  'student.readmitted': 'Student readmitted',
+  'student_document.uploaded': 'Document uploaded',
+  'student_document.downloaded': 'Document downloaded',
+  'student_document.download_denied': 'Document download refused',
+  'student_document.deleted': 'Document deleted',
+  'transfer_certificate.requested': 'Transfer certificate requested',
+  'transfer_certificate.updated': 'Transfer certificate details changed',
+  'transfer_certificate.pending_clearance': 'Transfer certificate waiting for dues',
+  'transfer_certificate.approved': 'Transfer certificate approved',
+  'transfer_certificate.issued': 'Transfer certificate issued',
+  'transfer_certificate.duplicate_issued': 'Duplicate transfer certificate issued',
+  'transfer_certificate.cancelled': 'Transfer certificate cancelled',
+  'promotion.bulk_run': 'Promotion run',
+  'import.created': 'Student file uploaded',
+  'import.mapped': 'Student file columns matched',
+  'import.validated': 'Student file checked',
+  'import.committed': 'Students imported',
+  'student_export.created': 'Student export created',
 };
 
 
@@ -458,6 +489,7 @@ export const SECURITY_EVENT_TYPES = [
   'FILE_REJECTED',
   // Students (Module 4)
   'CROSS_SCOPE_DENIED',
+  'PARENT_ACCESS_DENIED',
 ] as const;
 export type SecurityEventType = (typeof SECURITY_EVENT_TYPES)[number];
 
@@ -692,3 +724,198 @@ export type SubjectProblemCode = (typeof SUBJECT_PROBLEM_CODES)[number];
 /** Which timeline row a history entry is. */
 export const HISTORY_KINDS = ['STUDENT', 'ADMISSION', 'ENROLLMENT', 'SECTION', 'SUBJECT', 'GUARDIAN', 'TRANSFER'] as const;
 export type HistoryKind = (typeof HISTORY_KINDS)[number];
+
+// ───────────────────────────────────────────────────────────── Parent access, documents, lifecycle, import (Module 4, Part 3)
+
+/** What a guardian link can allow a parent to see. Checked in the database on every parent request. */
+export const PARENT_CAPABILITIES = ['ACADEMICS', 'FEES'] as const;
+export type ParentCapability = (typeof PARENT_CAPABILITIES)[number];
+
+/** Where a guardian is on the way to a login (for this one child). */
+export const PORTAL_STATES = ['NOT_INVITED', 'INVITED', 'ACTIVE', 'REVOKED'] as const;
+export type PortalState = (typeof PORTAL_STATES)[number];
+
+export const PORTAL_STATE_LABELS: Record<PortalState, string> = {
+  NOT_INVITED: 'Not invited',
+  INVITED: 'Invited',
+  ACTIVE: 'Has access',
+  REVOKED: 'Access removed',
+};
+
+export const STUDENT_DOCUMENT_TYPES = ['BIRTH_CERTIFICATE', 'PREVIOUS_SCHOOL_RECORD', 'TRANSFER_CERTIFICATE', 'ID_PROOF', 'PHOTO', 'MEDICAL', 'OTHER'] as const;
+export type StudentDocumentType = (typeof STUDENT_DOCUMENT_TYPES)[number];
+
+export const STUDENT_DOCUMENT_TYPE_LABELS: Record<StudentDocumentType, string> = {
+  BIRTH_CERTIFICATE: 'Birth certificate',
+  PREVIOUS_SCHOOL_RECORD: 'Previous school record',
+  TRANSFER_CERTIFICATE: 'Transfer certificate (from the old school)',
+  ID_PROOF: 'ID proof',
+  PHOTO: 'Photo',
+  MEDICAL: 'Medical certificate',
+  OTHER: 'Other',
+};
+
+/** The small set a parent may see and download. Medical and "other" papers stay with the school. */
+export const PARENT_VISIBLE_DOCUMENT_TYPES: readonly StudentDocumentType[] = ['BIRTH_CERTIFICATE', 'PREVIOUS_SCHOOL_RECORD', 'TRANSFER_CERTIFICATE', 'ID_PROOF', 'PHOTO'];
+
+/** Documents every student should have. The transfer certificate is only expected from students who joined from another school. */
+export const REQUIRED_STUDENT_DOCUMENT_TYPES = ['BIRTH_CERTIFICATE', 'PREVIOUS_SCHOOL_RECORD', 'ID_PROOF', 'PHOTO'] as const satisfies readonly StudentDocumentType[];
+
+/** What a parent can ask the school to change. Each goes to an admin to approve. */
+export const STUDENT_CHANGE_FIELDS = ['LEGAL_NAME', 'DATE_OF_BIRTH', 'GUARDIAN_CONTACT'] as const;
+export type StudentChangeField = (typeof STUDENT_CHANGE_FIELDS)[number];
+
+export const STUDENT_CHANGE_FIELD_LABELS: Record<StudentChangeField, string> = {
+  LEGAL_NAME: 'Child’s legal name',
+  DATE_OF_BIRTH: 'Child’s date of birth',
+  GUARDIAN_CONTACT: 'My phone number',
+};
+
+// ───────────────────────────────────────────────────────────── promotion
+
+export const PROMOTION_DECISIONS = ['PROMOTE', 'REPEAT', 'LEAVING', 'HOLD', 'PASSED_OUT'] as const;
+export type PromotionDecision = (typeof PROMOTION_DECISIONS)[number];
+
+export const PROMOTION_DECISION_LABELS: Record<PromotionDecision, string> = {
+  PROMOTE: 'Promote',
+  REPEAT: 'Repeat the class',
+  LEAVING: 'Leaving',
+  HOLD: 'Hold',
+  PASSED_OUT: 'Finished school',
+};
+
+/** Why a student needs a look before promotion. The text for each is built by the service, in plain words. */
+export const PROMOTION_REVIEW_REASONS = [
+  'NO_NEXT_CLASS',
+  'LEAVING',
+  'SUBJECT_CHOICE_PENDING',
+  'PROGRAMME_NOT_VALID',
+  'SECTION_MISSING',
+  'LOCATION_MISSING',
+  'STUDENT_NOT_ACTIVE',
+  'ALREADY_PROMOTED',
+] as const;
+export type PromotionReviewReason = (typeof PROMOTION_REVIEW_REASONS)[number];
+
+export const PROMOTION_RESULT_STATUSES = ['DONE', 'SKIPPED', 'FAILED'] as const;
+export type PromotionResultStatus = (typeof PROMOTION_RESULT_STATUSES)[number];
+
+// ───────────────────────────────────────────────────────────── exit, transfer certificate, readmission
+
+export const WITHDRAWAL_REASON_CATEGORIES = ['RELOCATION', 'TRANSFER_TO_OTHER_SCHOOL', 'FINANCIAL', 'FAMILY_REASONS', 'HEALTH', 'DISCIPLINARY', 'OTHER'] as const;
+export type WithdrawalReasonCategory = (typeof WITHDRAWAL_REASON_CATEGORIES)[number];
+
+export const WITHDRAWAL_REASON_LABELS: Record<WithdrawalReasonCategory, string> = {
+  RELOCATION: 'Family is moving',
+  TRANSFER_TO_OTHER_SCHOOL: 'Joining another school',
+  FINANCIAL: 'Fees or money reasons',
+  FAMILY_REASONS: 'Family reasons',
+  HEALTH: 'Health',
+  DISCIPLINARY: 'School discipline',
+  OTHER: 'Something else',
+};
+
+export const TC_STATUSES = ['REQUESTED', 'UNDER_REVIEW', 'PENDING_CLEARANCE', 'APPROVED', 'ISSUED', 'CANCELLED', 'DUPLICATE_ISSUED'] as const;
+export type TcStatus = (typeof TC_STATUSES)[number];
+
+export const TC_STATUS_LABELS: Record<TcStatus, string> = {
+  REQUESTED: 'Requested',
+  UNDER_REVIEW: 'Under review',
+  PENDING_CLEARANCE: 'Waiting for dues',
+  APPROVED: 'Approved',
+  ISSUED: 'Issued',
+  CANCELLED: 'Cancelled',
+  DUPLICATE_ISSUED: 'Duplicate issued',
+};
+
+export const TC_COPY_TYPES = ['ORIGINAL', 'DUPLICATE'] as const;
+export type TcCopyType = (typeof TC_COPY_TYPES)[number];
+
+export const DUES_STATUSES = ['PENDING', 'CLEARED'] as const;
+export type DuesStatus = (typeof DUES_STATUSES)[number];
+
+// ───────────────────────────────────────────────────────────── import and export
+
+export const IMPORT_MODES = ['EXISTING_STUDENTS', 'NEW_ADMISSIONS'] as const;
+export type ImportMode = (typeof IMPORT_MODES)[number];
+
+export const IMPORT_ROW_STATUSES = ['READY', 'NEEDS_ATTENTION', 'IMPORTED', 'SKIPPED'] as const;
+export type ImportRowStatus = (typeof IMPORT_ROW_STATUSES)[number];
+
+export const IMPORT_STATUSES = ['UPLOADED', 'MAPPED', 'VALIDATED', 'COMMITTED'] as const;
+export type ImportStatus = (typeof IMPORT_STATUSES)[number];
+
+/** The columns an import file can fill. `required` ones must be mapped before the file can be checked. */
+export const IMPORT_FIELDS = [
+  'studentName',
+  'dateOfBirth',
+  'gender',
+  'admissionNumber',
+  'admissionDate',
+  'className',
+  'sectionName',
+  'rollNumber',
+  'guardianName',
+  'guardianPhone',
+  'guardianEmail',
+  'guardianRelationship',
+  'subjects',
+] as const;
+export type ImportField = (typeof IMPORT_FIELDS)[number];
+
+export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
+  studentName: 'Student name',
+  dateOfBirth: 'Date of birth',
+  gender: 'Gender',
+  admissionNumber: 'Admission number',
+  admissionDate: 'Admission date',
+  className: 'Class',
+  sectionName: 'Section',
+  rollNumber: 'Roll number',
+  guardianName: 'Parent name',
+  guardianPhone: 'Parent phone',
+  guardianEmail: 'Parent email',
+  guardianRelationship: 'Relationship',
+  subjects: 'Subjects',
+};
+
+export const IMPORT_REQUIRED_FIELDS: readonly ImportField[] = ['studentName', 'className'];
+
+export const IMPORT_ISSUE_CODES = [
+  'NAME_MISSING',
+  'DUPLICATE_ADMISSION_NUMBER_IN_FILE',
+  'ADMISSION_NUMBER_TAKEN',
+  'ADMISSION_NUMBER_MISSING',
+  'UNKNOWN_CLASS',
+  'UNKNOWN_SECTION',
+  'SECTION_CLASS_MISMATCH',
+  'CLASS_NOT_OFFERED',
+  'INVALID_DATE',
+  'POSSIBLE_DUPLICATE_STUDENT',
+  'PARENT_FOUND',
+  'GUARDIAN_PROBLEM',
+  'SECTION_FULL',
+  'ROLL_NUMBER_CLASH',
+  'INVALID_SUBJECT_CHOICE',
+  'NO_ACTIVE_SESSION',
+] as const;
+export type ImportIssueCode = (typeof IMPORT_ISSUE_CODES)[number];
+
+/** `ERROR` stops a row. `WARNING` and `INFO` are shown but the row can still be imported. */
+export const IMPORT_ISSUE_LEVELS = ['ERROR', 'WARNING', 'INFO'] as const;
+export type ImportIssueLevel = (typeof IMPORT_ISSUE_LEVELS)[number];
+
+export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+export const IMPORT_MAX_ROWS = 2000;
+
+export const STUDENT_EXPORT_PURPOSES = ['DIRECTORY', 'ACADEMIC', 'GUARDIAN_CONTACTS'] as const;
+export type StudentExportPurpose = (typeof STUDENT_EXPORT_PURPOSES)[number];
+
+export const STUDENT_EXPORT_PURPOSE_LABELS: Record<StudentExportPurpose, string> = {
+  DIRECTORY: 'Directory (name, admission number, class, section, roll, status)',
+  ACADEMIC: 'Academic (adds admission date, programme and subjects)',
+  GUARDIAN_CONTACTS: 'Parent contacts (adds primary parent name and phone)',
+};
+
+/** Links a student export file is open for. */
+export const STUDENT_EXPORT_LINK_SECONDS = 15 * 60;

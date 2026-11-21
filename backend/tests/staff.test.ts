@@ -705,8 +705,10 @@ describe('the Greenfield demo staff (seed)', () => {
     const adminUser = await User.findOne({ email: 'admin@greenfield.demo' }).setOptions(SKIP_TENANT_SCOPE).lean();
     expect(adminUser?.personId ?? null).toBeNull();
     expect(await User.countDocuments({ tenantId: adminUser!.tenantId, personId: (await body<EmployeeProfileDTO>(admin, `/employees/${lab.employeeId}`)).personId })).toBe(0);
-    // The two demo logins, plus Neha's login that is still waiting to be activated (Part 2).
-    expect(await User.countDocuments({ tenantId: adminUser!.tenantId, personId: { $ne: null } })).toBe(3);
+    // The two demo logins, plus Neha's login that is still waiting to be activated (Part 2), plus the three parent logins that
+    // Module 4 Part 3 links to a person (Simran Kaur, activated; Farah Khan, invited; Meena Malhotra, invited then removed).
+    expect(await User.countDocuments({ tenantId: adminUser!.tenantId, personId: { $ne: null } })).toBe(6);
+    expect(await User.countDocuments({ tenantId: adminUser!.tenantId, personId: { $ne: null }, role: { $ne: 'PARENT' } })).toBe(3);
 
     // The faculty login lands in the colleague directory for Mohali only, with directory fields.
     const faculty = await login('faculty@greenfield.demo');

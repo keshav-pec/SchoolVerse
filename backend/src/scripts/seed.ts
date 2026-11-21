@@ -20,6 +20,8 @@ import { Department, Designation } from '../modules/staff/master.model';
 import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
 import { seedStudentsDemo } from '../modules/students/students.seed';
+import { seedStudentLifecycleDemo } from '../modules/students/students.lifecycle.seed';
+import { StudentChangeRequest, StudentCounter, StudentDocument, StudentExport, StudentImport, StudentImportRow, StudentTransferCertificate } from '../modules/students/records.models';
 import {
   AdmissionNumberSettings,
   Student,
@@ -157,8 +159,13 @@ const DEMO_TENANTS: DemoTenant[] = [
 
 async function wipeTenant(tenantId: string) {
   // Private files first, while the rows that name them still exist.
-  const [documents, exports] = await Promise.all([EmployeeDocument.find({ tenantId }).select('objectKey').lean(), StaffExport.find({ tenantId }).select('objectKey').lean()]);
-  await Promise.all([...documents, ...exports].map((row) => privateStorage.remove(row.objectKey)));
+  const [documents, exports, studentDocuments, studentExports] = await Promise.all([
+    EmployeeDocument.find({ tenantId }).select('objectKey').lean(),
+    StaffExport.find({ tenantId }).select('objectKey').lean(),
+    StudentDocument.find({ tenantId }).select('objectKey').lean(),
+    StudentExport.find({ tenantId }).select('objectKey').lean(),
+  ]);
+  await Promise.all([...documents, ...exports, ...studentDocuments, ...studentExports].map((row) => privateStorage.remove(row.objectKey)));
   // Audit events are append-only through Mongoose, so remove demo rows via the raw collection.
   await AuditEvent.collection.deleteMany({ tenantId });
   await Promise.all([
@@ -205,6 +212,13 @@ async function wipeTenant(tenantId: string) {
     StudentSectionAssignment.deleteMany({ tenantId }),
     StudentSubjectEnrollment.deleteMany({ tenantId }),
     StudentTransferEvent.deleteMany({ tenantId }),
+    StudentDocument.deleteMany({ tenantId }),
+    StudentChangeRequest.deleteMany({ tenantId }),
+    StudentTransferCertificate.deleteMany({ tenantId }),
+    StudentImport.deleteMany({ tenantId }),
+    StudentImportRow.deleteMany({ tenantId }),
+    StudentExport.deleteMany({ tenantId }),
+    StudentCounter.deleteMany({ tenantId }),
     AccountToken.deleteMany({ tenantId }),
     DevOutbox.deleteMany({ tenantId }),
   ]);
@@ -248,12 +262,14 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
       await seedStarterSubjects(ctx);
       const byCode = (code: string) => created.find((l) => l.locationCode === code)!._id;
       if (def.slug === 'greenfield-public-school') {
-        await seedAcademicDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
-        log('    📚 Academic session 2026-27 (active) and 2027-28 (draft, cloned)');
+        const academic = await seedAcademicDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
+        log('    📚 Academic session 2026-27 (active) and 2027-28 (cloned, then published for promotion)');
         const staff = await seedStaffDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail });
         log(`    🧑‍🏫 ${staff.employees} employees across Mohali and Chandigarh (faculty and staff demo logins are linked to people)`);
         const students = await seedStudentsDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
         log(`    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
+        await seedStudentLifecycleDemo(ctx, { students: students.created, nextSessionId: academic.nextSessionId });
+        log('    👪 Parent portal: parent@greenfield.demo has two children; one pending invitation; one removed access; one student leaving; one Transfer Certificate waiting for dues');
       }
     }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);

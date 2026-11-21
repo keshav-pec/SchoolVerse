@@ -31,7 +31,7 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 |---|---|---|
 | 1 | Student and admission master, admission numbers, guardians and sibling reuse, enrollments, sections and roll numbers, subjects with the choice checker, history, faculty-scoped access (API) | ✅ Done |
 | 2 | Student & Family screens: persistent year and campus, Quick Add and Full Admission Form, student profile, Families, subject choice checker, Needs Attention, My Students | ✅ Done |
-| 3 | Parent access, documents, transfers, promotion, exit and TC, readmission, CSV import, student context service (API) | Not started |
+| 3 | Parent access, documents, transfers, promotion, exit and TC, readmission, CSV import, student context service (API) | ✅ Done |
 | 4 | Parent portal, lifecycle screens, e2e, child-data security gate | Not started |
 
 ## Layout
@@ -87,8 +87,14 @@ Greenfield's people (Module 3, all synthetic): about ten employees across Mohali
 | A section change in the middle of the year | Kabir Singh moved from VIII-A to VIII-B on 1 September. Open his **History** tab. |
 | Drafts | Tara Mehra (a name only) and Ishaan Gill (admission pending, no section, no parent). Both are on **Needs Attention**. |
 | A subject choice not made yet | Zoya Khan (VI-A) has no first language. Open **Change Subjects**: pick Hindi and Punjabi together to see the checker say what is wrong. |
+| A parent with two children, already signed in | `parent@greenfield.demo` (Simran Kaur) has portal access to Riya and Arjun. Sign in and call `GET /api/v1/parent/children`. |
+| A pending invitation | Farah Khan (Zoya's mother) was invited and has not activated. Her link is in the dev outbox (`GET /api/v1/dev/outbox?to=farah.khan@greenfield.demo`). |
+| Access removed for one child | Meena Malhotra (Aarav's mother) was invited, then her access was removed. She keeps her login. |
+| A student who is leaving | A Chandigarh Class VIII student leaves on 31 March 2027 (moving to another school); their Transfer Certificate has not been requested yet. |
+| A Transfer Certificate waiting for dues | Another Chandigarh student's certificate is in **Pending clearance** (dues not cleared). |
+| Promotion to 2027-28 | 2027-28 is **published**, so `GET /api/v1/promotions/readiness` and `POST /api/v1/promotions/bulk` can be tried. |
 
-There is no student login. `faculty@greenfield.demo` sees only students in the sections they teach, on **My Students**. Parent logins arrive in Part 3.
+There is no student login. `faculty@greenfield.demo` sees only students in the sections they teach, on **My Students**. A parent login sees only their own children (Part 3 API; the parent screens arrive in Part 4).
 
 The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
 
@@ -98,7 +104,7 @@ The seed also creates each tenant's School Master and the PRD §19 location data
 | Chandigarh Campus | CHD | No | Active |
 | Panchkula Campus | PKL | No | Draft |
 
-**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (classes Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Class VI language choice group, Class XI Science / Commerce / Humanities / Flexible programmes, two terms) and a **2027-28 draft** created by cloning it. Riverside has no academic data. Boards, rule versions and the 17-class master are built-in reference data shared by every school.
+**Academic data (Greenfield).** The seed also loads the PRD §23 dataset: session **2026-27 (Active)** with Mohali on CBSE and Chandigarh on the state-board test template (classes Nursery–XII at Mohali, Nursery–VIII at Chandigarh, sections VIII-A/B/C, a Class VI language choice group, Class XI Science / Commerce / Humanities / Flexible programmes, two terms) and **2027-28**, created by cloning it and then published (Module 4 does this so promotion can be tried). Riverside has no academic data. Boards, rule versions and the 17-class master are built-in reference data shared by every school.
 
 Greenfield's first-time setup is **completed**, so its admin goes straight to the app. Riverside Academy has one active campus that reuses the code `MOH` (codes only have to be unique within a school) and an unfinished setup. A workspace you create through **Sign up** always starts in the wizard.
 
@@ -184,6 +190,28 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 
 **Things that differ from the plan.** The **Full Admission Form** has 11 steps: Student, Personal, Admission, Previous School, Class, Subjects, Parent, Emergency, Address, Notes, Review. The "Subject choice pending" list filter is not a filter: those students are on Needs Attention → Subjects. Part 2 added two read-only backend routes the screens need: `GET /students/attention` and `GET /guardians`.
 
+## Parent access, lifecycle and import (Module 4, Part 3, API only)
+
+The screens for these arrive in Part 4. All routes are under `/api/v1` and return the standard `{ data }` / `{ error }` envelopes.
+
+| Area | Routes | Needs |
+|---|---|---|
+| Parent logins | `POST /guardian-links/:id/enable-portal` (reuses the parent's login, or sends an activation link), `…/revoke-portal` (one child only), `…/resend-invitation`, `GET /students/:id/parent-access`, `POST /parents/invitations/bulk` | `parent_access:manage` |
+| Parent portal | `GET /parent/children`, `GET /parent/children/:studentId`, `…/documents`, `POST …/change-requests`, `GET /parent/change-requests`, `POST /parent/change-requests/:id/cancel` | Parent login only. A child that is not theirs is a 404. |
+| Documents | `GET/POST /students/:id/documents`, `POST /student-documents/:id/download` (signed link, 60 s), `DELETE /student-documents/:id` | `student:documents` (download: also a parent for their own child) |
+| Change requests | `GET /student-change-requests`, `POST …/:id/approve`, `POST …/:id/reject` | `student:approve_changes` |
+| Campus transfer | `POST /students/:id/location-transfer/validate`, `POST /students/:id/location-transfer`, `GET /students/:id/transfers` | `student:lifecycle` |
+| Promotion | `GET /promotions/readiness`, `POST /promotions/recommend`, `POST /promotions/bulk`, `POST /students/:id/repeat` | `student:lifecycle` |
+| Exit | `GET/POST/PATCH /students/:id/withdrawal`, `…/withdrawal/complete`, `…/withdrawal/cancel`, `POST /students/:id/readmit` | `student:lifecycle` |
+| Transfer Certificate | `GET/POST /students/:id/transfer-certificates`, `PATCH /transfer-certificates/:id`, `…/approve`, `…/issue`, `…/duplicate`, `…/cancel` | `student:lifecycle` |
+| Import | `GET /students/imports/template.csv`, `POST /students/imports` (CSV), `GET /students/imports/:id`, `…/map`, `…/validate`, `…/rows`, `PATCH …/rows/:rowId`, `…/issues`, `…/issues.csv`, `…/commit` | `student:import` |
+| Export | `POST /students/exports` (Directory, Academic, Parent contacts) | `student:export` |
+| Context | `GET /student-context?studentId=&academicSessionId=&date=` (admin, a teacher in scope, or a parent) | — |
+
+A sample file for the import is `backend/seed/students-sample.csv` (with a few mistakes on purpose). The hourly job `processDueWithdrawals` finishes withdrawals whose leaving date has come.
+
+**If you already have a database from before Part 3,** run `npm run migrate:admission-index` once in `backend/`. It changes one index (the admission number is now unique among *current* admissions, so a readmitted student can keep their number) and never touches data. A fresh database needs nothing. Then run `npm run seed` again to load the Part 3 demo data.
+
 ## Setup flow
 
 1. **Sign up** creates a workspace and its School Admin. The admin is sent to `/setup`.
@@ -196,7 +224,7 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 
 | Suite | Where | Run |
 |---|---|---|
-| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students` (Module 4), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students`, `parent-access` and `student-lifecycle` (Module 4), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
 | E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice). The `people-*` and `students-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
 

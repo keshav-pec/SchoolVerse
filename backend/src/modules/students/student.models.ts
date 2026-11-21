@@ -10,6 +10,7 @@ import {
   SECTION_CAPACITY_POLICIES,
   STUDENT_STATUSES,
   SUBJECT_ENROLLMENT_SOURCES,
+  WITHDRAWAL_REASON_CATEGORIES,
   TRANSFER_EVENT_TYPES,
   type AdmissionMode,
   type AdmissionNumberMode,
@@ -22,6 +23,7 @@ import {
   type StudentStatus,
   type SubjectEnrollmentSource,
   type TransferEventType,
+  type WithdrawalReasonCategory,
 } from '@shared';
 import { auditFields, baseSchemaOptions, uuidPrimaryKey, type AuditFields, type BaseDoc } from '../../db/plugins/base';
 import { tenantScopePlugin } from '../../db/plugins/tenant-scope';
@@ -42,6 +44,17 @@ const OPEN = { effectiveTo: { $type: 'null' }, cancelledAt: { $type: 'null' } } 
 
 // ───────────────────────────────────────────────────────────── students
 
+/** Why and when a student is leaving. Set when a withdrawal starts, kept afterwards as history. */
+export interface WithdrawalInfo {
+  leavingDate: string;
+  reasonCategory: WithdrawalReasonCategory;
+  destinationSchool: string | null;
+  note: string | null;
+  needsTC: boolean;
+  startedAt: Date;
+  startedBy: string;
+}
+
 export interface StudentDoc extends BaseDoc, AuditFields {
   tenantId: string;
   schoolId: string;
@@ -54,7 +67,21 @@ export interface StudentDoc extends BaseDoc, AuditFields {
   version: number;
   statusChangedAt: Date | null;
   statusChangedBy: string | null;
+  withdrawal: WithdrawalInfo | null;
 }
+
+const withdrawalSchema = new Schema<WithdrawalInfo>(
+  {
+    leavingDate: { type: String, required: true },
+    reasonCategory: { type: String, enum: WITHDRAWAL_REASON_CATEGORIES, required: true },
+    destinationSchool: { type: String, default: null },
+    note: { type: String, default: null, maxlength: 500 },
+    needsTC: { type: Boolean, default: false },
+    startedAt: { type: Date, required: true },
+    startedBy: { type: String, required: true },
+  },
+  { _id: false },
+);
 
 const studentSchema = new Schema<StudentDoc>(
   {
@@ -69,6 +96,7 @@ const studentSchema = new Schema<StudentDoc>(
     version: { type: Number, default: 1 },
     statusChangedAt: { type: Date, default: null },
     statusChangedBy: { type: String, default: null },
+    withdrawal: { type: withdrawalSchema, default: null },
     ...auditFields,
   },
   baseSchemaOptions('students'),
@@ -137,7 +165,11 @@ const admissionSchema = new Schema<StudentAdmissionDoc>(
   },
   baseSchemaOptions('student_admissions'),
 );
-admissionSchema.index({ tenantId: 1, schoolId: 1, admissionNumber: 1 }, { unique: true });
+// Unique among current admissions. A readmission that keeps the old number adds a new current row and retires the old one;
+// handing a retired number to someone else is refused by the service (it checks every admission row).
+admissionSchema.index({ tenantId: 1, schoolId: 1, admissionNumber: 1 }, { unique: true, partialFilterExpression: { isCurrent: true }, name: 'one_current_admission_number' });
+// Looking up any admission row (current or retired) by number, so a retired number is never handed to someone else.
+admissionSchema.index({ tenantId: 1, admissionNumber: 1 });
 admissionSchema.index({ tenantId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { isCurrent: true }, name: 'one_current_admission_per_student' });
 admissionSchema.index({ tenantId: 1, admissionLocationId: 1 });
 admissionSchema.plugin(tenantScopePlugin);
@@ -232,6 +264,8 @@ export interface StudentGuardianLinkDoc extends BaseDoc, AuditFields {
   pickupAllowed: boolean;
   /** Turned on by the Part 3 invitation flow. Having a guardian does not mean having a login. */
   portalEnabled: boolean;
+  /** Set when access was removed for this child, so the screen can say "Access removed" rather than "Not invited". */
+  portalRevokedAt: Date | null;
   effectiveFrom: string;
   effectiveTo: string | null;
   cancelledAt: Date | null;
@@ -252,6 +286,7 @@ const guardianLinkSchema = new Schema<StudentGuardianLinkDoc>(
     canSeeFees: { type: Boolean, default: true },
     pickupAllowed: { type: Boolean, default: false },
     portalEnabled: { type: Boolean, default: false },
+    portalRevokedAt: { type: Date, default: null },
     effectiveFrom: { type: String, required: true },
     effectiveTo: { type: String, default: null },
     cancelledAt: { type: Date, default: null },
@@ -264,6 +299,8 @@ const guardianLinkSchema = new Schema<StudentGuardianLinkDoc>(
 guardianLinkSchema.index({ tenantId: 1, studentId: 1 }, { unique: true, partialFilterExpression: { isPrimary: true, ...OPEN }, name: 'one_primary_guardian' });
 guardianLinkSchema.index({ tenantId: 1, studentId: 1, guardianPersonId: 1 });
 guardianLinkSchema.index({ tenantId: 1, guardianPersonId: 1 });
+// The parent-access check reads links by guardian person and student on every parent request.
+guardianLinkSchema.index({ tenantId: 1, guardianPersonId: 1, studentId: 1, portalEnabled: 1 });
 guardianLinkSchema.plugin(tenantScopePlugin);
 
 export const StudentGuardianLink = model<StudentGuardianLinkDoc>('StudentGuardianLink', guardianLinkSchema);

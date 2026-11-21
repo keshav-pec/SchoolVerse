@@ -1,0 +1,13 @@
+Student Name,Date of Birth,Gender,Admission No,Admission Date,Class,Section,Roll No,Father Name,Father Mobile,Father Email,Subjects
+Aadhya Verma,2014-03-14,Female,GPS/2020/90001,2020-04-01,VI,A,31,Mohit Verma,+91 90000 70001,mohit.verma@sample.demo,Punjabi
+Dev Malik,2014-07-02,Male,GPS/2020/90002,2020-04-01,VI,A,32,Sanjay Malik,+91 90000 70002,sanjay.malik@sample.demo,Hindi
+Ishita Rao,2012-11-09,Female,GPS/2019/90003,2019-04-01,VIII,B,31,Kiran Rao,+91 90000 70003,kiran.rao@sample.demo,
+Karan Bedi,2012-01-25,Male,GPS/2019/90004,2019-04-01,Class 8,C,31,Tejinder Bedi,+91 90000 70004,tejinder.bedi@sample.demo,
+Leena Joshi,2015-05-30,Female,GPS/2021/90005,2021-04-01,5,A,31,Harish Joshi,+91 90000 70005,harish.joshi@sample.demo,
+Mehul Arora,2014-09-18,Male,GPS/2020/90001,2020-04-01,VI,A,33,Rohit Arora,+91 90000 70006,rohit.arora@sample.demo,Punjabi
+Naina Gill,2014-02-11,Female,GPS/2020/90007,2020-04-01,XII,A,34,Amar Gill,+91 90000 70007,amar.gill@sample.demo,
+Omkar Sethi,2012-12-01,Male,GPS/2019/90008,2019-04-01,VIII,Z,35,Pankaj Sethi,+91 90000 70008,pankaj.sethi@sample.demo,
+Pari Chawla,31/02/2014,Female,GPS/2020/90009,2020-04-01,VI,A,35,Vinod Chawla,+91 90000 70009,vinod.chawla@sample.demo,Punjabi
+Qasim Ali,2014-06-06,Male,GPS/2020/90010,2020-04-01,VI,A,31,Imran Ali,+91 90000 70010,imran.ali@sample.demo,Urdu
+Rhea Kapoor,2015-08-08,Female,GPS/2021/90011,2021-04-01,5,A,36,Sunil Kapoor,+91 90000 7011,sunil.kapoor@sample.demo,
+Riya Kaur,2014-06-12,Female,GPS/2021/90012,2021-04-01,VI,A,37,Simran Kaur,+91 90000 00001,parent@greenfield.demo,Hindi

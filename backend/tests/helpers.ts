@@ -504,3 +504,54 @@ export async function teacherWith(t: StaffSchool, items: Record<string, unknown>
   const login = await loginAs(t, 'FACULTY', employee);
   return { ...login, employee };
 }
+
+// ───────────────────────────────────────────────────────────── parent access and lifecycle (Module 4, Part 3)
+
+/** A second EICAR-style antivirus test file: harmless, and every scanner must flag it. */
+export const EICAR = Buffer.from('%PDF-1.4\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*\n%%EOF\n');
+
+/** The guardian links of a student, as the admin sees them. */
+export async function guardianLinks(agent: Agent, studentId: string) {
+  return (await agent.get(`${API}/students/${studentId}/guardians`).expect(200)).body.data as { guardianLinkId: string; guardianPersonId: string; relationshipType: string; isPrimary: boolean }[];
+}
+
+/** Admin enables portal access for a student's first guardian and returns the link, the parent's email and the activation token (when a new login was made). */
+export async function inviteParent(t: { agent: Agent }, studentId: string, email: string) {
+  const links = await guardianLinks(t.agent, studentId);
+  const linkId = links[0]!.guardianLinkId;
+  const res = await t.agent.post(`${API}/guardian-links/${linkId}/enable-portal`);
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return { linkId, access: res.body.data as { portalState: string; reusedAccount: boolean; invitationSent: boolean }, email };
+}
+
+/** The whole path a parent takes: invited, follows the link in the dev outbox, chooses a password, signs in. */
+export async function activatedParent(t: { agent: Agent }, studentId: string, email: string) {
+  const { linkId, access } = await inviteParent(t, studentId, email);
+  const token = tokenFromLink(await outboxLink(email, 'ACTIVATION'));
+  await request(app).post(`${API}/auth/activate`).send({ token, password: PASSWORD }).expect(200);
+  const agent = request.agent(app);
+  await agent.post(`${API}/auth/login`).send({ email, password: PASSWORD }).expect(200);
+  return { agent, linkId, access, email, token };
+}
+
+/**
+ * The staff school plus Class IX (sections A and B, Maths and Science) in the active session, then 2027-28 cloned from it and
+ * published. Class X is added to 2026-27 after the clone, so it is not offered next year: Class VIII students have a next class,
+ * Class IX students have none, and Class X is the last class.
+ */
+export async function promotionSchool() {
+  const t = await staffSchool();
+  const subjects = Object.fromEntries((await t.agent.get(`${API}/subjects?pageSize=100`).expect(200)).body.data.items.map((s: { subjectCode: string; subjectId: string }) => [s.subjectCode, s.subjectId])) as Record<string, string>;
+  const classWithSections = async (classId: string) => {
+    const [offering] = await addClasses(t.agent, t.sessionId, t.moh.locationId, [classId]);
+    const rows = (await t.agent.post(`${API}/class-offerings/${offering!.classOfferingId}/sections`).send({ codes: ['A', 'B'] }).expect(201)).body.data as { sectionCode: string; sectionOfferingId: string }[];
+    await offer(t.agent, offering!.classOfferingId, [subjects.MATH!, subjects.SCI!]);
+    return { classOfferingId: offering!.classOfferingId, sections: Object.fromEntries(rows.map((r) => [r.sectionCode, r.sectionOfferingId])) as Record<'A' | 'B', string> };
+  };
+  const nine = await classWithSections(t.ref.classId.G09!);
+  const next = (await t.agent.post(`${API}/academic-sessions/${t.sessionId}/clone`).send({ name: 'Academic Year 2027-28', code: '2027-28', startDate: '2027-04-01', endDate: '2028-03-31' }).expect(201)).body.data as AcademicSessionDTO;
+  await forceStatus(t.tenantId, next.academicSessionId, 'PUBLISHED');
+  const ten = await classWithSections(t.ref.classId.G10!);
+  return { ...t, nextSessionId: next.academicSessionId, nine, ten };
+}
+export type PromotionSchool = Awaited<ReturnType<typeof promotionSchool>>;

@@ -33,3 +33,8 @@ export function singleImageUpload(field: string, maxBytes: number): RequestHandl
 export function singleDocumentUpload(field: string, maxBytes: number): RequestHandler {
   return singleFileUpload(field, { fileSize: maxBytes, fieldSize: 500 }, () => new AppError('DOCUMENT_TOO_LARGE'), 'Upload exactly one file.');
 }
+
+/** A CSV file (student import) with the text fields that travel beside it. The bytes are checked later; the type the browser claims is ignored. */
+export function singleCsvUpload(field: string, maxBytes: number): RequestHandler {
+  return singleFileUpload(field, { fileSize: maxBytes, fieldSize: 200 }, () => new AppError('FILE_TOO_LARGE'), 'Upload exactly one CSV file.');
+}

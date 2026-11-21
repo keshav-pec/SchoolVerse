@@ -29,7 +29,11 @@ import {
 import { AppError } from '../src/core/errors';
 import { MASKED_DTO_ALLOWED_CLASSES } from '@shared';
 import { createFieldCrypto, mask, signFileToken, verifyFileToken } from '../src/platform/identity/crypto';
-import { csvCell, toCsv } from '../src/platform/identity/csv';
+import { csvCell, parseCsv, toCsv } from '../src/platform/identity/csv';
+import { classKey, parseGender, parseImportDate, parseRelationship, sectionKey, splitName, splitSubjects, suggestMapping } from '../src/modules/students/import-rules';
+import { formatTcNumber, isFinalClass, pickSection, PROMOTION_REASON_TEXT, promotionReviewReasons, resolveNextClass } from '../src/modules/students/rules';
+import { simplePdf } from '../src/modules/students/tc.service';
+import { StudentChangeRequest, StudentCounter, StudentDocument, StudentExport, StudentImport, StudentImportRow, StudentTransferCertificate } from '../src/modules/students/records.models';
 import { safeFileName, scanFile, sniffDocumentType, EICAR_SIGNATURE } from '../src/platform/identity/file-checks';
 import { AccountToken } from '../src/platform/identity/account-token.model';
 import { toRestrictedDTO } from '../src/platform/identity/restricted-data';
@@ -52,6 +56,7 @@ import type { StaffMasterDoc } from '../src/modules/staff/master.model';
 import { addDays, daysBetween } from '../src/core/dates';
 import { assignmentStatus, overlapping } from '../src/modules/staff/status';
 import {
+  PROMOTION_REVIEW_REASONS,
   STUDENT_ACTIONS,
   STUDENT_DTO_ALLOWED_CLASSES,
   STUDENT_STATUSES,
@@ -804,5 +809,157 @@ describe('student data classification (SEC-SPM-02)', () => {
     expect(directory).toContain('Priya Sharma');
     expect(faculty).not.toContain('Priya Sharma');
     expect(directory).toContain('VIII-A');
+  });
+});
+
+// ───────────────────────────────────────────────────────────── Module 4, Part 3
+
+describe('promotion rules (SPM-28)', () => {
+  const levels = [5, 6, 7, 9].map((n) => ({ classOfferingId: `c${n}`, classId: `k${n}`, sequenceNumber: n }));
+
+  it('the standard next class is the one straight after; a gap needs a person, and the last class has none', () => {
+    expect(resolveNextClass(6, levels)?.classOfferingId).toBe('c7');
+    expect(resolveNextClass(7, levels)).toBeNull(); // Class 8 is not offered: no skipping to 9
+    expect(resolveNextClass(9, levels)).toBeNull();
+    expect(isFinalClass(9, [5, 6, 7, 9])).toBe(true);
+    expect(isFinalClass(7, [5, 6, 7, 9])).toBe(false);
+  });
+
+  it('sections are filled evenly: not full first, fewest students, then the usual order', () => {
+    const load = (sectionId: string, enrolled: number, capacity: number | null, sequenceOrder = 0) => ({ sectionId, enrolled, capacity, sequenceOrder });
+    expect(pickSection([load('a', 30, 40, 1), load('b', 25, 40, 2), load('c', 25, 40, 3)])?.sectionId).toBe('b');
+    expect(pickSection([load('a', 40, 40, 1), load('b', 39, 40, 2)])?.sectionId).toBe('b');
+    expect(pickSection([load('a', 40, 40, 1), load('b', 41, 40, 2)])?.sectionId).toBe('a'); // all full: the least over
+    expect(pickSection([load('a', 99, null, 1), load('b', 10, 40, 2)])?.sectionId).toBe('b');
+    expect(pickSection([])).toBeNull();
+  });
+
+  it('review reasons are plain, and a student in the last class needs nothing about next year', () => {
+    const facts = { studentStatus: 'ACTIVE' as const, hasSection: true, locationInTarget: true, nextClassFound: true, isFinal: false, subjectChoiceIncomplete: false, programmeOk: true, alreadyHasTargetEnrollment: false };
+    expect(promotionReviewReasons(facts)).toEqual([]);
+    expect(promotionReviewReasons({ ...facts, studentStatus: 'WITHDRAWAL_INITIATED' })).toEqual(['LEAVING']);
+    expect(promotionReviewReasons({ ...facts, studentStatus: 'INACTIVE' })).toEqual(['STUDENT_NOT_ACTIVE']);
+    expect(promotionReviewReasons({ ...facts, nextClassFound: false })).toEqual(['NO_NEXT_CLASS']);
+    expect(promotionReviewReasons({ ...facts, locationInTarget: false, nextClassFound: false })).toEqual(['LOCATION_MISSING']);
+    expect(promotionReviewReasons({ ...facts, hasSection: false, subjectChoiceIncomplete: true, programmeOk: false })).toEqual(['SECTION_MISSING', 'SUBJECT_CHOICE_PENDING', 'PROGRAMME_NOT_VALID']);
+    expect(promotionReviewReasons({ ...facts, alreadyHasTargetEnrollment: true })).toEqual(['ALREADY_PROMOTED']);
+    expect(promotionReviewReasons({ ...facts, isFinal: true, nextClassFound: false, subjectChoiceIncomplete: true, programmeOk: false })).toEqual([]);
+    for (const code of PROMOTION_REVIEW_REASONS) expect(PROMOTION_REASON_TEXT[code], code).toMatch(/[a-z]/);
+  });
+});
+
+describe('transfer certificate number (SPM-30)', () => {
+  it('is TC / session / four digits, and only the counter decides the number', () => {
+    expect(formatTcNumber('2026-27', 4)).toBe('TC/2026-27/0004');
+    expect(formatTcNumber('2026-27', 12345)).toBe('TC/2026-27/12345');
+    expect(formatTcNumber('20 26/27!', 1)).toBe('TC/202627/0001');
+  });
+
+  it('simplePdf makes a real one-page PDF that passes the upload checks, whatever the text', () => {
+    const pdf = simplePdf(['Greenfield (Public) School', 'Name: Riya \\ Kaur', 'Ünïcode → ?']);
+    expect(sniffDocumentType(pdf)).toBe('application/pdf');
+    const text = pdf.toString('latin1');
+    expect(text).toContain('%%EOF');
+    expect(text).toContain('Greenfield \\(Public\\) School');
+    expect(text).toMatch(/xref\n0 6/);
+    // The cross-reference table points at real objects.
+    const offsets = [...text.matchAll(/(\d{10}) 00000 n/g)].map((m) => Number(m[1]));
+    expect(offsets).toHaveLength(5);
+    offsets.forEach((offset, i) => expect(text.slice(offset, offset + 8)).toBe(`${i + 1} 0 obj\n`));
+  });
+});
+
+describe('student import rules (SPM-32)', () => {
+  it('QA M1: matches the headers schools really use, and uses a column only once', () => {
+    expect(suggestMapping(['Student Name', 'Admission No', 'Class', 'Section', 'Father Mobile', 'DOB', 'Roll No.', 'Parent Email'])).toEqual({
+      studentName: 'Student Name',
+      admissionNumber: 'Admission No',
+      className: 'Class',
+      sectionName: 'Section',
+      guardianPhone: 'Father Mobile',
+      dateOfBirth: 'DOB',
+      rollNumber: 'Roll No.',
+      guardianEmail: 'Parent Email',
+    });
+    // Two phone columns: the first is used, the second is left for the admin.
+    expect(suggestMapping(['Name', 'Father Mobile', 'Mother Mobile', 'Grade'])).toEqual({ studentName: 'Name', guardianPhone: 'Father Mobile', className: 'Grade' });
+    expect(suggestMapping(['x', 'y'])).toEqual({});
+  });
+
+  it('reads class and section the way schools write them', () => {
+    for (const v of ['VIII', 'Class 8', 'class VIII', '8', '8th', 'Grade 8', 'STD. 8', ' viii ']) expect(classKey(v), v).toBe('8');
+    expect(classKey('Class 12')).toBe('12');
+    expect(classKey('XII')).toBe('12');
+    expect(classKey('Nursery')).toBe('nursery');
+    expect(classKey('LKG')).toBe('lkg');
+    for (const v of ['A', 'a', 'VIII-A', '8 A', 'Class 8 - a']) expect(sectionKey(v), v).toBe('A');
+  });
+
+  it('reads dates day-first, and refuses dates that do not exist', () => {
+    expect(parseImportDate('2019-04-01')).toBe('2019-04-01');
+    expect(parseImportDate('01/04/2019')).toBe('2019-04-01');
+    expect(parseImportDate('1-4-2019')).toBe('2019-04-01');
+    expect(parseImportDate('1.4.2019')).toBe('2019-04-01');
+    for (const bad of ['31/02/2019', '2019-13-01', 'April 1', '', '2019/04/01']) expect(parseImportDate(bad), bad).toBeNull();
+  });
+
+  it('reads gender, relationship, subjects and full names', () => {
+    expect([parseGender('M'), parseGender('female'), parseGender('Boy'), parseGender('x'), parseGender('')]).toEqual(['MALE', 'FEMALE', 'MALE', 'OTHER', null]);
+    expect([parseRelationship('mother'), parseRelationship('', 'Father Name'), parseRelationship('', 'Guardian'), parseRelationship('Uncle')]).toEqual(['Mother', 'Father', 'Other', 'Uncle']);
+    expect(splitSubjects('Maths; Hindi, Physics | Art')).toEqual(['Maths', 'Hindi', 'Physics', 'Art']);
+    expect(splitName('Riya')).toEqual({ first: 'Riya', middle: null, last: '' });
+    expect(splitName('Riya Kaur')).toEqual({ first: 'Riya', middle: null, last: 'Kaur' });
+    expect(splitName('Riya Preet  Kaur')).toEqual({ first: 'Riya', middle: 'Preet', last: 'Kaur' });
+  });
+
+  it('QA CSV: reads quotes, commas, line breaks and a byte-order mark; writing escapes formulas', () => {
+    expect(parseCsv('﻿a,b\r\n"x, y","say ""hi"""\n\n,\n')).toEqual([['a', 'b'], ['x, y', 'say "hi"']]);
+    expect(parseCsv('a,b\n"line\nbreak",2')).toEqual([['a', 'b'], ['line\nbreak', '2']]);
+    expect(parseCsv('')).toEqual([]);
+    // A cell is only text: a formula is kept as typed and is escaped when it is written back out.
+    const [, row] = parseCsv('n\n=SUM(A1)');
+    expect(row).toEqual(['=SUM(A1)']);
+    expect(csvCell(row![0])).toBe("'=SUM(A1)");
+    expect(parseCsv(toCsv(['a', 'b'], [['x,y', 'q"r'], ['1', '2']]))).toEqual([['a', 'b'], ['x,y', 'q"r'], ['1', '2']]);
+  });
+});
+
+describe('Part 3 data classification (SEC-SPM-02)', () => {
+  const systemFields: readonly string[] = SYSTEM_FIELDS;
+  const businessPaths = (schema: { paths: Record<string, unknown> }) => [...new Set(Object.keys(schema.paths).map((p) => p.split('.')[0]!))].filter((p) => !systemFields.includes(p));
+
+  it('every field of every Part 3 collection has a class, and nothing in the map is stale', () => {
+    const cases: [keyof typeof DATA_CLASSIFICATION, { schema: { paths: Record<string, unknown> } }][] = [
+      ['student_document', StudentDocument],
+      ['student_change_request', StudentChangeRequest],
+      ['student_transfer_certificate', StudentTransferCertificate],
+      ['student_import', StudentImport],
+      ['student_import_row', StudentImportRow],
+      ['student_export', StudentExport],
+      ['student_counter', StudentCounter],
+    ];
+    for (const [entity, model] of cases) expect(businessPaths(model.schema).sort(), entity).toEqual(Object.keys(DATA_CLASSIFICATION[entity]).sort());
+  });
+
+  it('keeps file keys secret, and the values a parent asks to change and an import row restricted, so the audit trail redacts them', () => {
+    expect(classOf('student_document', 'objectKey')).toBe('SECRET');
+    expect(classOf('student_export', 'objectKey')).toBe('SECRET');
+    expect(classOf('student_change_request', 'oldValue')).toBe('RESTRICTED');
+    expect(classOf('student_change_request', 'proposedValue')).toBe('RESTRICTED');
+    expect(classOf('student_import_row', 'raw')).toBe('RESTRICTED');
+    expect(classOf('student_transfer_certificate', 'reasonForLeaving')).toBe('PERSONAL');
+    expect(classOf('student', 'withdrawal')).toBe('PERSONAL');
+    expect(classOf('student_guardian_link', 'portalRevokedAt')).toBe('INTERNAL');
+  });
+
+  it('the exit statuses can only be reached through the exit workflow', () => {
+    for (const action of ['complete_withdrawal', 'complete_schooling', 'readmit'] as const) expect(STUDENT_ACTIONS).toContain(action);
+    expect(canStudentTransition('ACTIVE', 'complete_withdrawal')).toBe(false);
+    expect(canStudentTransition('WITHDRAWAL_INITIATED', 'complete_withdrawal')).toBe(true);
+    expect(canStudentTransition('WITHDRAWN', 'readmit')).toBe(true);
+    expect(canStudentTransition('ACTIVE', 'readmit')).toBe(false);
+    expect(hasPermission('FACULTY', 'student:lifecycle')).toBe(false);
+    expect(hasPermission('PARENT', 'student:documents')).toBe(false);
+    expect(hasPermission('SCHOOL_ADMIN', 'parent_access:manage')).toBe(true);
   });
 });

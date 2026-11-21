@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { login } from './helpers';
 
-/** The seeded Greenfield already has an ACTIVE 2026-27 and a DRAFT 2027-28. These flows build and run a new session on top of it. */
+/** The seeded Greenfield already has an ACTIVE 2026-27 and a PUBLISHED 2027-28 (Module 4 publishes it so promotion can be tried). These flows build and run a new session on top of it. */
 test.describe.configure({ mode: 'serial' });
 
 let sessionId = '';

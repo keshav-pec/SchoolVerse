@@ -10,6 +10,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "seed:reference": "tsx src/scripts/seed-reference.ts",
     "migrate:grade-to-class": "tsx src/scripts/migrate-grade-to-class.ts",
+    "migrate:admission-index": "tsx src/scripts/migrate-admission-index.ts",
     "data-inventory": "tsx src/scripts/data-inventory.ts",
     "e2e:server": "tsx src/scripts/e2e-server.ts",
     "test": "vitest run",

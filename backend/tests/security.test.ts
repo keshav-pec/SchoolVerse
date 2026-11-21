@@ -13,10 +13,12 @@ import { Department, Designation } from '../src/modules/staff/master.model';
 import { EmployeeDocument, ProfileChangeRequest } from '../src/modules/staff/identity.models';
 import { Person } from '../src/modules/staff/person.model';
 import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
+import { StudentChangeRequest, StudentDocument, StudentTransferCertificate } from '../src/modules/students/records.models';
 import { Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent } from '../src/modules/students/student.models';
 import { User } from '../src/platform/users/user.model';
 import { School } from '../src/modules/school/school.model';
 import {
+  activatedParent,
   addClasses,
   API,
   app,
@@ -80,6 +82,10 @@ interface StudentIds {
   guardianLinkId: string;
   guardianPersonId: string;
   externalIdId: string;
+  // Part 3
+  documentId: string;
+  certificateId: string;
+  changeRequestId: string;
 }
 
 type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds };
@@ -133,6 +139,11 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET documents', send: (c) => c.get(`${employee}/documents`) },
       // Students and parents (Module 4)
       { name: 'GET student', send: (c) => c.get(student) },
+      { name: 'GET student documents', send: (c) => c.get(`${student}/documents`) },
+      { name: 'GET student parent access', send: (c) => c.get(`${student}/parent-access`) },
+      { name: 'GET student withdrawal', send: (c) => c.get(`${student}/withdrawal`) },
+      { name: 'GET student transfers', send: (c) => c.get(`${student}/transfers`) },
+      { name: 'GET student transfer certificates', send: (c) => c.get(`${student}/transfer-certificates`) },
       { name: 'GET student history', send: (c) => c.get(`${student}/history`) },
       { name: 'GET student guardians', send: (c) => c.get(`${student}/guardians`) },
       { name: 'GET student enrollments', send: (c) => c.get(`${student}/enrollments`) },
@@ -250,6 +261,27 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'end subject', send: (c) => c.post(`${API}/student-subject-enrollments/${kid.subjectEnrollmentId}/end`).send({}) },
       { name: 'bulk roll numbers', send: (c) => c.post(`${API}/sections/roll-numbers/bulk`).send({ sectionId: x.sectionId, order: 'ALPHABETICAL', apply: true }) },
       { name: 'recommend sections', send: (c) => c.post(`${API}/sections/recommend`).send({ classOfferingId: x.classOfferingId }) },
+      // Parent access, documents, change requests, transfers, exit and certificates (Module 4, Part 3)
+      { name: 'enable portal', send: (c) => c.post(`${API}/guardian-links/${kid.guardianLinkId}/enable-portal`) },
+      { name: 'revoke portal', send: (c) => c.post(`${API}/guardian-links/${kid.guardianLinkId}/revoke-portal`) },
+      { name: 'resend invitation', send: (c) => c.post(`${API}/guardian-links/${kid.guardianLinkId}/resend-invitation`) },
+      { name: 'delete student document', send: (c) => c.delete(`${API}/student-documents/${kid.documentId}`) },
+      { name: 'approve student change', send: (c) => c.post(`${API}/student-change-requests/${kid.changeRequestId}/approve`).send({}) },
+      { name: 'reject student change', send: (c) => c.post(`${API}/student-change-requests/${kid.changeRequestId}/reject`).send({ note: 'No' }) },
+      { name: 'validate location transfer', send: (c) => c.post(`${student}/location-transfer/validate`).send({ toLocationId: ids.locationId, classOfferingId: x.classOfferingId, effectiveDate: '2026-12-01' }) },
+      { name: 'location transfer', send: (c) => c.post(`${student}/location-transfer`).send({ toLocationId: ids.locationId, classOfferingId: x.classOfferingId, effectiveDate: '2026-12-01', reason: 'Matrix' }) },
+      { name: 'repeat student', send: (c) => c.post(`${student}/repeat`).send({ toSessionId: x.sessionId }) },
+      { name: 'start withdrawal', send: (c) => c.post(`${student}/withdrawal`).send({ leavingDate: '2027-03-31', reasonCategory: 'OTHER', needsTC: false }) },
+      { name: 'update withdrawal', send: (c) => c.patch(`${student}/withdrawal`).send({ note: 'Matrix' }) },
+      { name: 'complete withdrawal', send: (c) => c.post(`${student}/withdrawal/complete`) },
+      { name: 'cancel withdrawal', send: (c) => c.post(`${student}/withdrawal/cancel`) },
+      { name: 'readmit student', send: (c) => c.post(`${student}/readmit`).send({ academicSessionId: x.sessionId, locationId: ids.locationId, classOfferingId: x.classOfferingId }) },
+      { name: 'request transfer certificate', send: (c) => c.post(`${student}/transfer-certificates`).send({}) },
+      { name: 'update transfer certificate', send: (c) => c.patch(`${API}/transfer-certificates/${kid.certificateId}`).send({ duesStatus: 'CLEARED' }) },
+      { name: 'approve transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/approve`) },
+      { name: 'issue transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/issue`).send({}) },
+      { name: 'duplicate transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/duplicate`).send({ reason: 'Matrix' }) },
+      { name: 'cancel transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/cancel`) },
     ],
   };
 }
@@ -331,7 +363,7 @@ async function victim() {
         classOfferingId: g6!.classOfferingId,
         sectionId: section.sectionOfferingId,
         rollNumber: '1',
-        guardian: { legalFirstName: 'Vic', legalLastName: 'Parent', phone: '+91 98140 19999', relationshipType: 'Mother' },
+        guardian: { legalFirstName: 'Vic', legalLastName: 'Parent', phone: '+91 98140 19999', email: 'vic.parent@victim.demo', relationshipType: 'Mother' },
       })
       .expect(201)
   ).body.data.student as { studentId: string };
@@ -339,7 +371,15 @@ async function victim() {
   const kidEnrollment = (await StudentEnrollment.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!;
   await b.agent.post(`${API}/student-enrollments/${kidEnrollment._id}/subjects`).send({ subjectOfferingIds: [offering.subjectOfferingId] }).expect(200);
   const link = (await StudentGuardianLink.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!;
+  // Part 3: a private document, a certificate in progress, and a change request from an activated parent.
+  const kidDocument = (await uploadDocument(b.agent, `${API}/students/${kid.studentId}/documents`, undefined, { documentType: 'ID_PROOF' }).expect(201)).body.data;
+  const kidCertificate = (await b.agent.post(`${API}/students/${kid.studentId}/transfer-certificates`).send({}).expect(201)).body.data;
+  const kidParent = await activatedParent(b, kid.studentId, 'vic.parent@victim.demo');
+  const kidChange = (await kidParent.agent.post(`${API}/parent/children/${kid.studentId}/change-requests`).send({ field: 'DATE_OF_BIRTH', value: { dateOfBirth: '2014-01-01' } }).expect(201)).body.data;
   const students: StudentIds = {
+    documentId: kidDocument.documentId,
+    certificateId: kidCertificate.certificateId,
+    changeRequestId: kidChange.changeRequestId,
     studentId: kid.studentId,
     enrollmentId: kidEnrollment._id,
     sectionAssignmentId: (await StudentSectionAssignment.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!._id,
@@ -369,7 +409,7 @@ async function victim() {
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent, StudentDocument, StudentTransferCertificate, StudentChangeRequest] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
@@ -464,6 +504,21 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
       expect(create.status, `${role} POST /schools`).toBe(403);
     }
     expect((await Location.findOne({ _id: b.chd.locationId, tenantId: b.tenantId }).lean())?.displayName).toBe('Chandigarh Campus');
+  });
+
+  it('the parent routes answer 403 to everyone who is not a Parent, and the download route never says whether a document exists', async () => {
+    const b = await victim();
+    const faculty = await createUserAndLogin(b.tenantId, 'FACULTY');
+    const staff = await createUserAndLogin(b.tenantId, 'STAFF');
+    for (const who of [b.agent, faculty.agent, staff.agent]) {
+      for (const path of ['/parent/children', `/parent/children/${b.students.studentId}`, `/parent/children/${b.students.studentId}/documents`, '/parent/change-requests']) {
+        expectError(await who.get(`${API}${path}`), 403, 'FORBIDDEN');
+      }
+      expectError(await who.post(`${API}/parent/children/${b.students.studentId}/change-requests`).send({ field: 'DATE_OF_BIRTH', value: { dateOfBirth: '2014-01-01' } }), 403, 'FORBIDDEN');
+    }
+    // Faculty and staff are told 404, not 403, so they cannot tell a document exists.
+    for (const who of [faculty.agent, staff.agent]) expectError(await who.post(`${API}/student-documents/${b.students.documentId}/download`), 404, 'NOT_FOUND');
+    expect((await request(app).post(`${API}/student-documents/${b.students.documentId}/download`)).status).toBe(401);
   });
 
   it('Parents cannot read any school or location data', async () => {

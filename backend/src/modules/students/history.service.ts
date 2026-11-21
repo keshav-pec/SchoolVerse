@@ -61,7 +61,7 @@ export async function getStudentHistory(ctx: ServiceContext, studentId: string, 
     AuditEvent.find({
       tenantId,
       $or: [{ 'metadata.studentId': studentId }, { 'metadata.studentIds': studentId }],
-      action: { $regex: '^(student\\.|admission\\.|guardian\\.updated)' },
+      action: { $regex: '^(student\\.|admission\\.|guardian\\.updated|transfer_certificate\\.)' },
     })
       .sort({ occurredAt: -1 })
       .limit(limit)
@@ -80,7 +80,7 @@ export async function getStudentHistory(ctx: ServiceContext, studentId: string, 
     SubjectOffering.find({ tenantId, _id: { $in: offeringIds } }).select('subjectId').lean<{ _id: string; subjectId: string }[]>(),
     AcademicSession.find({ tenantId, _id: { $in: enrollments.map((e) => e.academicSessionId) } }).select('code').lean<{ _id: string; code: string }[]>(),
     Person.find({ tenantId, _id: { $in: guardianIds } }).lean<PersonDoc[]>(),
-    labelsFor(tenantId, enrollments.map((e) => e.locationId)),
+    labelsFor(tenantId, [...enrollments.map((e) => e.locationId), ...transfers.flatMap((t) => [t.fromLocationId, t.toLocationId]).filter((x): x is string => Boolean(x))]),
   ]);
   const subjects = await Subject.find({ tenantId, _id: { $in: offerings.map((o) => o.subjectId) } }).select('name').lean<{ _id: string; name: string }[]>();
 
@@ -127,7 +127,11 @@ export async function getStudentHistory(ctx: ServiceContext, studentId: string, 
   }
 
   for (const t of transfers) {
-    push({ entryId: `transfer:${t._id}`, kind: 'TRANSFER', occurredOn: t.effectiveDate, recordedAt: t.createdAt, title: `Moved from ${sectionLabel(t.fromSectionId)} to ${sectionLabel(t.toSectionId)}`, detail: t.reason, actor: t.actorId });
+    const title =
+      t.type === 'LOCATION'
+        ? `Moved from ${locations.get(t.fromLocationId ?? '')?.displayName ?? 'another campus'} to ${locations.get(t.toLocationId ?? '')?.displayName ?? 'another campus'}`
+        : `Moved from ${sectionLabel(t.fromSectionId)} to ${sectionLabel(t.toSectionId)}`;
+    push({ entryId: `transfer:${t._id}`, kind: 'TRANSFER', occurredOn: t.effectiveDate, recordedAt: t.createdAt, title, detail: t.reason, actor: t.actorId });
   }
 
   // Subjects: one line for the rows added together, one for the rows that ended together.
@@ -166,8 +170,8 @@ export async function getStudentHistory(ctx: ServiceContext, studentId: string, 
   }
 
   for (const row of audit) {
-    // The admission is already shown from its own table.
-    if (row.action === 'admission.created') continue;
+    // The admission, the promotion and the moves are already shown from their own tables.
+    if (['admission.created', 'student.promoted', 'student.repeated', 'student.location_transferred', 'student.readmitted'].includes(row.action)) continue;
     const status = row.action === 'student.status_changed' ? row.changes.find((c) => c.field === 'status') : undefined;
     const fields = row.changes.map((c) => c.field).filter((f) => !['status', 'type', 'value'].includes(f));
     push({

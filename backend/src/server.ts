@@ -3,6 +3,7 @@ import { logger } from './core/logger';
 import { connectDatabase, disconnectDatabase } from './db/connection';
 import { createApp } from './app';
 import { startStaffJobs } from './modules/staff/jobs';
+import { startStudentJobs } from './modules/students/jobs';
 
 async function main() {
   await connectDatabase(env.MONGODB_URI);
@@ -11,7 +12,12 @@ async function main() {
     logger.info(`🚀 SchoolVerse API ready on http://localhost:${env.PORT}/api/v1`);
   });
 
-  const stopJobs = startStaffJobs();
+  const stopStaffJobs = startStaffJobs();
+  const stopStudentJobs = startStudentJobs();
+  const stopJobs = () => {
+    stopStaffJobs();
+    stopStudentJobs();
+  };
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received — shutting down`);

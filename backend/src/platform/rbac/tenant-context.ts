@@ -28,6 +28,13 @@ export interface ServiceContext {
   requestId: string | null;
   /** Caller's IP, for security events only. Optional so in-process callers need not supply it. */
   ip?: string | null;
+  /** The hourly job acts as the system: audit rows say `SYSTEM`, not a person. */
+  system?: boolean;
+}
+
+/** A context for scheduled jobs (`processDueWithdrawals`). It carries no permissions: jobs call services directly. */
+export function systemContext(tenantId: string): ServiceContext {
+  return { tenantId, userId: 'system', role: 'SCHOOL_ADMIN', permissions: [], requestId: null, system: true };
 }
 
 export function contextOf(req: Request): ServiceContext {
@@ -43,6 +50,7 @@ export function contextOf(req: Request): ServiceContext {
 }
 
 export function actorFrom(ctx: ServiceContext): AuditActor {
+  if (ctx.system) return 'SYSTEM';
   return { userId: ctx.userId, role: ctx.role };
 }
 

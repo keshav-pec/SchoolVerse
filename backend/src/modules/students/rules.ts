@@ -1,4 +1,4 @@
-import type { AssignmentStatus, ChoiceRuleType, EnrollmentState, EnrollmentStatus, ProgrammeKind, ProgrammeRequirement, SubjectOfferingType, SubjectProblemDTO, SubjectSelectionResultDTO } from '@shared';
+import type { AssignmentStatus, ChoiceRuleType, EnrollmentState, EnrollmentStatus, ProgrammeKind, ProgrammeRequirement, PromotionReviewReason, StudentStatus, SubjectOfferingType, SubjectProblemDTO, SubjectSelectionResultDTO } from '@shared';
 import { describeGroup } from '../academic/rules.service';
 
 /**
@@ -246,3 +246,83 @@ export function checkSubjectSelection(input: SubjectCheckInput): SubjectSelectio
 
 /** Problems that are only "not chosen yet" (as opposed to a wrong choice): shown as "still undecided". */
 export const UNDECIDED_CODES = ['GROUP_TOO_FEW', 'PROGRAMME_CHOICE_TOO_FEW'] as const;
+
+
+// ───────────────────────────────────────────────────────────── promotion (Part 3)
+
+export interface ClassLevel {
+  classOfferingId: string;
+  classId: string;
+  /** Position in the class master: Class 5 is 5, Class 6 is 6… */
+  sequenceNumber: number;
+}
+
+/** The standard next class: the offered class that comes straight after this one. No gaps are skipped (a missing class needs a person to decide). */
+export function resolveNextClass(currentSequence: number, offered: readonly ClassLevel[]): ClassLevel | null {
+  return offered.find((c) => c.sequenceNumber === currentSequence + 1) ?? null;
+}
+
+/** The school's last class at a location: nothing higher is offered in the session the student is leaving. */
+export function isFinalClass(currentSequence: number, offeredSequencesInFromSession: readonly number[]): boolean {
+  return !offeredSequencesInFromSession.some((n) => n > currentSequence);
+}
+
+export interface SectionLoad {
+  sectionId: string;
+  capacity: number | null;
+  enrolled: number;
+  sequenceOrder: number;
+}
+
+/** The section with the most room: sections that are not full first, then the fewest students, then the usual order. Balances strength as students are placed. */
+export function pickSection(sections: readonly SectionLoad[]): SectionLoad | null {
+  const open = sections.filter((s) => s.capacity === null || s.enrolled < s.capacity);
+  const pool = open.length > 0 ? open : sections;
+  return [...pool].sort((a, b) => a.enrolled - b.enrolled || a.sequenceOrder - b.sequenceOrder || a.sectionId.localeCompare(b.sectionId))[0] ?? null;
+}
+
+export const PROMOTION_REASON_TEXT: Record<PromotionReviewReason, string> = {
+  NO_NEXT_CLASS: 'No class is offered for next year.',
+  LEAVING: 'This student is leaving the school.',
+  SUBJECT_CHOICE_PENDING: 'The subject choice is not complete.',
+  PROGRAMME_NOT_VALID: 'Their programme is not available in the next class.',
+  SECTION_MISSING: 'No section is set for this year.',
+  LOCATION_MISSING: 'This campus is not part of the next session.',
+  STUDENT_NOT_ACTIVE: 'This student is not active.',
+  ALREADY_PROMOTED: 'Already has a place in the next session.',
+};
+
+export interface PromotionFacts {
+  studentStatus: StudentStatus;
+  hasSection: boolean;
+  locationInTarget: boolean;
+  nextClassFound: boolean;
+  isFinal: boolean;
+  subjectChoiceIncomplete: boolean;
+  programmeOk: boolean;
+  alreadyHasTargetEnrollment: boolean;
+}
+
+/** Why a student needs a look before promotion. No reasons means READY. Results and marks are not used: this module does not track them. */
+export function promotionReviewReasons(f: PromotionFacts): PromotionReviewReason[] {
+  const reasons: PromotionReviewReason[] = [];
+  if (f.studentStatus === 'WITHDRAWAL_INITIATED') reasons.push('LEAVING');
+  else if (f.studentStatus !== 'ACTIVE') reasons.push('STUDENT_NOT_ACTIVE');
+  if (f.alreadyHasTargetEnrollment) reasons.push('ALREADY_PROMOTED');
+  // A student in the last class finishes school: nothing about next year applies to them.
+  if (!f.isFinal) {
+    if (!f.locationInTarget) reasons.push('LOCATION_MISSING');
+    else if (!f.nextClassFound) reasons.push('NO_NEXT_CLASS');
+  }
+  if (!f.hasSection) reasons.push('SECTION_MISSING');
+  if (!f.isFinal && f.subjectChoiceIncomplete) reasons.push('SUBJECT_CHOICE_PENDING');
+  if (!f.isFinal && !f.programmeOk) reasons.push('PROGRAMME_NOT_VALID');
+  return reasons;
+}
+
+// ───────────────────────────────────────────────────────────── transfer certificate number
+
+/** `TC/2026-27/0004`. The sequence is the school's own counter and is never reused, even for a cancelled certificate. */
+export function formatTcNumber(sessionCode: string, sequence: number): string {
+  return `TC/${sessionCode.replace(/[^A-Za-z0-9-]/g, '')}/${String(sequence).padStart(4, '0')}`;
+}

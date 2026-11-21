@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 
 export const STUDENTS_INTRO: ReactNode = (
   <p>
-    Every student in your school, once. Add a student, link their parents, and place them in a class and section. Their class
+    Add a student, link their parents, and place them in a class and section. Their class
     changes each year, but their admission number and history stay with them.
   </p>
 );

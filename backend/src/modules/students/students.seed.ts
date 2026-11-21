@@ -211,7 +211,7 @@ export async function seedStudentsDemo(ctx: ServiceContext, input: { mohaliId: s
     createStudentSchema.parse({ draft: true, legalFirstName: 'Ishaan', legalLastName: 'Gill', dateOfBirth: '2012-05-05', locationId: input.mohaliId, classOfferingId: await offering('MOH', 'G08'), mode: 'NEW_ADMISSION', admissionDate: '2026-04-01' }),
   );
 
-  return { students: created.length + 2 };
+  return { students: created.length + 2, created };
 }
 
 /** The parent person of a student's primary guardian link (for linking a sibling to the same person). */
