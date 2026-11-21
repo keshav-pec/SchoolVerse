@@ -10,6 +10,13 @@ import { EmployeePage } from '@/features/people/employee-page';
 import { PeoplePage } from '@/features/people/people-page';
 import { RequestsPage } from '@/features/people/requests-page';
 import { PeopleSettingsPage } from '@/features/people/settings-page';
+import { AttentionPage } from '@/features/students/attention-page';
+import { FamiliesPage } from '@/features/students/families-page';
+import { FamilyPage } from '@/features/students/family-page';
+import { MyStudentsPage } from '@/features/students/my-students-page';
+import { StudentPage } from '@/features/students/student-page';
+import { StudentsLayout } from '@/features/students/students-layout';
+import { StudentsPage } from '@/features/students/students-page';
 import { SHOW_DEV_OUTBOX } from '@/lib/dev';
 import { SignupPage } from '@/features/auth/signup-page';
 import { NotFoundPage } from '@/features/errors/not-found-page';
@@ -34,6 +41,9 @@ import {
   RequireAcademicConfig,
   RequireAuth,
   RequireDirectoryAccess,
+  RequireFaculty,
+  RequireStudentAccess,
+  RequireStudentAdmin,
   RequirePeopleAdmin,
   RequireSetupAccess,
   RequireSetupComplete,
@@ -124,6 +134,45 @@ const router = createBrowserRouter([
                       { path: '/me', element: <MyProfilePage /> },
                       { path: '/colleagues', element: <ColleaguesPage /> },
                     ],
+                  },
+                  {
+                    path: '/students',
+                    element: <RequireStudentAccess />,
+                    children: [
+                      {
+                        element: <RequireStudentAdmin />,
+                        children: [
+                          {
+                            element: <StudentsLayout />,
+                            children: [
+                              { index: true, element: <StudentsPage /> },
+                              { path: 'new', element: <StudentsPage /> },
+                              { path: 'attention', element: <AttentionPage /> },
+                            ],
+                          },
+                        ],
+                      },
+                      // Admins get the full record; a teacher gets the short summary. Outside their sections it is Not Found.
+                      { path: ':studentId', element: <StudentPage /> },
+                    ],
+                  },
+                  {
+                    path: '/families',
+                    element: <RequireStudentAdmin />,
+                    children: [
+                      {
+                        element: <StudentsLayout />,
+                        children: [
+                          { index: true, element: <FamiliesPage /> },
+                          { path: ':personId', element: <FamilyPage /> },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    path: '/my-students',
+                    element: <RequireFaculty />,
+                    children: [{ index: true, element: <MyStudentsPage /> }],
                   },
                   {
                     path: '/academics',

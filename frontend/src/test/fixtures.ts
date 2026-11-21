@@ -1,4 +1,4 @@
-import { permissionsFor, type EmployeeProfileDTO, type RestrictedEmployeeProfileDTO, type SelfProfileDTO, type LocationDetailDTO, type LocationListDTO, type Role, type SchoolDTO, type SessionDTO } from '@shared';
+import { permissionsFor, type AcademicSessionDTO, type ClassOfferingDTO, type EnrollmentDTO, type GuardianLinkDTO, type MasterLocationDTO, type SectionAssignmentDTO, type StudentAdminProfileDTO, type StudentDirectoryDTO, type EmployeeProfileDTO, type RestrictedEmployeeProfileDTO, type SelfProfileDTO, type LocationDetailDTO, type LocationListDTO, type Role, type SchoolDTO, type SessionDTO } from '@shared';
 
 export const SCHOOL_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -167,6 +167,204 @@ export function selfProfile(overrides: Partial<SelfProfileDTO> = {}): SelfProfil
     responsibilities: [],
     account: { ...user, personId: PERSON_ID },
     pendingRequests: [],
+    ...overrides,
+  };
+}
+
+
+// ───────────────────────────────────────────────────────────── Students (Module 4)
+
+export const STUDENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+export const SESSION_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+export const LOCATION_ID = '22222222-2222-4222-8222-222222222222';
+export const CLASS_OFFERING_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+export const SECTION_A_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+export const SECTION_B_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+export const ENROLLMENT_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+
+export const academicSession: AcademicSessionDTO = {
+  academicSessionId: SESSION_ID,
+  schoolId: SCHOOL_ID,
+  name: 'Academic Year 2026-27',
+  code: '2026-27',
+  startDate: '2026-04-01',
+  endDate: '2027-03-31',
+  status: 'ACTIVE',
+  isCurrent: true,
+  locations: [],
+  previousSessionId: null,
+  warnings: [],
+  deletable: false,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+export const masterLocation: MasterLocationDTO = {
+  locationId: LOCATION_ID,
+  schoolId: SCHOOL_ID,
+  locationCode: 'MOH',
+  displayName: 'Mohali Campus',
+  locationType: 'MAIN_CAMPUS',
+  status: 'ACTIVE',
+  isPrimary: true,
+  city: 'Mohali',
+  state: 'Punjab',
+  country: 'IN',
+  effectiveDefaults: { timezone: 'Asia/Kolkata', currency: 'INR', locale: 'en-IN' },
+};
+
+export const classOffering: ClassOfferingDTO = {
+  classOfferingId: CLASS_OFFERING_ID,
+  academicSessionId: SESSION_ID,
+  locationId: LOCATION_ID,
+  classId: 'class-8',
+  canonicalCode: 'G08',
+  displayName: 'Class VIII',
+  displayCode: 'VIII',
+  medium: null,
+  capacity: null,
+  sequenceOrder: 8,
+  status: 'ACTIVE',
+  sectionCount: 2,
+  subjectCount: 5,
+};
+
+export const classSection = (code: string | null = 'A') => ({
+  classOfferingId: CLASS_OFFERING_ID,
+  className: 'Class VIII',
+  classCode: 'VIII',
+  sectionId: code ? (code === 'A' ? SECTION_A_ID : SECTION_B_ID) : null,
+  sectionCode: code,
+  label: code ? `VIII-${code}` : 'VIII',
+});
+
+export function sectionAssignment(overrides: Partial<SectionAssignmentDTO> = {}): SectionAssignmentDTO {
+  return {
+    sectionAssignmentId: 'assign-1',
+    enrollmentId: ENROLLMENT_ID,
+    studentId: STUDENT_ID,
+    sectionId: SECTION_A_ID,
+    sectionCode: 'A',
+    sectionName: 'VIII-A',
+    rollNumber: '17',
+    effectiveFrom: '2026-04-01',
+    effectiveTo: null,
+    cancelledAt: null,
+    reason: null,
+    status: 'ACTIVE',
+    ...overrides,
+  };
+}
+
+export function enrollmentDto(overrides: Partial<EnrollmentDTO> = {}): EnrollmentDTO {
+  return {
+    enrollmentId: ENROLLMENT_ID,
+    studentId: STUDENT_ID,
+    academicSessionId: SESSION_ID,
+    sessionCode: '2026-27',
+    sessionName: 'Academic Year 2026-27',
+    locationId: LOCATION_ID,
+    locationName: 'Mohali Campus',
+    classOfferingId: CLASS_OFFERING_ID,
+    className: 'Class VIII',
+    classCode: 'VIII',
+    programmeId: null,
+    programmeName: null,
+    enrollmentType: 'NEW_ADMISSION',
+    effectiveFrom: '2026-04-01',
+    effectiveTo: null,
+    state: 'OPEN',
+    status: 'ACTIVE',
+    outcome: null,
+    previousEnrollmentId: null,
+    section: sectionAssignment(),
+    version: 1,
+    createdAt: '2026-04-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function studentProfile(overrides: Partial<StudentAdminProfileDTO> = {}): StudentAdminProfileDTO {
+  return {
+    studentId: STUDENT_ID,
+    admissionNumber: 'GPS/2026/00001',
+    fullName: 'Riya Sharma',
+    displayName: 'Riya Sharma',
+    status: 'ACTIVE',
+    hasPhoto: false,
+    academicSessionId: SESSION_ID,
+    locationId: LOCATION_ID,
+    enrollmentId: ENROLLMENT_ID,
+    enrollmentStatus: 'ACTIVE',
+    classSection: classSection('A'),
+    rollNumber: '17',
+    primaryGuardianName: 'Priya Sharma',
+    personId: 'person-1',
+    legalFirstName: 'Riya',
+    legalMiddleName: null,
+    legalLastName: 'Sharma',
+    preferredName: null,
+    gender: 'FEMALE',
+    bloodGroup: null,
+    notes: null,
+    personalIncluded: true,
+    dateOfBirth: '2014-05-10',
+    primaryPhone: null,
+    primaryEmail: null,
+    address: null,
+    admission: null,
+    externalIds: [],
+    guardianCount: 1,
+    enrollment: enrollmentDto(),
+    missing: [],
+    deletable: false,
+    availableActions: ['deactivate'],
+    version: 1,
+    createdAt: '2026-04-01T00:00:00.000Z',
+    updatedAt: '2026-04-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function directoryRow(overrides: Partial<StudentDirectoryDTO> = {}): StudentDirectoryDTO {
+  return {
+    studentId: STUDENT_ID,
+    admissionNumber: 'GPS/2026/00001',
+    fullName: 'Riya Sharma',
+    displayName: 'Riya Sharma',
+    status: 'ACTIVE',
+    hasPhoto: false,
+    academicSessionId: SESSION_ID,
+    locationId: LOCATION_ID,
+    enrollmentId: ENROLLMENT_ID,
+    enrollmentStatus: 'ACTIVE',
+    classSection: classSection('A'),
+    rollNumber: '17',
+    primaryGuardianName: 'Priya Sharma',
+    ...overrides,
+  };
+}
+
+export function guardianLink(overrides: Partial<GuardianLinkDTO> = {}): GuardianLinkDTO {
+  return {
+    guardianLinkId: 'link-1',
+    studentId: STUDENT_ID,
+    guardianPersonId: 'person-parent',
+    fullName: 'Priya Sharma',
+    relationshipType: 'Mother',
+    isPrimary: true,
+    isEmergencyContact: false,
+    communicationPriority: 1,
+    canSeeAcademics: true,
+    canSeeFees: true,
+    pickupAllowed: false,
+    portalEnabled: false,
+    effectiveFrom: '2026-04-01',
+    effectiveTo: null,
+    status: 'ACTIVE',
+    phone: '+910000000001',
+    email: 'priya@family.demo',
+    version: 1,
     ...overrides,
   };
 }

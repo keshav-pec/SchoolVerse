@@ -5,7 +5,7 @@ import { GettingSetUpPage } from '@/features/setup/getting-set-up-page';
 import { useCurrentSchool } from '@/features/school-profile/api';
 import { ErrorState } from '@/components/sv/error-state';
 import type { Permission } from '@shared';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useSession } from '@/lib/auth';
 
 export function FullScreenLoader({ label = 'Loading your workspace…' }: { label?: string }) {
   return (
@@ -102,5 +102,30 @@ export function RequirePeopleAdmin({ permission = 'employee:view' }: { permissio
 export function RequireDirectoryAccess() {
   const { can } = useAuth();
   if (!can('employee:directory')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}
+
+/**
+ * Students: School Admins (`student:view`) and Faculty (through their own sections) may enter. Staff and Parents get the
+ * restricted page. Which students a teacher can open is decided by the API.
+ */
+export function RequireStudentAccess() {
+  const { can } = useAuth();
+  const session = useSession();
+  if (!can('student:view') && session.user.role !== 'FACULTY') return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}
+
+/** Student lists, families and Needs Attention are for admins. Faculty see Not Found: the page does not admit it exists. */
+export function RequireStudentAdmin() {
+  const { can } = useAuth();
+  if (!can('student:view')) return <NotFoundPage />;
+  return <Outlet />;
+}
+
+/** `/my-students` is the teacher's own list. */
+export function RequireFaculty() {
+  const session = useSession();
+  if (session.user.role !== 'FACULTY') return <NotFoundPage />;
   return <Outlet />;
 }

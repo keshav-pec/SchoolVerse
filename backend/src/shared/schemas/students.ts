@@ -364,6 +364,12 @@ export const listStudentsQuerySchema = paginationQuerySchema.extend({
 });
 export type ListStudentsQuery = z.output<typeof listStudentsQuerySchema>;
 
+export const listFamiliesQuerySchema = paginationQuerySchema.extend({ q: z.string().trim().max(100).optional() });
+export type ListFamiliesQuery = z.output<typeof listFamiliesQuerySchema>;
+
+export const studentAttentionQuerySchema = z.object({ academicSessionId: uuidSchema.optional(), locationId: uuidSchema.optional() });
+export type StudentAttentionQuery = z.output<typeof studentAttentionQuerySchema>;
+
 export const studentContextQuerySchema = z.object({ date: requiredDateSchema.optional() });
 export type StudentContextQuery = z.output<typeof studentContextQuerySchema>;
 

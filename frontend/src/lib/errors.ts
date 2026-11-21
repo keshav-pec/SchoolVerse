@@ -25,6 +25,16 @@ const UI_MESSAGES: Record<string, string> = {
   CANNOT_ACT_ON_SELF: 'You cannot do that to your own account.',
   CHANGE_REQUEST_PENDING: 'There is already a pending request for this detail. Cancel it first to send a new one.',
   FILE_REJECTED: 'This file was rejected. Upload a clean PDF, PNG or JPEG.',
+  SECTION_FULL: 'This section is full. Pick another section, or ask your School Admin to add seats in Academic Setup.',
+  ROLL_NUMBER_TAKEN: 'Another student in this section already has this roll number. Pick a different number, or use Next Free Number.',
+  POSSIBLE_DUPLICATE_STUDENT: 'This looks like a student who is already in the school. Check the matches below, then choose.',
+  SUBJECT_CHOICE_INVALID: 'This subject choice does not follow the class rules. The checker shows what to fix.',
+  CLASS_NOT_OFFERED_AT_LOCATION: 'This class is not offered at this campus this year. Add it in Academic Setup first.',
+  SECTION_CLASS_MISMATCH: 'This section belongs to a different class. Pick a section of the student’s class.',
+  ENROLLMENT_ALREADY_OPEN: 'This student is already in a class for this year. Use Change Section to move them.',
+  STUDENT_READ_ONLY: 'This student has left the school. The record is kept for history and cannot be changed.',
+  VERSION_CONFLICT: 'Someone else changed this just now. Reload the page and try again.',
+  ADMISSION_NUMBER_TAKEN: 'This admission number is already used by another student. Choose a different one.',
   ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
 

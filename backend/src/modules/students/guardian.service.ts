@@ -1,8 +1,10 @@
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, PipelineStage } from 'mongoose';
 import {
   GUARDIAN_PERSON_FIELDS,
   GUARDIAN_LINK_EDITABLE_FIELDS,
   type EndGuardianLinkData,
+  type FamilyListDTO,
+  type ListFamiliesQuery,
   type GuardianChildDTO,
   type GuardianFamilyDTO,
   type GuardianInputData,
@@ -424,4 +426,51 @@ export async function updateGuardianPerson(ctx: ServiceContext, personId: string
     });
   });
   return getGuardianFamily(ctx, personId);
+}
+
+/** The Families list: every parent with a live link, with their children's names. Search by parent name, phone or a child's name. */
+export async function listFamilies(ctx: ServiceContext, query: ListFamiliesQuery): Promise<FamilyListDTO> {
+  const tenantId = ctx.tenantId;
+  const today = await todayFor(ctx);
+  const tokens = (query.q ?? '').split(/\s+/).filter(Boolean);
+  const viewPersonal = can(ctx, 'student:view_personal');
+
+  const pipeline: PipelineStage[] = [
+    { $match: { tenantId, ...liveToday(today) } },
+    { $group: { _id: '$guardianPersonId', studentIds: { $addToSet: '$studentId' } } },
+    { $lookup: { from: 'people', localField: '_id', foreignField: '_id', as: 'person' } },
+    { $unwind: '$person' },
+    { $lookup: { from: 'students', localField: 'studentIds', foreignField: '_id', as: 'kids' } },
+    { $lookup: { from: 'people', localField: 'kids.personId', foreignField: '_id', as: 'kidPeople' } },
+  ];
+  if (tokens.length > 0) {
+    pipeline.push({
+      $match: {
+        $and: tokens.map((t) => {
+          const rx = new RegExp(escapeRegex(t), 'i');
+          return { $or: [{ 'person.legalFirstName': rx }, { 'person.legalMiddleName': rx }, { 'person.legalLastName': rx }, { 'person.primaryPhone': rx }, { 'kidPeople.legalFirstName': rx }, { 'kidPeople.legalLastName': rx }] };
+        }),
+      },
+    });
+  }
+  pipeline.push(
+    { $sort: { 'person.legalFirstName': 1, 'person.legalLastName': 1, _id: 1 } },
+    { $facet: { items: [{ $skip: (query.page - 1) * query.pageSize }, { $limit: query.pageSize }], total: [{ $count: 'n' }] } },
+  );
+  const [result] = await StudentGuardianLink.aggregate<{ items: { _id: string; person: PersonDoc; kids: { _id: string; personId: string }[]; kidPeople: PersonDoc[] }[]; total: { n: number }[] }>(pipeline).collation({ locale: 'en', strength: 2 });
+  const items = (result?.items ?? []).map((row) => {
+    const peopleById = new Map(row.kidPeople.map((p) => [p._id, p]));
+    const children = row.kids
+      .map((k) => ({ studentId: k._id, fullName: fullNameOf(peopleById.get(k.personId) ?? { legalFirstName: 'Student', legalLastName: '' }) }))
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, 'en', { sensitivity: 'base' }));
+    return {
+      personId: row._id,
+      fullName: fullNameOf(row.person),
+      phone: viewPersonal ? row.person.primaryPhone ?? null : null,
+      email: viewPersonal ? row.person.primaryEmail ?? null : null,
+      childCount: children.length,
+      children,
+    };
+  });
+  return { items, page: query.page, pageSize: query.pageSize, total: result?.total[0]?.n ?? 0 };
 }

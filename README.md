@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) and **Module 4: Student & Parent Management** ([Module4.md](Module4.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -24,6 +24,15 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 | 1 | Person and employee master, departments, designations, effective-dated location and class assignments, responsibilities, lifecycle (API) | ✅ Done |
 | 2 | Logins and activation, step-up, suspension, encrypted restricted data, self-service and change approval, private documents, exports (API) | ✅ Done (MFA is deliberately left out for now) |
 | 3 | Faculty & Staff UI, e2e, security gate and docs | ✅ Done (MFA screens are left out with MFA) |
+
+**Module 4: Student & Parent Management** ([Module4.md](Module4.md))
+
+| Part | Scope | Status |
+|---|---|---|
+| 1 | Student and admission master, admission numbers, guardians and sibling reuse, enrollments, sections and roll numbers, subjects with the choice checker, history, faculty-scoped access (API) | ✅ Done |
+| 2 | Student & Family screens: persistent year and campus, Quick Add and Full Admission Form, student profile, Families, subject choice checker, Needs Attention, My Students | ✅ Done |
+| 3 | Parent access, documents, transfers, promotion, exit and TC, readmission, CSV import, student context service (API) | Not started |
+| 4 | Parent portal, lifecycle screens, e2e, child-data security gate | Not started |
 
 ## Layout
 
@@ -68,6 +77,18 @@ Demo password for every seeded account: `Welcome@123`.
 | admin@riverside.demo | School Admin of a second, isolated tenant. Its setup is **left mid-wizard** (step 5), so this login shows the wizard resuming. |
 
 Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open the web app's **/dev/outbox** page (on the sign-in page: forgot password → "Open the dev outbox"), follow her link, choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
+
+**Students (Module 4, Greenfield, all synthetic).** About 40 students in 2026-27 over Mohali and Chandigarh, with the required subjects added. Emails end in `.demo` and phones look like `+91 90000 0nnnn`. Admission numbers are automatic (`GPS/2026/00001`…); most students were added as existing students with their original admission number and date. Look for these cases:
+
+| Case | Where to look |
+|---|---|
+| Two siblings under one parent | Riya (VI-A) and Arjun (VIII-A) Kaur share the parent Simran Kaur (`parent@greenfield.demo`). Open **Families** → Simran Kaur. |
+| A student with three guardians | Aarav Malhotra (VIII-B): primary mother, father, and an emergency-only grandmother with no access. |
+| A section change in the middle of the year | Kabir Singh moved from VIII-A to VIII-B on 1 September. Open his **History** tab. |
+| Drafts | Tara Mehra (a name only) and Ishaan Gill (admission pending, no section, no parent). Both are on **Needs Attention**. |
+| A subject choice not made yet | Zoya Khan (VI-A) has no first language. Open **Change Subjects**: pick Hindi and Punjabi together to see the checker say what is wrong. |
+
+There is no student login. `faculty@greenfield.demo` sees only students in the sections they teach, on **My Students**. Parent logins arrive in Part 3.
 
 The seed also creates each tenant's School Master and the PRD §19 location dataset for Greenfield:
 
@@ -141,9 +162,27 @@ All routes are under `/api/v1`, require a session cookie, and are scoped to the 
 | Self-service | `GET`/`PATCH /me/profile` · `GET`/`POST /me/profile-change-requests` · `POST …/:id/cancel` · `GET`/`POST /me/documents` |
 | Change approval | `GET /profile-change-requests` · `POST …/:id/approve` · `…/:id/reject` |
 | Documents, exports | `GET`/`POST /employees/:id/documents` · `POST /employee-documents/:id/download` (returns a 60 s link) · `DELETE /employee-documents/:id` · `POST /employees/exports` · `GET /files/:signedToken` |
+| Admission numbers | `GET`/`PUT /admission-number-settings` · `POST /admission-numbers/preview` |
+| Students | `GET`/`POST /students` · `GET /students/attention` (Needs Attention and the counts strip) · `POST /students/duplicate-check` · `GET`/`PATCH`/`DELETE /students/:id` · `GET …/completeness` · `…/academic-context` · `…/history` · `POST …/status` · `…/activate` · `…/admission` · `GET`/`POST …/external-ids` · `POST /external-ids/:id/end` |
+| Parents and guardians | `GET /guardians` (Families list) · `POST /guardians/match` · `GET /guardians/:personId/children` · `PATCH /guardians/:personId` · `GET`/`POST /students/:id/guardians` · `POST …/link-existing-guardian` · `PATCH /guardian-links/:id` · `POST …/:id/end` |
+| Enrollment, section, subjects | `GET`/`POST /students/:id/enrollments` · `PATCH /student-enrollments/:id` (programme change previews until `confirm: true`) · `POST …/complete` · `…/section-assignment` · `PATCH /student-section-assignments/:id` · `POST /students/:id/section-transfer` · `POST /sections/recommend` · `/sections/roll-numbers/bulk` · `GET`/`POST /student-enrollments/:id/subjects` · `…/subjects/initialize` · `…/subjects/validate-selection` · `POST /student-subject-enrollments/:id/end` |
 | Dev only | `POST`/`DELETE /dev/location-references` simulates downstream references (archive blocked, code locked). Not mounted in production. `GET /dev/outbox` shows the emails the app would have sent (only while `DEV_OUTBOX` is on). |
 
 Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, default `backend/uploads`).
+
+## Student screens (Module 4, Part 2)
+
+| Route | Who | What |
+|---|---|---|
+| `/students` | School Admin | The student list with search, Class, Section, Status and More Filters. A strip above it puts **Needs attention** first. `/students/new` opens the same page with **Add Student** open. |
+| `/students/attention` | School Admin | **Needs Attention**, grouped as Student setup, Family and Subjects. Each row has a **Fix** button that opens the right drawer on the student (`?fix=`). A count badge sits in the sidebar. |
+| `/students/:studentId` | School Admin (full record) · Faculty (short summary) | Tabs `?tab=`: `overview`, `academic` (Class & Subjects), `guardians` (Parents & Guardians), `admission`, `history`. A student outside a teacher's sections shows **Not found**. |
+| `/families`, `/families/:personId` | School Admin | Every parent once, with all their children. Parent details are edited once. **Link Existing Student** and **Add New Child** reuse the parent. |
+| `/my-students` | Faculty | Cards with name, class, roll and the subjects the teacher teaches. No contact, address or birth date. |
+
+The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Campus") is chosen once and remembered on the device. The list, Quick Add and Needs Attention follow it. Wording for these screens is in `frontend/src/features/students/help-copy.tsx`.
+
+**Things that differ from the plan.** The **Full Admission Form** has 11 steps: Student, Personal, Admission, Previous School, Class, Subjects, Parent, Emergency, Address, Notes, Review. The "Subject choice pending" list filter is not a filter: those students are on Needs Attention → Subjects. Part 2 added two read-only backend routes the screens need: `GET /students/attention` and `GET /guardians`.
 
 ## Setup flow
 
@@ -157,9 +196,9 @@ Uploaded logos are served from `/uploads/…` (folder set by `UPLOAD_DIR`, defau
 
 | Suite | Where | Run |
 |---|---|---|
-| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students` (Module 4), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
-| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`). The `people-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice). The `people-*` and `students-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
 
 Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
 Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).

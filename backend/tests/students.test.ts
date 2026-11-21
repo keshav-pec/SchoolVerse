@@ -6,6 +6,7 @@ import type {
   DuplicateCheckResultDTO,
   EnrollmentDTO,
   FacultyStudentSummaryDTO,
+  FamilyListDTO,
   GuardianFamilyDTO,
   GuardianLinkDTO,
   GuardianMatchDTO,
@@ -15,6 +16,7 @@ import type {
   SectionRecommendationDTO,
   SectionTransferResultDTO,
   StudentAcademicContextDTO,
+  StudentAttentionDTO,
   StudentAdminProfileDTO,
   StudentCompletenessDTO,
   StudentHistoryDTO,
@@ -376,6 +378,22 @@ describe('parents and guardians (Module 4, Part 1)', () => {
     expect(await post<GuardianMatchDTO[]>(t.agent, '/guardians/match', { phone: nextPhone() })).toEqual([]);
     expectError(await t.agent.post(`${API}/guardians/match`).send({}), 400, 'VALIDATION_FAILED');
     expect(first.student.guardianCount).toBe(1);
+  });
+
+  it('lists parents with their children for the Families page, and searches by parent, phone or child', async () => {
+    const t = await studentSchool();
+    const phone = nextPhone();
+    await addStudent(t, { legalFirstName: 'Riya', guardian: { legalFirstName: 'Priya', legalLastName: 'Sharma', phone, relationshipType: 'Mother' } });
+    const [match] = await post<GuardianMatchDTO[]>(t.agent, '/guardians/match', { phone });
+    await addStudent(t, { legalFirstName: 'Arjun', guardian: { guardianPersonId: match!.personId, relationshipType: 'Mother' } });
+    await addStudent(t, { legalFirstName: 'Neha', guardian: { legalFirstName: 'Kiran', legalLastName: 'Gill', phone: nextPhone(), relationshipType: 'Father' } });
+
+    const all = await get<FamilyListDTO>(t.agent, '/guardians');
+    expect(all.total).toBe(2);
+    expect(all.items.find((f) => f.fullName === 'Priya Sharma')).toMatchObject({ childCount: 2, children: [{ fullName: 'Arjun Learner' }, { fullName: 'Riya Learner' }] });
+    expect((await get<FamilyListDTO>(t.agent, '/guardians?q=kiran')).items.map((f) => f.fullName)).toEqual(['Kiran Gill']);
+    expect((await get<FamilyListDTO>(t.agent, '/guardians?q=arjun')).items.map((f) => f.fullName)).toEqual(['Priya Sharma']);
+    expect((await get<FamilyListDTO>(t.agent, `/guardians?q=${encodeURIComponent(e164(phone).slice(-6))}`)).items.map((f) => f.fullName)).toEqual(['Priya Sharma']);
   });
 
   it('QA I10: a sibling reuses the same parent person, and the parent is edited once for every child', async () => {
@@ -773,6 +791,26 @@ describe('student directory (Module 4, Part 1)', () => {
     );
     const json = JSON.stringify(row);
     for (const secret of ['2014-05-10', 'Mohali', '+91']) expect(json).not.toContain(secret);
+  });
+
+  it('Needs Attention groups what is unfinished and counts it for the dashboard strip (SPM-36)', async () => {
+    const t = await studentSchool();
+    await addStudent(t, { legalFirstName: 'Done' });
+    await addStudent(t, { legalFirstName: 'NoSection', sectionId: undefined });
+    await t.agent.post(`${API}/students`).send({ draft: true, legalFirstName: 'Draftie' }).expect(201);
+    const shared = nextPhone();
+    await addStudent(t, { legalFirstName: 'TwinA', guardian: { legalFirstName: 'Asha', legalLastName: 'One', phone: shared, relationshipType: 'Mother' } });
+    await addStudent(t, { legalFirstName: 'TwinB', guardian: { legalFirstName: 'Asha', legalLastName: 'Two', phone: shared, relationshipType: 'Mother' }, confirmNotDuplicate: true });
+
+    const attention = await get<StudentAttentionDTO>(t.agent, '/students/attention');
+    const group = (key: string) => attention.groups.find((g) => g.key === key)!;
+    expect(group('SETUP').items.map((i) => [i.fullName.split(' ')[0], i.fix])).toEqual(expect.arrayContaining([['NoSection', 'ADD_SECTION'], ['Draftie', 'ADD_ADMISSION'], ['Draftie', 'ADD_CLASS']]));
+    expect(group('SETUP').items.some((i) => i.fullName.startsWith('Done'))).toBe(false);
+    expect(group('FAMILY').items.map((i) => i.fix)).toEqual(expect.arrayContaining(['ADD_GUARDIAN']));
+    expect(attention.counts.activeStudents).toBe(4);
+    expect(attention.counts.newThisYear).toBe(4);
+    expect(attention.counts.needsAttention).toBeGreaterThanOrEqual(2);
+    await t.agent.get(`${API}/students/attention?locationId=${t.chd.locationId}`).expect(200);
   });
 
   it('reads class and section from the dates, so a planned enrollment shows as starting later', async () => {

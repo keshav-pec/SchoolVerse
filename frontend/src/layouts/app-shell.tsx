@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Library,
   ListTree,
+  ListChecks,
   LogOut,
   MapPinned,
   Menu,
@@ -18,6 +19,7 @@ import {
   School,
   UserRound,
   UsersRound,
+  Users,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import {
@@ -31,6 +33,7 @@ import {
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { usePendingRequestCount } from '@/features/people/api';
 import { useCurrentSchool } from '@/features/school-profile/api';
+import { useAttentionCount } from '@/features/students/api';
 import { useAuth, useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +48,7 @@ interface NavItem {
   /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
   when?: (user: { role: string; personId: string | null }) => boolean;
   /** Shows the pending change-request count beside the label. */
-  badge?: 'requests';
+  badge?: 'requests' | 'attention';
 }
 
 interface NavSection {
@@ -110,6 +113,15 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    label: 'Students',
+    items: [
+      { to: '/students', label: 'Students', Icon: Users, permission: 'student:view', end: true },
+      { to: '/students/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'student:view', badge: 'attention' },
+      { to: '/families', label: 'Families', Icon: UsersRound, permission: 'student:view' },
+      { to: '/my-students', label: 'My Students', Icon: Users, when: (u) => u.role === 'FACULTY' },
+    ],
+  },
+  {
     label: 'People',
     items: [
       {
@@ -157,6 +169,13 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/students/attention', ['Students', 'Needs Attention']],
+  ['/students/new', ['Students', 'Add Student']],
+  ['/students/', ['Students', 'Student']],
+  ['/students', ['Students', 'Students']],
+  ['/families/', ['Students', 'Families', 'Family']],
+  ['/families', ['Students', 'Families']],
+  ['/my-students', ['Students', 'My Students']],
   ['/people/requests', ['People', 'Change requests']],
   ['/people/settings', ['People', 'Departments & Designations']],
   ['/people/', ['People', 'Faculty & Staff', 'Profile']],
@@ -182,6 +201,7 @@ function SidebarContent({
   const { can } = useAuth();
   const session = useSession();
   const pending = usePendingRequestCount(can('employee:approve_changes'));
+  const attention = useAttentionCount(can('student:view'), {});
   // Same cached query the profile page updates, so a new, replaced or removed logo shows here at once.
   const savedLogo = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
   // A logo whose file can't be loaded falls back to the icon instead of a broken image.
@@ -267,6 +287,17 @@ function SidebarContent({
                     >
                       <Icon className="size-[18px] shrink-0" />
                       {!collapsed && label}
+                      {badge === 'attention' && (attention.data ?? 0) > 0 && (
+                        <span
+                          className={cn(
+                            'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
+                            collapsed && 'absolute top-1.5 right-1.5 ml-0',
+                          )}
+                          aria-label={`${attention.data} need attention`}
+                        >
+                          {attention.data}
+                        </span>
+                      )}
                       {badge === 'requests' && (pending.data ?? 0) > 0 && (
                         <span
                           className={cn(

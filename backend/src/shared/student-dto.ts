@@ -231,6 +231,18 @@ export interface GuardianChildDTO {
   link: GuardianLinkDTO;
 }
 
+/** One row of the Families list: a parent and the names of their children. Contact only with `student:view_personal`. */
+export interface FamilySummaryDTO {
+  personId: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  childCount: number;
+  children: { studentId: string; fullName: string }[];
+}
+
+export type FamilyListDTO = PaginatedDTO<FamilySummaryDTO>;
+
 /** One parent and every child linked to them (the Family view). */
 export interface GuardianFamilyDTO {
   personId: string;
@@ -472,3 +484,41 @@ export interface StudentHistoryDTO {
 
 export type StudentListDTO = PaginatedDTO<StudentDirectoryDTO>;
 export type FacultyStudentListDTO = PaginatedDTO<FacultyStudentSummaryDTO>;
+
+// ───────────────────────────────────────────────────────────── needs attention and dashboard counts
+
+/** Where "Fix" should take the person: the profile tab or drawer that solves it. */
+export type AttentionFix = 'ADD_SECTION' | 'ADD_GUARDIAN' | 'CHOOSE_PRIMARY' | 'CHOOSE_SUBJECTS' | 'ADD_ADMISSION' | 'ADD_CLASS' | 'OPEN_FAMILY';
+
+export interface AttentionItemDTO {
+  /** `studentId` or `studentId:problem`, stable for React keys. */
+  key: string;
+  studentId: string | null;
+  /** Set for a parent problem that is not about one child. */
+  personId: string | null;
+  fullName: string;
+  admissionNumber: string | null;
+  classSection: ClassSectionDTO | null;
+  message: string;
+  fix: AttentionFix;
+}
+
+export type AttentionGroupKey = 'SETUP' | 'FAMILY' | 'SUBJECTS';
+
+export interface AttentionGroupDTO {
+  key: AttentionGroupKey;
+  title: string;
+  items: AttentionItemDTO[];
+}
+
+/** The strip above the student list, and the numbers behind the sidebar badge. */
+export interface StudentSummaryCountsDTO {
+  activeStudents: number;
+  newThisYear: number;
+  needsAttention: number;
+}
+
+export interface StudentAttentionDTO {
+  counts: StudentSummaryCountsDTO;
+  groups: AttentionGroupDTO[];
+}

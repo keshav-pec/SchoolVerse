@@ -14,12 +14,14 @@ import {
   endGuardianLinkSchema,
   endSubjectEnrollmentSchema,
   linkExistingGuardianSchema,
+  listFamiliesQuerySchema,
   listStudentsQuerySchema,
   matchGuardianSchema,
   previewAdmissionNumberSchema,
   recommendSectionSchema,
   recordAdmissionSchema,
   sectionTransferSchema,
+  studentAttentionQuerySchema,
   studentContextQuerySchema,
   studentHistoryQuerySchema,
   subjectSelectionSchema,
@@ -44,6 +46,7 @@ import * as settings from './settings.service';
 import * as students from './student.service';
 import * as subjects from './subject.service';
 import { duplicateCheck } from './duplicates.service';
+import { getAttention } from './attention.service';
 
 /**
  * Module 4 — Students & Parents (Part 1). Mounted at the API root; paths follow the Epic. Permission checks come first, so a
@@ -86,7 +89,12 @@ studentRouter.get('/students', studentReader, validate({ query: listStudentsQuer
   ok(res, await students.listStudents(contextOf(req), res.locals.query));
 });
 
-// Before `/students/:id`, which would otherwise read "duplicate-check" as an id.
+// Before `/students/:id`, which would otherwise read "attention" or "duplicate-check" as an id.
+studentRouter.get('/students/attention', requirePermission('student:view'), validate({ query: studentAttentionQuerySchema }), async (req, res) => {
+  ok(res, await getAttention(contextOf(req), res.locals.query));
+});
+
+
 studentRouter.post('/students/duplicate-check', requirePermission('student:manage'), validate({ body: duplicateCheckSchema }), async (req, res) => {
   ok(res, await duplicateCheck(contextOf(req), req.body));
 });
@@ -154,6 +162,10 @@ studentRouter.post('/external-ids/:id/end', requirePermission('student:manage'),
 
 studentRouter.post('/guardians/match', requirePermission('guardian:manage'), validate({ body: matchGuardianSchema }), async (req, res) => {
   ok(res, await guardians.matchGuardians(contextOf(req), req.body));
+});
+
+studentRouter.get('/guardians', requirePermission('student:view'), validate({ query: listFamiliesQuerySchema }), async (req, res) => {
+  ok(res, await guardians.listFamilies(contextOf(req), res.locals.query));
 });
 
 studentRouter.get('/guardians/:personId/children', requirePermission('student:view'), validate({ params: personParams }), async (req, res) => {
