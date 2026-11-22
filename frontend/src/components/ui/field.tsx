@@ -17,7 +17,7 @@ interface FieldShellProps {
   className?: string;
 }
 
-/** Label + control + hint/error, programmatically associated (Quill QuillField pattern). */
+/** Label + control + hint/error, programmatically associated. */
 export function FieldShell({ id, label, required, hint, error, labelAside, children, className }: FieldShellProps) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>

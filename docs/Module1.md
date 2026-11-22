@@ -1,6 +1,6 @@
 # SchoolVerse — Module 1: School & School Locations Setup (built)
 
-Source of truth: `../School_ERP_School_and_Locations_Setup_PRD_v1.1.pdf` · Visual reference: `../quill-ui-kit`
+Source of truth: `../School_ERP_School_and_Locations_Setup_PRD_v1.1.pdf`
 Status: complete (Parts 1–4, 2026-11-15). Endpoints: `/api/docs`. Contracts: `backend/src/docs/CONTRACTS.md`.
 
 ## Architecture decisions (still binding for later modules)
@@ -20,7 +20,7 @@ Status: complete (Parts 1–4, 2026-11-15). Endpoints: `/api/docs`. Contracts: `
 
 **Stack:** Node 22, Express 5, TypeScript, Mongoose 9, Zod 4, pino, helmet · React 19 + Vite, Tailwind 4, React Router, TanStack Query, react-hook-form, Radix (shadcn-style), sonner, motion · Vitest, Supertest, mongodb-memory-server, RTL, Playwright.
 
-**UI direction:** Quill tokens (navy `#0D1F3D` sidebar, blue `#244FD4` primary, 16px card radius, 44px controls), SchoolVerse accents (sunshine, coral, mint, lavender) for illustrations and avatars only, never for status. Plus Jakarta Sans headings, Inter body. Playful touches: school-bus wizard progress, campus avatars, crown-pin Primary badge, illustrated empty states, completion ring, confetti on finishing setup. Every status shows a word and an icon.
+**UI direction:** SchoolVerse tokens (navy `#0D1F3D` sidebar, blue `#244FD4` primary, 16px card radius, 44px controls), SchoolVerse accents (sunshine, coral, mint, lavender) for illustrations and avatars only, never for status. Plus Jakarta Sans headings, Inter body. Playful touches: school-bus wizard progress, campus avatars, crown-pin Primary badge, illustrated empty states, completion ring, confetti on finishing setup. Every status shows a word and an icon.
 
 ## Domain rules as built
 

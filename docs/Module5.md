@@ -2,7 +2,7 @@
 
 Source of truth: `../School_ERP_Module_05_Building_Floor_Room_Setup_PRD_v2.1_Functional_Parity_UX_Enhanced.pdf` (+ the Epic brief)
 Depends on: Module 1 (School & Locations), Module 2 (Academic Structure: sessions, class and section offerings), Module 3 (Faculty & Staff, identity), Module 4 (Students, used for **section strength**). The next module (Timetable) will read rooms from here.
-Visual reference: same Quill theme and SchoolVerse accents as Modules 1–4.
+Visual reference: same SchoolVerse theme and accents as Modules 1–4.
 
 **Goal, in plain words:** a school builds its campus **once** (Location → Building → Floor → Room/Space), says what each room is and how many students fit, and then SchoolVerse **suggests a Home Classroom for every Section**. The admin accepts the normal cases and only looks at the exceptions. Timetable and other modules later ask this module "which rooms exist and can I use this one?" and never keep their own room list.
 

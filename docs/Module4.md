@@ -2,7 +2,7 @@
 
 Source of truth: `../School_ERP_Module_04_Student_Parent_Management_PRD_v2.1_Functional_Parity_UX_Enhanced.pdf` (+ the Epic brief)
 Depends on: Module 1 (School & Locations), Module 2 (Academic Structure), Module 3 (Faculty & Staff and the shared identity layer). Next modules (Attendance, Fees, Exams and so on) will read Student data from here.
-Visual reference: same Quill theme and SchoolVerse accents as Modules 1–3.
+Visual reference: same SchoolVerse theme and accents as Modules 1–3.
 
 **Goal, in plain words:** a school can add a student **once**, give them a **permanent Admission Number**, link their **parents and guardians**, put them in a **class, section and subjects for each year**, and keep the **whole history** until they leave. Parents get a safe login that only shows **their own children**.
 
