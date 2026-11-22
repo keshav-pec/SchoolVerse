@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { SPACE_STATUS_LABELS, type SpaceTreeDTO } from '@shared';
 import { Building2, Copy, DoorOpen, Download, FileUp, Hammer, Search } from 'lucide-react';
@@ -13,6 +13,9 @@ import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { useAuth } from '@/lib/auth';
+import { cn } from '@/lib/utils';
+import { InfoTip } from '@/components/ui/tooltip';
+import { useSpaceAttention } from './allocation-api';
 import { useStudentContext } from '../students/context';
 import { exportUrl, useSpaces, useSpaceTree, useSpaceTypes, type SpaceListParams } from './api';
 import { BulkBar } from './bulk-bar';
@@ -28,18 +31,29 @@ import { useMediaQuery } from './use-media-query';
 const PAGE_SIZE = 50;
 const LIVE = 'DRAFT,ACTIVE,TEMPORARILY_UNAVAILABLE,RESTRICTED,INACTIVE';
 
-function Kpis({ tree }: { tree: SpaceTreeDTO }) {
-  const items = [
+/** Campus totals. Admins also see how much of the work the system did (rooms accepted from suggestions) and how complete setup is. */
+function Kpis({ tree, sessionId }: { tree: SpaceTreeDTO; sessionId: string | undefined }) {
+  const { can } = useAuth();
+  const attention = useSpaceAttention(tree.locationId, sessionId, can('space:edit'));
+  const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${n}%`);
+  const items: [string, string | number, ReactNode?][] = [
     ['Buildings', tree.totals.buildings],
     ['Floors', tree.totals.floors],
     ['Rooms', tree.totals.rooms],
     ['Can be timetabled', tree.totals.schedulableRooms],
-  ] as const;
+  ];
+  if (attention.data) {
+    items.push(['Recommended automatically', pct(attention.data.kpis.recommendedAutomaticallyPercent), 'Home Classrooms that came from our suggestions this school year.']);
+    items.push(['Setup completeness', pct(attention.data.kpis.setupCompletenessPercent), 'Rooms that have everything they need, such as seats for classes.']);
+  }
   return (
-    <dl className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Campus totals">
-      {items.map(([label, n]) => (
+    <dl className={cn('mb-4 grid grid-cols-2 gap-3', items.length > 4 ? 'sm:grid-cols-3 xl:grid-cols-6' : 'sm:grid-cols-4')} aria-label="Campus totals">
+      {items.map(([label, n, help]) => (
         <div key={label} className="rounded-xl border border-line bg-white px-4 py-2.5">
-          <dt className="text-xs font-semibold text-muted">{label}</dt>
+          <dt className="flex items-center gap-1 text-xs font-semibold text-muted">
+            {label}
+            {help && <InfoTip label={`About ${label.toLowerCase()}`}>{help}</InfoTip>}
+          </dt>
           <dd className="text-xl font-extrabold tabular-nums">{n}</dd>
         </div>
       ))}
@@ -202,7 +216,7 @@ export function WorkspacePage() {
         )
       ) : (
         <>
-          <Kpis tree={tree} />
+          <Kpis tree={tree} sessionId={ctx.sessionId} />
           <div className={wide && inspector ? 'grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)_380px]' : 'grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]'}>
             <Card className="h-fit p-3 sm:p-3">
               <SpaceTree
@@ -228,7 +242,7 @@ export function WorkspacePage() {
                       type="search"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search by room name or code…"
+                      placeholder="Search by room, code or section…"
                       aria-label="Search rooms"
                       className="h-9 w-full rounded-lg border border-control bg-white pr-2 pl-8 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
                     />

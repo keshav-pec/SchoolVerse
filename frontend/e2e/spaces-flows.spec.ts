@@ -41,7 +41,7 @@ test('admin builds a block with 3 floors and generates ten rooms in a few clicks
   await expectToast(page, /10 rooms created/i);
 
   // The panel closes and the new floor is selected in the tree, with its ten rooms listed.
-  await expect(page.getByRole('navigation', { name: 'Campus structure' }).getByRole('button', { name: /second floor, 10 rooms/i })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Campus structure' }).getByRole('button', { name: /^second, 10 rooms/i })).toBeVisible();
   await expect(page.getByRole('table', { name: 'Rooms' }).getByRole('row')).toHaveCount(11);
 });
 
@@ -66,7 +66,7 @@ test('admin edits the seats of a room inline, sees Saved, and undoes it', async 
 test('admin sets the seats of all ten new rooms at once, with a preview first', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await openWorkspace(page);
-  await page.getByRole('navigation', { name: 'Campus structure' }).getByRole('button', { name: /second floor, 10 rooms/i }).click();
+  await page.getByRole('navigation', { name: 'Campus structure' }).getByRole('button', { name: /^second, 10 rooms/i }).click();
   await page.getByRole('checkbox', { name: 'Select all rooms on this page' }).check();
   await expect(page.getByTestId('bulk-count')).toHaveText('10 rooms selected');
 
@@ -100,23 +100,24 @@ test('admin imports a CSV, then cannot import it a second time', async ({ page }
   await expect(page.getByRole('button', { name: /import ready rows/i })).toBeDisabled();
 });
 
-test('admin archives a room that is in use and reads the explanation', async ({ page }) => {
+test('admin closes a room for dates, then archives it: the closure is kept as history and does not block the archive', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await openWorkspace(page);
   const inspector = await openRoom(page, 'AN-102');
 
-  // A closure with dates is something the room depends on.
   await inspector.getByRole('button', { name: /make unavailable/i }).click();
   const closure = page.getByRole('dialog', { name: /make this room unavailable/i });
   await closure.getByRole('button', { name: /^make unavailable$/i }).click();
   await expectToast(page, /marked unavailable/i);
 
+  // A closure is history, not a use: the room archives straight away. (A room that a section uses is covered in spaces-home-classrooms.)
   await inspector.getByRole('button', { name: /more actions/i }).click();
   await page.getByRole('menuitem', { name: /archive room/i }).click();
   await page.getByRole('dialog', { name: /archive this room/i }).getByRole('button', { name: /archive room/i }).click();
+  await expectToast(page, /AN-102 was archived\. It stays in the history\./i);
 
-  const explanation = page.getByRole('dialog', { name: /still in use/i });
-  await expect(explanation).toBeVisible();
-  await expect(explanation.getByText(/what depends on this room/i)).toBeVisible();
-  await expect(explanation.getByRole('listitem').first()).toBeVisible();
+  // Archived rooms leave the normal list but can still be found.
+  await expect(page.getByRole('heading', { name: 'No room matches' })).toBeVisible();
+  await chooseOption(page.getByRole('combobox', { name: 'Room status' }), /^Archived$/);
+  await expect(page.getByRole('table', { name: 'Rooms' }).getByRole('row').filter({ hasText: 'AN-102' })).toBeVisible();
 });

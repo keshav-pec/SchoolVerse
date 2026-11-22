@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import {
   SPACE_FEATURES,
@@ -502,7 +503,27 @@ export function Inspector({ spaceId, onClose }: { spaceId: string; onClose: () =
 
         <FieldShell id="home-section" label="Home section" labelAside={<InfoTip label="About home classrooms">{HOME_CLASSROOM_HELP}</InfoTip>}>
           <p id="home-section" className="text-sm font-semibold">
-            {space.homeClassroom?.label ?? <span className="font-normal text-muted">No section sits here yet.</span>}
+            {space.homeClassroom ? (
+              can('space:section_assignment:manage') ? (
+                <Link to="/spaces/allocation?tab=current" className="text-brand hover:underline">
+                  {space.homeClassroom.label}
+                </Link>
+              ) : (
+                space.homeClassroom.label
+              )
+            ) : (
+              <span className="font-normal text-muted">
+                No section sits here yet.
+                {can('space:section_assignment:manage') && space.homeClassroomEligible.value && (
+                  <>
+                    {' '}
+                    <Link to="/spaces/allocation" className="font-semibold text-brand hover:underline">
+                      Go To Classroom Allocation
+                    </Link>
+                  </>
+                )}
+              </span>
+            )}
           </p>
         </FieldShell>
       </div>

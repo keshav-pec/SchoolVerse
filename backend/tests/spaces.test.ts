@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type {
-  AssignmentChangeResultDTO, BulkAssignmentResultDTO, HomeClassroomListDTO, ReadinessDTO, RecommendationSetDTO, ReplaceRoomResultDTO, RolloverCommitDTO, RolloverSummaryDTO, SectionHomeClassroomDTO, SpaceAttentionDTO, SpaceReportDTO,
+  AssignmentChangeResultDTO, BulkAssignmentResultDTO, HomeClassroomListDTO, MyClassroomsDTO, ReadinessDTO, RecommendationSetDTO, ReplaceRoomResultDTO, RolloverCommitDTO, RolloverSummaryDTO, SectionHomeClassroomDTO, SpaceAttentionDTO, SpaceReportDTO,
   ArchiveSpaceResultDTO, AvailabilityBlockDTO, AvailabilityCheckDTO, BuildingDTO, BulkEditResultDTO, CopyPreviewDTO, FloorDTO, GeneratePreviewDTO, GenerateResultDTO,
   SpaceContextDTO, SpaceDTO, SpaceImportCommitDTO, SpaceImportDTO, SpaceListDTO, SpaceTreeDTO, SpaceTypeDTO, TypeConversionPreviewDTO,
 } from '@shared';
@@ -881,11 +881,13 @@ describe('integration answers, availability and archive with replacement (SPACE-
     expect(ready.boundary).toMatch(/does not check whether a room is already booked/);
   });
 
-  it('QA SPACE-52: archiving a used room explains and suggests a replacement; Choose Replacement moves every section, then archives', async () => {
+  it('QA SPACE-52: archiving a used room explains and suggests a free replacement; Choose Replacement moves every section, then archives', async () => {
     const h = await homeSchool();
-    const [a, spare] = [await h.room('Room 101', 40), await h.room('Room 102', 40)];
+    const [a, busy, spare] = [await h.room('Room 101', 40), await h.room('Room 102', 40), await h.room('Room 103', 40)];
     await h.fill(h.sections.A, 36);
     await h.give(h.sections.A, a.spaceId, { effectiveFrom: '2026-04-01' });
+    // Room 102 fits too, but 8-B sits there: a room that holds another Home Classroom is never suggested.
+    await h.give(h.sections.B, busy.spaceId);
     const explain = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/archive`).send({}).expect(200)) as ArchiveSpaceResultDTO;
     expect(explain).toMatchObject({ archived: false, suggestedReplacementId: spare.spaceId, actions: ['CHOOSE_REPLACEMENT', 'ARCHIVE_AFTER_SESSION'] });
     expect(explain.dependencies).toEqual([{ kind: 'HOME_CLASSROOM', label: 'Home Classroom of 8-A in Academic Year 2026-27.', count: 1 }]);
@@ -896,8 +898,8 @@ describe('integration answers, availability and archive with replacement (SPACE-
     expect(preview.rechecks.join(' ')).toMatch(/8-A uses this room as its Home Classroom/);
 
     const done = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/replace`).send({ mode: 'NOW', replacementSpaceId: spare.spaceId }).expect(200)) as ReplaceRoomResultDTO;
-    expect(done).toMatchObject({ archived: true, moved: [{ label: '8-A', fromRoom: 'Room 101', toRoom: 'Room 102' }] });
-    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom`)).homeClassroom?.room.spaceName).toBe('Room 102');
+    expect(done).toMatchObject({ archived: true, moved: [{ label: '8-A', fromRoom: 'Room 101', toRoom: 'Room 103' }] });
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom`)).homeClassroom?.room.spaceName).toBe('Room 103');
     expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom?date=${addDays(today(), -1)}`)).homeClassroom?.room.spaceName).toBe('Room 101');
     expect((await PhysicalSpace.findOne({ tenantId: h.tenantId, _id: a.spaceId }).lean())!.operationalStatus).toBe('ARCHIVED');
     expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, action: 'physical_space.replaced' })).toBe(1);
@@ -1058,6 +1060,37 @@ describe('Needs Attention, reports, events and access (SPACE-60, 73 to 79)', () 
       expectError(await who.agent.get(`${API}/section-space-assignments`), 403, 'FORBIDDEN');
       expectError(await who.agent.get(`${API}/sections/${h.sections.A}/home-classroom`), 403, 'FORBIDDEN');
     }
+  });
+});
+
+describe('My Classroom and room search by section (Module 5, Part 4)', () => {
+  it('QA SPACE-75: a teacher sees the Home Classroom of the sections they teach, read-only; anyone else gets an empty list', async () => {
+    const h = await homeSchool();
+    const r101 = await h.room('Room 101', 40);
+    const r102 = await h.room('Room 102', 40);
+    await h.give(h.sections.A, r101.spaceId);
+    await h.give(h.sections.B, r102.spaceId);
+    const teacher = await addActiveEmployee(h);
+    await h.agent.post(`${API}/employees/${teacher.employeeId}/academic-assignments`).send({ items: [{ assignmentType: 'SUBJECT_FACULTY', sectionId: h.sections.A, subjectOfferingId: h.offerings.MATH }, { assignmentType: 'SUBJECT_FACULTY', sectionId: h.sections.C, subjectOfferingId: h.offerings.MATH }] }).expect(201);
+    const login = await loginAs(h, 'FACULTY', teacher);
+    const mine = data(await login.agent.get(`${API}/spaces/my-classrooms`).expect(200)) as MyClassroomsDTO;
+    expect(mine.items.map((i) => [i.section.label, i.room.spaceName])).toEqual([['8-A', 'Room 101']]);
+    expect(mine.withoutRoom.map((s) => s.label)).toEqual(['8-C']);
+    // A teacher with no classes, and the admin (not a teacher), get nothing; parents and staff are refused.
+    const idle = await loginAs(h, 'FACULTY', await addActiveEmployee(h));
+    expect(data(await idle.agent.get(`${API}/spaces/my-classrooms`).expect(200))).toEqual({ items: [], withoutRoom: [] });
+    expect(data(await h.agent.get(`${API}/spaces/my-classrooms`).expect(200))).toEqual({ items: [], withoutRoom: [] });
+    for (const role of ['STAFF', 'PARENT'] as const) expectError(await (await createUserAndLogin(h.tenantId, role)).agent.get(`${API}/spaces/my-classrooms`), 403, 'FORBIDDEN');
+  });
+
+  it('QA SPACE-31: the room search finds a room by the section that sits in it today', async () => {
+    const h = await homeSchool();
+    const r101 = await h.room('Room 101', 40);
+    await h.room('Room 102', 40);
+    await h.give(h.sections.A, r101.spaceId);
+    expect((await get<SpaceListDTO>(h, `/physical-spaces?locationId=${h.locationId}&q=8-A`)).items.map((s) => s.spaceName)).toEqual(['Room 101']);
+    expect((await get<SpaceListDTO>(h, `/physical-spaces?q=8-B`)).total).toBe(0);
+    expect((await get<SpaceListDTO>(h, `/physical-spaces?q=102`)).items.map((s) => s.spaceName)).toEqual(['Room 102']);
   });
 });
 

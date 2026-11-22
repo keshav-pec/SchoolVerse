@@ -16,6 +16,9 @@ import {
   DoorClosed,
   Shapes,
   FileUp,
+  FileBarChart,
+  LayoutGrid,
+  Repeat,
   Rocket,
   MapPinned,
   Menu,
@@ -137,7 +140,10 @@ const NAV: NavSection[] = [
     items: [
       { to: '/spaces', label: 'Space Setup', Icon: Building2, permission: 'space:edit', end: true },
       { to: '/spaces', label: 'Rooms', Icon: DoorClosed, permission: 'space:view', hideWith: 'space:edit', end: true },
+      { to: '/spaces/allocation', label: 'Classroom Allocation', Icon: LayoutGrid, permission: 'space:section_assignment:manage' },
       { to: '/spaces/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'space:edit', badge: 'space-attention' },
+      { to: '/spaces/rollover', label: 'Rollover', Icon: Repeat, permission: 'space:section_assignment:manage' },
+      { to: '/spaces/reports', label: 'Reports', Icon: FileBarChart, permission: 'space:export' },
       { to: '/spaces/types', label: 'Room Types', Icon: Shapes, permission: 'space:edit' },
       { to: '/spaces/imports', label: 'Imports', Icon: FileUp, permission: 'space:import' },
     ],
@@ -190,6 +196,9 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/spaces/allocation', ['Campus', 'Classroom Allocation']],
+  ['/spaces/rollover', ['Campus', 'Rollover']],
+  ['/spaces/reports', ['Campus', 'Reports']],
   ['/spaces/attention', ['Campus', 'Needs Attention']],
   ['/spaces/types', ['Campus', 'Room Types']],
   ['/spaces/imports/', ['Campus', 'Imports', 'Import']],
@@ -409,7 +418,7 @@ function SidebarContent({
                       {!collapsed && badge === 'space-attention' && spaceAttention > 0 && (
                         <span
                           className="ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy"
-                          aria-label={`${spaceAttention} rooms need attention`}
+                          aria-label={`${spaceAttention} things need attention`}
                         >
                           {spaceAttention}
                         </span>

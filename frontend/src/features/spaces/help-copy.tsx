@@ -32,7 +32,31 @@ export const IMPORTS_INTRO: ReactNode = (
 
 export const ATTENTION_INTRO: ReactNode = (
   <p>
-    Rooms that still need something. Press <b>Fix</b> to open the room. When a problem is solved, it leaves this list by itself.
+    Rooms and classes that still need something: a section with no room, a section bigger than its room, a room with no seat count.
+    Press the button on a row to fix it. When a problem is solved, it leaves this list by itself.
+  </p>
+);
+
+export const ALLOCATION_INTRO: ReactNode = (
+  <p>
+    Every section needs a <b>Home Classroom</b>: the room where it sits most of the day. We suggest a room for each section. Accept the
+    suggestions in one go, then look only at the few that need you.
+  </p>
+);
+
+export const ROLLOVER_INTRO: ReactNode = (
+  <p>
+    Starting a new school year? Keep each section in the same room as last year. We check every room first, so you only look at the
+    few that changed.
+  </p>
+);
+
+export const ROLLOVER_NOTE = 'Rooms are not copied. Only the section-to-room links are.';
+
+export const REPORTS_INTRO: ReactNode = (
+  <p>
+    Ready-made lists about rooms and classrooms. Pick a report, look at it here, or press <b>Download CSV</b> to open it in a
+    spreadsheet.
   </p>
 );
 
@@ -114,8 +138,68 @@ export const LONG_CLOSURE_TEXT = 'For a closure of a year or more, mark the room
 // ───────────────────────────────────────────────────────────── labels for fixes
 
 export const FIX_LABELS: Record<string, string> = {
-  OPEN_SPACE: 'Fix',
+  ASSIGN_ROOM: 'Assign Room',
+  CHOOSE_LARGER_ROOM: 'Choose Larger Room',
   SET_CAPACITY: 'Add Seats',
-  CHECK_FLOOR: 'Open Room',
-  CHECK_AVAILABILITY: 'Open Room',
+  REVIEW_BLOCK: 'Review Closure',
+  FIX_HIERARCHY: 'Open Room',
 };
+
+// ───────────────────────────────────────────────────────────── classroom allocation
+
+export const BEST_FIT_HELP: ReactNode = (
+  <>
+    <p>
+      <b>Best fit</b> means the smallest free room that still holds the whole section.
+    </p>
+    <p className="mt-1.5">Example: 36 students go to a 40-seat room, not a 60-seat hall, so the big room stays free for a big section.</p>
+  </>
+);
+
+export const CONTINUITY_HELP: ReactNode = (
+  <>
+    <p>
+      <b>Same room as last year</b>: if a section had a room last year and it still fits, we keep it there.
+    </p>
+    <p className="mt-1.5">Children and parents already know the room, and nobody has to move desks.</p>
+  </>
+);
+
+export const KEEP_ROOM_HELP: ReactNode = (
+  <>
+    <p>
+      <b>Keep Room Anyway</b> keeps a room that has fewer seats than the section has students.
+    </p>
+    <p className="mt-1.5">Write why, for example “Extra desks added”. We will remind you again only if the section grows more.</p>
+  </>
+);
+
+export const SHIFT_HELP: ReactNode = (
+  <>
+    <p>Two sections cannot have the same Home Classroom on the same dates.</p>
+    <p className="mt-1.5">Morning and afternoon shifts will be able to share a room once shifts are set up for your school.</p>
+  </>
+);
+
+export const UNRESOLVED_LABELS: Record<string, string> = {
+  NO_ELIGIBLE_ROOM: 'No classroom at this campus',
+  ALL_TOO_SMALL: 'Every free room is too small',
+  ALL_TAKEN: 'Every room is taken',
+};
+
+export const ROLLOVER_REASON_LABELS: Record<string, string> = {
+  ROOM_ARCHIVED: 'Room archived or closed',
+  CAPACITY_CHANGED: 'Section grew bigger than the room',
+  SECTION_NOT_FOUND: 'Section changed or removed',
+  ROOM_TAKEN: 'Room already taken',
+};
+
+export const SOURCE_LABELS: Record<string, string> = {
+  MANUAL: 'Picked by hand',
+  SYSTEM_RECOMMENDED: 'Suggested',
+  PREVIOUS_SESSION_COPY: 'Carried forward',
+  BULK: 'Bulk',
+  IMPORT: 'Imported',
+};
+
+export const PHASE_LABELS: Record<string, string> = { PLANNED: 'Starts later', ACTIVE: 'Now', ENDED: 'Ended', CANCELLED: 'Cancelled' };

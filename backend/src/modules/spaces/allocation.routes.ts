@@ -28,6 +28,7 @@ import { contextOf } from '../../platform/rbac/tenant-context';
 import * as assignments from './assignment.service';
 import { spaceAttention } from './attention.service';
 import { findAvailable, readiness, recommendRooms } from './integration';
+import { myHomeClassrooms } from './my-classroom.service';
 import { recommendHomeClassrooms } from './recommend.service';
 import { replaceRoom } from './replace.service';
 import { spaceReport } from './report.service';
@@ -110,6 +111,11 @@ allocationRouter.post('/physical-spaces/recommend', requirePermission('space:vie
 
 allocationRouter.post('/physical-spaces/:id/replace', requirePermission('space:archive', MANAGE), validate({ params: idParams, body: replaceRoomSchema }), async (req, res) => {
   ok(res, await replaceRoom(contextOf(req), req.params.id as string, req.body));
+});
+
+// A teacher's own Home Classrooms (read-only). Only the sections the caller teaches today; anyone else gets an empty list.
+allocationRouter.get('/spaces/my-classrooms', requirePermission('space:view'), async (req, res) => {
+  ok(res, await myHomeClassrooms(contextOf(req)));
 });
 
 allocationRouter.get('/spaces/readiness', requirePermission('space:edit'), validate({ query: readinessQuerySchema }), async (req, res) => {

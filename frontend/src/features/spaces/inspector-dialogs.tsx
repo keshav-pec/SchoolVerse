@@ -7,6 +7,7 @@ import {
   MAX_BLOCK_DAYS,
   SPACE_SUITABILITY_TAGS,
   type ArchiveSpaceResultDTO,
+  type ReplaceRoomResultDTO,
   type AvailabilityBlockDTO,
   type SpaceDTO,
   type TypeConversionPreviewDTO,
@@ -20,6 +21,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { FormProblem, messageFor } from '@/lib/errors';
 import { SP, useBuildings, useFloors, useSpaceMutation } from './api';
+import { useReplaceRoom } from './allocation-api';
+import { roomOptions, usePickerData } from './room-picker';
+import { useOptionalStudentContext } from '../students/context';
 import { ARCHIVE_TEXT, LONG_CLOSURE_TEXT } from './help-copy';
 
 // ───────────────────────────────────────────────────────────── change of type
@@ -119,14 +123,57 @@ export function ConvertTypeDialog({ space, toTypeId, onClose }: { space: SpaceDT
 export function ArchiveDialog({ space, onClose, onArchived }: { space: SpaceDTO; onClose: () => void; onArchived: () => void }) {
   const [reason, setReason] = useState('');
   const [result, setResult] = useState<ArchiveSpaceResultDTO | null>(null);
+  const [done, setDone] = useState<ReplaceRoomResultDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const archive = useSpaceMutation((body: object) => api.post<ArchiveSpaceResultDTO>(`/physical-spaces/${space.spaceId}/archive`, body), { quiet: true });
+
+  if (done) {
+    return (
+      <Modal
+        open
+        onOpenChange={(open) => {
+          if (open) return;
+          if (done.archived) onArchived();
+          else onClose();
+        }}
+        title={done.archived ? 'Room archived' : done.mode === 'AFTER_SESSION' ? 'Archive planned' : 'Sections moved'}
+        description={space.spaceName}
+        footer={<Button onClick={() => (done.archived ? onArchived() : onClose())}>Done</Button>}
+      >
+        <div className="space-y-3 text-sm" data-testid="replace-result">
+          <Alert tone="success">{done.message}</Alert>
+          {done.moved.length > 0 && (
+            <section aria-label="What moved">
+              <h3 className="mb-1.5 font-bold">{done.mode === 'NOW' ? 'What moved' : 'Keeps this room until then'}</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                {done.moved.map((m) => (
+                  <li key={m.assignmentId}>
+                    {m.label}: {m.fromRoom}
+                    {done.mode === 'NOW' && (
+                      <>
+                        {' '}
+                        <ArrowRight className="inline size-3.5" aria-hidden="true" /> <b>{m.toRoom}</b>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {done.dependencies.length > 0 && (
+            <p className="text-muted">Still in the way: {done.dependencies.map((d) => d.label).join(' ')}</p>
+          )}
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
       open
       onOpenChange={(open) => !open && onClose()}
       title={result ? 'This room is still in use' : 'Archive this room?'}
+      className={result ? 'max-w-xl' : undefined}
       description={space.spaceName}
       footer={
         result ? (
@@ -176,23 +223,11 @@ export function ArchiveDialog({ space, onClose, onArchived }: { space: SpaceDTO;
               </span>
             </p>
           )}
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {result.actions.includes('CHOOSE_REPLACEMENT') && (
-                <Button variant="outline" size="sm" disabled>
-                  Choose A Replacement Room
-                </Button>
-              )}
-              {result.actions.includes('ARCHIVE_AFTER_SESSION') && (
-                <Button variant="outline" size="sm" disabled>
-                  Archive After This School Year
-                </Button>
-              )}
-            </div>
-            <p className="text-[13px] text-muted">
-              {result.actions.length > 0 ? 'These two options arrive with Classroom Allocation. Until then, ' : ''}finish or cancel the items above, then archive the room again.
-            </p>
-          </div>
+          {result.actions.length > 0 ? (
+            <ReplaceActions space={space} result={result} onDone={setDone} />
+          ) : (
+            <p className="text-[13px] text-muted">Finish or cancel the items above, then archive the room again.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -202,6 +237,71 @@ export function ArchiveDialog({ space, onClose, onArchived }: { space: SpaceDTO;
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * The two ways out when a room still holds Home Classrooms: move them to another room now (then archive), or keep the room until
+ * the current school year ends and archive it then.
+ */
+function ReplaceActions({ space, result, onDone }: { space: SpaceDTO; result: ArchiveSpaceResultDTO; onDone: (r: ReplaceRoomResultDTO) => void }) {
+  const ctx = useOptionalStudentContext();
+  const data = usePickerData(space.locationId, ctx?.sessionId);
+  const replace = useReplaceRoom(space.spaceId);
+  const [choosing, setChoosing] = useState(false);
+  const [picked, setPicked] = useState('');
+  const [keepReason, setKeepReason] = useState('');
+  const [tooSmall, setTooSmall] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Rooms used by the sections that are moving are not "taken" for this purpose.
+  const movingRoom = data.live.filter((r) => r.room.spaceId !== space.spaceId);
+  const options = roomOptions(data.rooms, movingRoom, { excludeRoomId: space.spaceId });
+  // Start with the suggested room when it can really be picked, else the best free room (the list puts it first).
+  const free = options.filter((o) => !o.disabled);
+  const roomId = picked || (free.find((o) => o.value === result.suggestedReplacementId) ?? free[0])?.value || '';
+
+  const run = async (body: Parameters<typeof replace.mutateAsync>[0]) => {
+    setError(null);
+    try {
+      onDone(await replace.mutateAsync(body));
+    } catch (err) {
+      const failures = err instanceof ApiError ? ((err.details?.failures as { code: string }[] | undefined) ?? []) : [];
+      setTooSmall(failures.length > 0 && failures.every((f) => f.code === 'ROOM_TOO_SMALL'));
+      setError(messageFor(err));
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {!choosing ? (
+        <div className="flex flex-wrap gap-2">
+          {result.actions.includes('CHOOSE_REPLACEMENT') && (
+            <Button size="sm" onClick={() => setChoosing(true)}>
+              Choose Replacement
+            </Button>
+          )}
+          {result.actions.includes('ARCHIVE_AFTER_SESSION') && (
+            <Button size="sm" variant="outline" loading={replace.isPending} loadingText="Saving…" onClick={() => void run({ mode: 'AFTER_SESSION' })}>
+              Archive After Current Session
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-xl border border-line p-3">
+          <ComboboxField label="Room that takes over" value={roomId} onChange={setPicked} options={options} placeholder={data.loading ? 'Loading rooms…' : 'Choose…'} searchPlaceholder="Search rooms…" hint="The sections move today. Their old room stays in History." disabled={data.loading} />
+          {tooSmall && <TextareaField label="Keep the smaller room anyway? Why" hint="Optional. Fill this in only to move into a room with fewer seats." value={keepReason} onChange={(e) => setKeepReason(e.target.value)} rows={2} maxLength={300} />}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setChoosing(false)}>
+              Back
+            </Button>
+            <Button size="sm" disabled={!roomId} loading={replace.isPending} loadingText="Moving…" onClick={() => void run({ mode: 'NOW', replacementSpaceId: roomId, ...(tooSmall && keepReason.trim() ? { capacityOverride: { reason: keepReason.trim() } } : {}) })}>
+              Move And Archive
+            </Button>
+          </div>
+        </div>
+      )}
+      {error && <Alert tone="danger">{error}</Alert>}
+    </div>
   );
 }
 

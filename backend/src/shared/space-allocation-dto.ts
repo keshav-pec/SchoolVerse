@@ -101,6 +101,12 @@ export interface AssignmentChangeResultDTO {
   warnings: AssignmentWarningDTO[];
 }
 
+/** `GET /spaces/my-classrooms` — a teacher's view: the Home Classroom of each section they teach today, and the ones still without a room. */
+export interface MyClassroomsDTO {
+  items: HomeClassroomDTO[];
+  withoutRoom: { sectionOfferingId: string; label: string }[];
+}
+
 // ───────────────────────────────────────────────────────────── bulk
 
 export interface BulkAssignmentResultDTO {

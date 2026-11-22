@@ -101,7 +101,8 @@ test('admin onboards a faculty member, places them, assigns Maths for VIII-A/B, 
   ).toBeVisible();
 
   await login(asha, 'asha.e2e@greenfield.demo');
-  // Faculty navigation: their own profile and colleagues, nothing administrative.
+  // Faculty navigation: their own profile and colleagues, nothing administrative. (Sidebar groups start collapsed at each sign-in.)
+  await asha.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^people/i }).click();
   await expect(asha.getByRole('link', { name: 'My Profile', exact: true })).toBeVisible();
   await expect(asha.getByRole('link', { name: 'Faculty & Staff' })).toHaveCount(0);
   await expect(asha.getByRole('link', { name: 'Change requests' })).toHaveCount(0);

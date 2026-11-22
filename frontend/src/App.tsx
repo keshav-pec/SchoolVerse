@@ -13,7 +13,10 @@ import { PeopleSettingsPage } from '@/features/people/settings-page';
 import { ParentLayout } from '@/features/parent/parent-layout';
 import { ParentChildPage, ParentDocumentsPage, ParentHomePage } from '@/features/parent/parent-pages';
 import { ParentRequestsPage } from '@/features/parent/parent-requests-page';
+import { AllocationPage } from '@/features/spaces/allocation-page';
 import { SpaceAttentionPage } from '@/features/spaces/attention-page';
+import { SpaceReportsPage } from '@/features/spaces/reports-page';
+import { RolloverPage } from '@/features/spaces/rollover-page';
 import { SpaceImportPage } from '@/features/spaces/import-page';
 import { SpaceImportsPage } from '@/features/spaces/imports-page';
 import { SpacesLayout } from '@/features/spaces/spaces-layout';
@@ -239,6 +242,17 @@ const router = createBrowserRouter([
                               { path: 'attention', element: <SpaceAttentionPage /> },
                               { path: 'types', element: <SpaceTypesPage /> },
                             ],
+                          },
+                          {
+                            element: <RequireSpacePermission permission="space:section_assignment:manage" />,
+                            children: [
+                              { path: 'allocation', element: <AllocationPage /> },
+                              { path: 'rollover', element: <RolloverPage /> },
+                            ],
+                          },
+                          {
+                            element: <RequireSpacePermission permission="space:export" />,
+                            children: [{ path: 'reports', element: <SpaceReportsPage /> }],
                           },
                           {
                             element: <RequireSpacePermission permission="space:import" />,

@@ -8,6 +8,7 @@ import {
   GraduationCap,
   Inbox,
   LayoutDashboard,
+  LayoutGrid,
   Library,
   ListChecks,
   ListTree,
@@ -25,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { useAuth, useSession } from '@/lib/auth';
 import { firstName, greetingFor } from '@/lib/utils';
+import { MyClassroomCard } from '@/features/spaces/my-classroom-card';
 
 interface QuickLink {
   to: string;
@@ -170,6 +172,14 @@ const QUICK_LINKS: QuickLink[] = [
     permission: 'student:import',
   },
   {
+    to: '/spaces/allocation',
+    title: 'Classroom allocation',
+    text: 'Give every section its Home Classroom in a few clicks.',
+    Icon: LayoutGrid,
+    tint: 'bg-mint-soft text-success',
+    permission: 'space:section_assignment:manage',
+  },
+  {
     to: '/my-students',
     title: 'My students',
     text: 'See the students in the classes you teach.',
@@ -233,6 +243,8 @@ export function HomePage() {
           <CampusScene className="mx-auto max-w-[340px] lg:-my-5" />
         </div>
       </motion.section>
+
+      {session.user.role === 'FACULTY' && can('space:view') && <MyClassroomCard />}
 
       <section aria-labelledby="home-actions">
         <h2 id="home-actions" className="text-lg font-bold text-ink">

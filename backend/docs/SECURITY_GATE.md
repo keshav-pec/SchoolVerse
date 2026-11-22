@@ -1,4 +1,4 @@
-# Security gate: employee data (Module 3) and child data (Module 4)
+# Security gate: employee data (Module 3), child data (Module 4) and campus data (Module 5)
 
 Run this before any release that holds employee or student personal data. A release with employee or child PII needs the
 matching checklist ticked (sign it off in the pull request, with the date and your name). The child-data section is
@@ -113,3 +113,51 @@ Manual review (a person, not a script):
 
 Parent MFA and OTP-verified phone numbers, consent records, pickup authorisation, real email/SMS delivery and a real malware
 scanner are deferred (see `Module4.md`, "Simplifications versus the PRD"). A teacher who is also a parent needs two logins.
+
+---
+
+## Campus data (Module 5)
+
+Run this as well before any release that holds rooms and Home Classrooms. It sits on top of the gates above: the same tenant
+scoping, strict bodies, audit rows and export rules apply. Campus data is not personal, but it decides where children sit, so
+the threats are about the wrong campus, the wrong room and hidden changes.
+
+### Threat model on one page
+
+**Assets.** The room master (buildings, floors, rooms, seats, status, closures) and Home Classroom assignments (which section sits
+in which room, from when to when, and any "keep anyway" reason). Room exports and reports.
+
+**Actors.** School Admin (trusted, audited; changes rooms and assignments) · facility staff (today the same School Admin role;
+there is no separate facility role yet) · Faculty (read-only: schedulable rooms at the campuses where they teach today, and their
+own sections' Home Classrooms) · Staff and Parents (no room routes) · another school (a different tenant).
+
+| Threat | Control | Test that proves it |
+|---|---|---|
+| Someone guesses another campus's room or building UUID | Every query is tenant-scoped; another school's id is **404**. A teacher's reach is worked out from today's assignments; another campus of the same school is **403** and writes `CROSS_SCOPE_DENIED`. Location ids in bodies and queries go through `assertLocationAccess` | `spaces` QA SPACE-74 (both) · QA SPACE-75 · `security` route matrix · e2e "faculty … another campus is refused by URL and by API" |
+| Two people grab one room at the same moment | The overlap check and the insert run in one transaction that bumps a lock row per room and per section, so the second request collides, is retried by the driver and then sees the room taken (`ROOM_ALREADY_ASSIGNED`) | `spaces` QA SPACE-38 · e2e "two admins give the same room to two sections at the same moment" |
+| A room is given to a second section on purpose (round the screen) | The server checks every rule on every write (bulk included); the screen only greys out taken rooms | `spaces` QA SPACE-33 · QA SPACE-61 · e2e "admin tries to give one room to two sections and is blocked" |
+| A used room is moved silently to another floor or campus | Move is refused for a room with history (advice: archive and add a new one); type changes need a confirmation and are audited; renames keep the id | `spaces` QA SPACE-50 · QA SPACE-49 |
+| A used room is archived or deleted and the section is left without a room | Archive never deletes; it explains what depends on the room and offers Choose Replacement (all-or-none move, then archive) or Archive After Current Session. Delete is only for a draft room that was never used | `spaces` QA SPACE-51 · QA SPACE-52 (both) · QA SPACE-53 · e2e "admin archives a room that a section uses and moves the section with Choose Replacement" |
+| Seats are changed to hide that a section does not fit | Seat changes are audited with old and new values and emit `physical_space.capacity.changed`; fit is checked live on every read, so a smaller room shows again under Needs Attention → Capacity. "Keep Room Anyway" needs a reason and records the numbers the admin saw; it is flagged again if the section grows or the room shrinks | `spaces` QA SPACE-34 · QA SPACE-73 · QA SPACE-60 · e2e "a section that outgrows its room shows in Needs Attention" |
+| A closure quietly removes a Home Classroom | A closure (availability block) is a warning only and never ends the assignment | `spaces` QA SPACE-63 · e2e "admin marks a used room unavailable: the Home Classroom stays" |
+| A teacher changes rooms or assignments | Faculty hold `space:view` only; every write needs `space:edit`, `space:archive` or `space:section_assignment:manage`; Classroom Allocation, Rollover, Needs Attention and Reports are refused (403) and the screens show Not Found | `spaces` QA SPACE-74 (teacher part) · QA SPACE-75 (both) · frontend "a teacher sees My Classroom read-only and cannot open Classroom Allocation" |
+| A room export carries a formula | Exports and reports are CSV with formula cells neutralised, need `space:export`, and every read is audited | `spaces` QA SPACE-31 · QA SPACE-79 |
+
+### Checklist (campus data)
+
+- [ ] **Lint.** `npm run lint` in `backend/` and `frontend/`: no errors.
+- [ ] **Backend tests.** `npm test` in `backend/`: green (`spaces` QA SPACE-03 to SPACE-79 and the route matrix).
+- [ ] **Frontend tests.** `npm test` in `frontend/`: green (allocation summary and Accept label, needs-a-look reason and three actions, Keep Room Anyway needs a reason, failed bulk row shows its reason, room picker greys out taken and closed rooms, the capacity dialog, rollover exceptions first, archive with replacement, Needs Attention groups and badge, Faculty read-only, reports).
+- [ ] **Browser tests.** `npm run e2e` in `frontend/`: green (`spaces-flows.spec.ts`, `spaces-home-classrooms.spec.ts`, `spaces-visual.spec.ts` at 1280px and 390px).
+
+Manual review (a person, not a script):
+
+- [ ] **Another campus's room.** Signed in as a teacher, paste a room id from another campus into `/spaces?room=…` and into the API in the network tab. The page shows the access message and the API answers 403.
+- [ ] **Same room, two tabs.** In two browser tabs, give one free room to two different sections and save both at once. One must be refused with "… already uses …".
+- [ ] **Shrinking seats.** Lower a used room's seats below its section's size. The section must appear under Needs Attention → Capacity straight away.
+
+### Known limits (campus data)
+
+There is no separate facility-staff role yet (the School Admin does facility work). Shifts are free-text labels until Shift
+Management exists, so sharing a room needs two named shifts. Recurring closures are stored but not evaluated. Timetable owns
+period-level booking; this module only says which rooms are usable (see `Module5.md`, "Simplifications versus the PRD").

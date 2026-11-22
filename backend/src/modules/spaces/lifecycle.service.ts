@@ -13,7 +13,8 @@ import { assertSpaceTransition } from './lifecycle';
 import { toSpaceDTOOne } from './mappers';
 import { effectiveStatusOf, resolveSpace } from './resolve';
 import { loadVisibleSpace } from './space.service';
-import { Building, Floor, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, type BuildingDoc, type FloorDoc, type PhysicalSpaceDoc, type SpaceChangeLogDoc } from './space.models';
+import { AcademicSession } from '../academic/session.model';
+import { Building, Floor, PhysicalSpace, SectionSpaceAssignment, SpaceAvailabilityBlock, SpaceChangeLog, type BuildingDoc, type FloorDoc, type PhysicalSpaceDoc, type SpaceChangeLogDoc } from './space.models';
 
 /** SPACE-48 to 53 — move, archive, hard delete and history. A used room is never moved or deleted: it is archived, with an explanation. */
 
@@ -49,11 +50,19 @@ export async function moveSpace(ctx: ServiceContext, id: string, data: MoveSpace
   return toSpaceDTOOne(ctx, (await PhysicalSpace.findOne({ _id: id, tenantId: ctx.tenantId }).lean<PhysicalSpaceDoc>())!, await todayFor(ctx));
 }
 
-/** The best other room to take over: same location and type, active, big enough, and the smallest that fits. */
+/** Rooms that hold a Home Classroom today or later: they cannot take over another section's room. */
+async function roomsInUse(ctx: ServiceContext, locationId: string, today: string): Promise<Set<string>> {
+  const open = (await AcademicSession.find({ tenantId: ctx.tenantId, endDate: { $gte: today } }).select('_id').lean<{ _id: string }[]>()).map((s) => s._id);
+  const rows = await SectionSpaceAssignment.find({ tenantId: ctx.tenantId, locationId, status: { $ne: 'CANCELLED' }, $or: [{ effectiveTo: { $gte: today } }, { effectiveTo: null, academicSessionId: { $in: open } }] }).select('physicalSpaceId').lean<{ physicalSpaceId: string }[]>();
+  return new Set(rows.map((r) => r.physicalSpaceId));
+}
+
+/** The best other room to take over: same location and type, active, free of other Home Classrooms, big enough, and the smallest that fits. */
 async function suggestReplacement(ctx: ServiceContext, room: PhysicalSpaceDoc, today: string): Promise<{ id: string; name: string } | null> {
   const type = await loadSpaceType(ctx, room.spaceTypeId);
   const need = resolveSpace(room, type).academicCapacity.value ?? 0;
-  const peers = await PhysicalSpace.find({ tenantId: ctx.tenantId, locationId: room.locationId, _id: { $ne: room._id }, spaceTypeId: room.spaceTypeId, operationalStatus: 'ACTIVE' }).lean<PhysicalSpaceDoc[]>();
+  const taken = await roomsInUse(ctx, room.locationId, today);
+  const peers = (await PhysicalSpace.find({ tenantId: ctx.tenantId, locationId: room.locationId, _id: { $ne: room._id }, spaceTypeId: room.spaceTypeId, operationalStatus: 'ACTIVE', archiveAfterDate: null }).lean<PhysicalSpaceDoc[]>()).filter((p) => !taken.has(p._id));
   if (peers.length === 0) return null;
   const [floors, buildings] = await Promise.all([Floor.find({ tenantId: ctx.tenantId, _id: { $in: peers.map((p) => p.floorId).filter(Boolean) as string[] } }).lean<FloorDoc[]>(), Building.find({ tenantId: ctx.tenantId, _id: { $in: peers.map((p) => p.buildingId).filter(Boolean) as string[] } }).lean<BuildingDoc[]>()]);
   const floorOf = new Map(floors.map((f) => [f._id, f]));

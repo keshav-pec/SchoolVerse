@@ -33,7 +33,7 @@ import { todayFor } from '../staff/status';
 import { emitSpaceEvent, recordSpaceAudit } from './audit';
 import { spaceCodeFrom } from './codes';
 import { conversionWarnings } from './dependencies';
-import { currentHomeClassroomOf } from './home-lookup';
+import { currentHomeClassroomOf, roomIdsBySection } from './home-lookup';
 import { assertInScope, assertLocationWritable, assertSpaceWritable, assertVersion, loadLocation, loadSpace, loadSpaceType, requireSchool, spaceScope, type SpaceScope } from './guards';
 import { assertSpaceTransition } from './lifecycle';
 import { loadLookups, pathOf, toBlockDTO, toSpaceDTO, toSpaceDTOOne, toSpaceDTOs, type SpaceLookups } from './mappers';
@@ -200,7 +200,9 @@ export async function buildSpaceFilter(ctx: ServiceContext, scope: SpaceScope, q
   if (query.feature) filter.features = query.feature;
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i');
-    and.push({ $or: [{ spaceName: rx }, { spaceCode: rx }, { roomNumber: rx }] });
+    // Also finds a room by the section that sits in it today ("8-A").
+    const bySection = await roomIdsBySection(ctx, rx, await todayFor(ctx), filter.locationId);
+    and.push({ $or: [{ spaceName: rx }, { spaceCode: rx }, { roomNumber: rx }, ...(bySection.length ? [{ _id: { $in: bySection } }] : [])] });
   }
 
   // A teacher sees only rooms that can be scheduled, are active and are not under an inactive floor or building.
