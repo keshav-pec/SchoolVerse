@@ -8,6 +8,7 @@ import { devRouter } from './modules/dependencies/dev.routes';
 import { locationRouter } from './modules/locations/location.routes';
 import { masterRouter } from './modules/master/master.routes';
 import { schoolRouter } from './modules/school/school.routes';
+import { spaceRouter } from './modules/spaces/space.routes';
 import { staffRouter } from './modules/staff/staff.routes';
 import { lifecycleRouter } from './modules/students/lifecycle.routes';
 import { parentRouter } from './modules/students/parent.routes';
@@ -43,6 +44,7 @@ mount(apiRouter, '', staffRouter);
 mount(apiRouter, '', lifecycleRouter);
 mount(apiRouter, '', parentRouter);
 mount(apiRouter, '', studentRouter);
+mount(apiRouter, '', spaceRouter);
 mount(apiRouter, '/files', filesRouter);
 // The dev outbox shows the emails that would have been sent. Only when DEV_OUTBOX is on, and before the (authenticated) dev router.
 if (env.DEV_OUTBOX) mount(apiRouter, '/dev/outbox', outboxRouter);

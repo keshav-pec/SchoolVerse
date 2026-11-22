@@ -15,6 +15,12 @@ import {
   type Permission,
 } from '@shared';
 import { describe, expect, it } from 'vitest';
+import { floorCodeFor, floorFromName } from '@shared';
+import { buildingCodeFrom, shiftTrailingNumber, spaceCodeFrom } from '../src/modules/spaces/codes';
+import { assertSpaceTransition, assertStructureTransition } from '../src/modules/spaces/lifecycle';
+import { effectiveStatusOf, resolveSpace, warningsFor } from '../src/modules/spaces/resolve';
+import { suggestSpaceMapping } from '../src/modules/spaces/import.service';
+import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
 import {
   DATA_CLASSIFICATION,
   DTO_ALLOWED_CLASSES,
@@ -961,5 +967,89 @@ describe('Part 3 data classification (SEC-SPM-02)', () => {
     expect(hasPermission('FACULTY', 'student:lifecycle')).toBe(false);
     expect(hasPermission('PARENT', 'student:documents')).toBe(false);
     expect(hasPermission('SCHOOL_ADMIN', 'parent_access:manage')).toBe(true);
+  });
+});
+
+// ───────────────────────────────────────────────────────────── Module 5, Part 1
+
+describe('room data classification (SEC-SPACE-01)', () => {
+  const systemFields: readonly string[] = SYSTEM_FIELDS;
+  const businessPaths = (schema: { paths: Record<string, unknown> }) => [...new Set(Object.keys(schema.paths).map((p) => p.split('.')[0]!))].filter((p) => !systemFields.includes(p));
+
+  it('every field of every campus collection has a class, and nothing in the map is stale', () => {
+    const cases: [keyof typeof DATA_CLASSIFICATION, { schema: { paths: Record<string, unknown> } }][] = [
+      ['building', Building], ['floor', Floor], ['space_type', SpaceType], ['physical_space', PhysicalSpace], ['space_availability_block', SpaceAvailabilityBlock],
+      ['space_import', SpaceImport], ['space_import_row', SpaceImportRow], ['space_change_log', SpaceChangeLog], ['outbox_event', OutboxEvent],
+    ];
+    for (const [entity, model] of cases) expect(businessPaths(model.schema).sort(), entity).toEqual(Object.keys(DATA_CLASSIFICATION[entity]).sort());
+  });
+});
+
+describe('room status machines (SPACE-06, 48)', () => {
+  it('buildings and floors: draft → active ⇄ inactive, archive ends it', () => {
+    expect(assertStructureTransition('building', 'DRAFT', 'ACTIVE')).toBe('ACTIVE');
+    expect(assertStructureTransition('floor', 'ACTIVE', 'INACTIVE')).toBe('INACTIVE');
+    expect(() => assertStructureTransition('building', 'ARCHIVED', 'ACTIVE')).toThrow(/kept for history/);
+    expect(() => assertStructureTransition('floor', 'ACTIVE', 'ACTIVE')).toThrow(/already active/);
+  });
+  it('rooms: temporary and restricted moves both ways, archived is final', () => {
+    expect(assertSpaceTransition('ACTIVE', 'TEMPORARILY_UNAVAILABLE')).toBe('TEMPORARILY_UNAVAILABLE');
+    expect(assertSpaceTransition('INACTIVE', 'ACTIVE')).toBe('ACTIVE');
+    expect(() => assertSpaceTransition('DRAFT', 'INACTIVE')).toThrow(/made active first/);
+    expect(() => assertSpaceTransition('ARCHIVED', 'ACTIVE')).toThrow(/kept for history/);
+  });
+});
+
+describe('room inheritance and effective status (SPACE-16 to 19)', () => {
+  const type = { _id: 't1', code: 'STANDARD_CLASSROOM', name: 'Standard Classroom', isSchedulable: true, isHomeClassroomEligible: true, defaultSuitabilityTags: ['GENERAL_TEACHING'], defaultAcademicCapacity: 40, isOutdoor: false } as never;
+  const lab = { _id: 't2', code: 'CHEMISTRY_LAB', name: 'Chemistry Lab', isSchedulable: true, isHomeClassroomEligible: false, defaultSuitabilityTags: ['CHEMISTRY_PRACTICAL'], defaultAcademicCapacity: 30, isOutdoor: false } as never;
+  const office = { _id: 't3', code: 'OFFICE', name: 'Office', isSchedulable: false, isHomeClassroomEligible: false, defaultSuitabilityTags: [], defaultAcademicCapacity: null, isOutdoor: false } as never;
+  const room = (over: object = {}) => ({ schedulableOverride: null, homeClassroomEligibleOverride: null, suitabilityOverrides: null, academicCapacity: null, ...over }) as never;
+
+  it('uses the type default and says so; an override says so too', () => {
+    expect(resolveSpace(room(), type)).toMatchObject({ academicCapacity: { value: 40, source: 'TYPE_DEFAULT' }, schedulable: { value: true, source: 'TYPE_DEFAULT' } });
+    expect(resolveSpace(room({ academicCapacity: 35 }), type).academicCapacity).toEqual({ value: 35, source: 'OVERRIDE' });
+    expect(resolveSpace(room({ suitabilityOverrides: [] }), type).suitabilityTags).toEqual({ value: [], source: 'OVERRIDE' });
+  });
+  it('schedulable and home-classroom eligible are separate; an office is never schedulable', () => {
+    const r = resolveSpace(room(), lab);
+    expect([r.schedulable.value, r.homeClassroomEligible.value]).toEqual([true, false]);
+    expect(resolveSpace(room({ schedulableOverride: true }), office).schedulable.value).toBe(false);
+  });
+  it('a room under an inactive floor says why, and nothing is rewritten', () => {
+    const space = { operationalStatus: 'ACTIVE' as const, archiveAfterDate: null as string | null };
+    expect(effectiveStatusOf(space, { floorName: 'Floor 2', status: 'INACTIVE' }, { buildingName: 'Main', status: 'ACTIVE' })).toEqual({ available: false, status: 'ACTIVE', reason: 'Unavailable because Floor 2 is inactive.' });
+    expect(effectiveStatusOf(space, null, { buildingName: 'Main', status: 'INACTIVE' }).reason).toMatch(/Main is inactive/);
+    expect(effectiveStatusOf({ ...space, archiveAfterDate: '2027-03-31' }, null, null, '2027-04-01').status).toBe('ARCHIVED');
+  });
+  it('warns when seats for classes exceed what the room holds, and when seats are missing', () => {
+    const noCap = { ...(type as object), defaultAcademicCapacity: null } as never;
+    expect(warningsFor({ physicalCapacity: 30 }, type, resolveSpace(room(), type)).map((w) => w.code)).toEqual(['ACADEMIC_OVER_PHYSICAL']);
+    expect(warningsFor({ physicalCapacity: null }, noCap, resolveSpace(room(), noCap)).map((w) => w.code)).toEqual(['MISSING_ACADEMIC_CAPACITY']);
+  });
+});
+
+describe('room codes, floors and import columns (SPACE-06, 12, 21, 27)', () => {
+  it('floor codes and names', () => {
+    expect([0, 1, 2, -1].map(floorCodeFor)).toEqual(['GF', 'F1', 'F2', 'B1']);
+    expect(['Ground', 'First', 'Second', 'Basement', 'Third Floor'].map((n, i) => floorFromName(n, i).floorNumber)).toEqual([0, 1, 2, -1, 3]);
+    expect(floorFromName('Ground').levelType).toBe('GROUND');
+    expect(floorFromName('Mezzanine', 4).floorNumber).toBe(4);
+  });
+  it('makes building and room codes, putting the building in front when the number is taken', () => {
+    expect(buildingCodeFrom('Main Academic Block', new Set())).toBe('MAB');
+    expect(buildingCodeFrom('Main Academic Block', new Set(['MAB']))).toBe('MAB-2');
+    expect(spaceCodeFrom({ roomNumber: '101', spaceName: 'Room 101', buildingCode: 'A' }, new Set())).toBe('101');
+    expect(spaceCodeFrom({ roomNumber: '101', spaceName: 'Room 101', buildingCode: 'A' }, new Set(['101']))).toBe('A-101');
+    expect(spaceCodeFrom({ roomNumber: null, spaceName: 'Chemistry Lab', buildingCode: null }, new Set())).toBe('CHEMISTRY-LAB');
+  });
+  it('shifts a trailing number and keeps its padding', () => {
+    expect(shiftTrailingNumber('101', 100)).toBe('201');
+    expect(shiftTrailingNumber('G01', 1)).toBe('G02');
+    expect(shiftTrailingNumber('LAB', 1)).toBeNull();
+  });
+  it('matches import columns from common headers', () => {
+    const m = suggestSpaceMapping(['Block', 'Level', 'Room Name', 'Room Type', 'Seats', 'Facilities']);
+    expect(m).toMatchObject({ building: 'Block', floor: 'Level', spaceName: 'Room Name', type: 'Room Type', academicCapacity: 'Seats', features: 'Facilities' });
   });
 });

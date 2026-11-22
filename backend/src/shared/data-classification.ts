@@ -309,6 +309,32 @@ export const DATA_CLASSIFICATION = {
     key: 'INTERNAL',
     seq: 'INTERNAL',
   },
+  // ───────────────────────────────────────────── Module 5: buildings, floors and rooms (no personal data: all INTERNAL)
+  building: {
+    schoolId: 'INTERNAL', locationId: 'INTERNAL', buildingCode: 'INTERNAL', buildingName: 'INTERNAL', buildingType: 'INTERNAL', status: 'INTERNAL',
+    effectiveFrom: 'INTERNAL', effectiveTo: 'INTERNAL', displayOrder: 'INTERNAL', version: 'INTERNAL',
+  },
+  floor: {
+    schoolId: 'INTERNAL', locationId: 'INTERNAL', buildingId: 'INTERNAL', floorCode: 'INTERNAL', floorName: 'INTERNAL', floorNumber: 'INTERNAL', levelType: 'INTERNAL', status: 'INTERNAL',
+    effectiveFrom: 'INTERNAL', effectiveTo: 'INTERNAL', version: 'INTERNAL',
+  },
+  space_type: {
+    schoolId: 'INTERNAL', code: 'INTERNAL', name: 'INTERNAL', isSchedulable: 'INTERNAL', isHomeClassroomEligible: 'INTERNAL', defaultSuitabilityTags: 'INTERNAL',
+    defaultAcademicCapacity: 'INTERNAL', isOutdoor: 'INTERNAL', isSystem: 'INTERNAL', status: 'INTERNAL',
+  },
+  physical_space: {
+    schoolId: 'INTERNAL', locationId: 'INTERNAL', buildingId: 'INTERNAL', floorId: 'INTERNAL', spaceCode: 'INTERNAL', spaceName: 'INTERNAL', roomNumber: 'INTERNAL', spaceTypeId: 'INTERNAL',
+    physicalCapacity: 'INTERNAL', academicCapacity: 'INTERNAL', examCapacity: 'INTERNAL', schedulableOverride: 'INTERNAL', homeClassroomEligibleOverride: 'INTERNAL', features: 'INTERNAL',
+    suitabilityOverrides: 'INTERNAL', operationalStatus: 'INTERNAL', archiveAfterDate: 'INTERNAL', readinessRecheckAt: 'INTERNAL', version: 'INTERNAL',
+  },
+  space_availability_block: {
+    physicalSpaceId: 'INTERNAL', locationId: 'INTERNAL', blockType: 'INTERNAL', startDatetime: 'INTERNAL', endDatetime: 'INTERNAL', reasonCode: 'INTERNAL', reason: 'INTERNAL',
+    recurrenceRule: 'INTERNAL', status: 'INTERNAL', cancelledAt: 'INTERNAL', cancelledBy: 'INTERNAL',
+  },
+  space_import: { schoolId: 'INTERNAL', locationId: 'INTERNAL', fileName: 'INTERNAL', fileHash: 'INTERNAL', status: 'INTERNAL', headers: 'INTERNAL', mapping: 'INTERNAL', rowCount: 'INTERNAL' },
+  space_import_row: { importId: 'INTERNAL', rowNumber: 'INTERNAL', raw: 'INTERNAL', status: 'INTERNAL', issues: 'INTERNAL', spaceId: 'INTERNAL' },
+  space_change_log: { physicalSpaceId: 'INTERNAL', type: 'INTERNAL', from: 'INTERNAL', to: 'INTERNAL', reason: 'INTERNAL', actorId: 'INTERNAL' },
+  outbox_event: { type: 'INTERNAL', payload: 'INTERNAL' },
   dev_outbox: {
     to: 'PERSONAL',
     template: 'INTERNAL',

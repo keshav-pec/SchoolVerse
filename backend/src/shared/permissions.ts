@@ -45,6 +45,19 @@ export const PERMISSIONS = [
   'student:approve_changes', // approve or reject changes parents ask for
   'student:import', // import students from a file
   'student:export', // download student exports
+  // Campus: buildings, floors and rooms (Module 5). Faculty get `space:view` only, and see schedulable rooms at their own locations.
+  'space:view', // buildings, floors, rooms, types, availability
+  'space:create', // add buildings, floors and rooms
+  'space:edit', // rename, change capacity, features, tags, status
+  'space:bulk_manage', // room generator, bulk edit, duplicate floor, copy campus
+  'space:archive', // archive, hard delete, guarded move
+  'space:capacity:manage', // change capacities
+  'space:features:manage', // change features and suitability tags
+  'space:availability:manage', // make a room unavailable for a period
+  'space:import', // import rooms from a file
+  'space:export', // download room exports
+  'space:audit:view', // a room's history
+  'space:section_assignment:manage', // Home Classroom assignments (Part 3)
   // Setup & governance
   'setup:manage',
   'audit:view',
@@ -58,9 +71,12 @@ const LIMITED_VIEW: Permission[] = ['school:view', 'location:view', 'academic:vi
 
 const COLLEAGUE_VIEW: Permission[] = [...LIMITED_VIEW, 'employee:directory'];
 
+/** Faculty may look up rooms; the server narrows what they see to schedulable rooms at their own locations. */
+const FACULTY_VIEW: Permission[] = [...COLLEAGUE_VIEW, 'space:view'];
+
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SCHOOL_ADMIN: PERMISSIONS,
-  FACULTY: COLLEAGUE_VIEW,
+  FACULTY: FACULTY_VIEW,
   STAFF: COLLEAGUE_VIEW,
   PARENT: [],
 };

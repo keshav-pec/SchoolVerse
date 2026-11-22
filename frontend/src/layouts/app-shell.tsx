@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Tooltip } from '@/components/ui/tooltip';
 import { usePendingRequestCount } from '@/features/people/api';
 import { useCurrentSchool } from '@/features/school-profile/api';
 import { useAttentionCount } from '@/features/students/api';
@@ -215,6 +216,17 @@ function readOpenGroups(): string[] {
   }
 }
 
+/** Shows a styled tooltip to the right of an icon, only while the sidebar is collapsed. */
+function CollapsedTip({ label, active, children }: { label: string; active: boolean; children: React.ReactElement }) {
+  return active ? (
+    <Tooltip content={label} side="right">
+      {children}
+    </Tooltip>
+  ) : (
+    children
+  );
+}
+
 function SidebarContent({
   onNavigate,
   collapsed = false,
@@ -260,11 +272,13 @@ function SidebarContent({
       )}
     >
       {/* The school card is the Home link. */}
+      <CollapsedTip label={`${session.tenant.name} – Home`} active={collapsed}>
+        <div>
       <NavLink
         to="/"
         end
         onClick={onNavigate}
-        title={collapsed ? `${session.tenant.name} – Home` : 'Home'}
+        title={collapsed ? undefined : 'Home'}
         aria-label={`${session.tenant.name} – Home`}
         className={({ isActive }) =>
           cn(
@@ -297,11 +311,9 @@ function SidebarContent({
           </p>
           <p className="text-[11px] text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</p>
         </div>
-        <span
-          className={cn('ml-auto size-1.5 shrink-0 rounded-full bg-mint', collapsed && 'hidden')}
-          aria-hidden="true"
-        />
       </NavLink>
+        </div>
+      </CollapsedTip>
 
       <nav className="scrollbar-minimal mt-2 flex-1 overflow-y-auto" aria-label="Main">
         {NAV.map((section, i) => {
@@ -367,11 +379,11 @@ function SidebarContent({
               >
                 {items.map(({ to, label: itemLabel, Icon, end, badge }) => (
                   <li key={to}>
+                    <CollapsedTip label={itemLabel} active={collapsed}>
                     <NavLink
                       to={to}
                       end={end}
                       onClick={onNavigate}
-                      title={collapsed ? itemLabel : undefined}
                       aria-label={collapsed ? itemLabel : undefined}
                       className={({ isActive }) =>
                         cn(
@@ -384,7 +396,7 @@ function SidebarContent({
                     >
                       <Icon className="size-[18px] shrink-0" />
                       {!collapsed && itemLabel}
-                      {badge === 'attention' && (attention.data ?? 0) > 0 && (
+                      {!collapsed && badge === 'attention' && (attention.data ?? 0) > 0 && (
                         <span
                           className={cn(
                             'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
@@ -395,7 +407,7 @@ function SidebarContent({
                           {attention.data}
                         </span>
                       )}
-                      {badge === 'student-requests' && (studentRequests.data ?? 0) > 0 && (
+                      {!collapsed && badge === 'student-requests' && (studentRequests.data ?? 0) > 0 && (
                         <span
                           className={cn(
                             'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
@@ -406,7 +418,7 @@ function SidebarContent({
                           {studentRequests.data}
                         </span>
                       )}
-                      {badge === 'requests' && (pending.data ?? 0) > 0 && (
+                      {!collapsed && badge === 'requests' && (pending.data ?? 0) > 0 && (
                         <span
                           className={cn(
                             'ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy',
@@ -418,6 +430,7 @@ function SidebarContent({
                         </span>
                       )}
                     </NavLink>
+                    </CollapsedTip>
                   </li>
                 ))}
               </ul>

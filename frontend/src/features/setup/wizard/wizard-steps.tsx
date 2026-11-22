@@ -9,7 +9,6 @@ import { EmptyMap } from '@/components/illustrations/empty-map';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CampusAvatar } from '@/components/sv/campus-avatar';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
 import { PrimaryBadge } from '@/components/sv/primary-badge';
 import { StatusPill } from '@/components/sv/status-pill';
@@ -189,7 +188,6 @@ export function AdditionalLocationsStep({ school, others, loading, onBack, onNex
         <ul className="divide-y divide-line rounded-xl border border-line" aria-label="Additional locations">
           {others.map((l) => (
             <li key={l.locationId} className="flex items-center gap-3 p-3.5">
-              <CampusAvatar code={l.locationCode} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{l.displayName}</p>
                 <p className="truncate text-xs text-muted">

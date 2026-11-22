@@ -176,6 +176,29 @@ export const ERROR_CODES = {
   IMPORT_NOT_READY: { status: 409, message: 'Check the file first. It has not been validated yet.' },
   IMPORT_MAPPING_INCOMPLETE: { status: 422, message: 'Match the required columns before checking the file.' },
   EXPORT_TOO_LARGE: { status: 413, message: 'This export has too many rows. Narrow the filters and try again.' },
+
+  // Buildings, floors and rooms (Module 5)
+  BUILDING_CODE_TAKEN: { status: 409, message: 'Another building at this campus already uses this code.' },
+  FLOOR_CODE_TAKEN: { status: 409, message: 'Another floor in this building already uses this code.' },
+  SPACE_CODE_TAKEN: { status: 409, message: 'Another room at this campus already uses this code.' },
+  SPACE_TYPE_CODE_TAKEN: { status: 409, message: 'Another room type already uses this code.' },
+  INDOOR_SPACE_NEEDS_FLOOR: { status: 422, message: 'A room inside a building needs a building and a floor. Choose where it is.' },
+  OUTDOOR_SPACE_NO_FLOOR: { status: 422, message: 'This kind of space is outdoors, so it does not belong to a building or floor.' },
+  CAPACITY_INVALID: { status: 422, message: 'Capacity must be a whole number above zero.' },
+  SPACE_TYPE_IN_USE: { status: 409, message: 'Active rooms still use this type. Change their type first.' },
+  SPACE_TYPE_SYSTEM: { status: 409, message: 'The built-in types cannot be deactivated or have their kind changed.' },
+  HAS_DEPENDENCIES: { status: 409, message: 'Other records depend on this, so it cannot be deleted. Archive it instead.' },
+  GUARDED_MOVE_REQUIRED: { status: 409, message: 'This room has history, so it cannot be moved. Archive this room and create a new one so history stays correct.' },
+  BLOCK_OVERLAP_INVALID: { status: 409, message: 'This room is already unavailable for part of that time.' },
+  USE_INACTIVE_FOR_INDEFINITE: { status: 422, message: 'For a long closure, mark the room Inactive instead of making it unavailable for dates.' },
+  CONFIRMATION_REQUIRED: { status: 409, message: 'Please confirm this change first. It affects how the room is used.' },
+  SPACE_NOT_ACTIVE: { status: 409, message: 'This room is not active, so it cannot be changed this way.' },
+  SPACE_ARCHIVED: { status: 409, message: 'Archived rooms are kept for history and cannot be changed.' },
+  STRUCTURE_ARCHIVED: { status: 409, message: 'Archived buildings and floors are kept for history and cannot be changed.' },
+  SPACE_LOCATION_MISMATCH: { status: 409, message: 'The building, floor and room must all be at the same campus.' },
+  SPACE_IMPORT_NOT_READY: { status: 409, message: 'Check the file first. It has not been checked yet.' },
+  SPACE_IMPORT_MAPPING_INCOMPLETE: { status: 422, message: 'Match the required columns before checking the file.' },
+  SPACE_IMPORT_DONE: { status: 409, message: 'This file has already been imported.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

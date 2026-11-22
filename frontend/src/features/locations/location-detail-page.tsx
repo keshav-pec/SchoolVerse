@@ -8,7 +8,6 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip } from '@/components/ui/tooltip';
-import { CampusAvatar } from '@/components/sv/campus-avatar';
 import { ErrorState } from '@/components/sv/error-state';
 import { PrimaryBadge } from '@/components/sv/primary-badge';
 import { StatusPill } from '@/components/sv/status-pill';
@@ -81,7 +80,6 @@ export function LocationDetailPage() {
 
       <header className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-4">
-          <CampusAvatar code={l.locationCode} size="lg" />
           <div className="min-w-0">
             <h1 className="truncate text-[24px] leading-tight font-extrabold sm:text-[26px]">{l.displayName}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">

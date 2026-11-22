@@ -19,6 +19,8 @@ import { Employee } from '../modules/staff/employee.model';
 import { Department, Designation } from '../modules/staff/master.model';
 import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
+import { seedSpacesDemo } from '../modules/spaces/spaces.seed';
+import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../modules/spaces/space.models';
 import { seedStudentsDemo } from '../modules/students/students.seed';
 import { seedStudentLifecycleDemo } from '../modules/students/students.lifecycle.seed';
 import { StudentChangeRequest, StudentCounter, StudentDocument, StudentExport, StudentImport, StudentImportRow, StudentTransferCertificate } from '../modules/students/records.models';
@@ -219,6 +221,16 @@ async function wipeTenant(tenantId: string) {
     StudentImportRow.deleteMany({ tenantId }),
     StudentExport.deleteMany({ tenantId }),
     StudentCounter.deleteMany({ tenantId }),
+    // Buildings, floors and rooms (Module 5)
+    Building.deleteMany({ tenantId }),
+    Floor.deleteMany({ tenantId }),
+    SpaceType.deleteMany({ tenantId }),
+    PhysicalSpace.deleteMany({ tenantId }),
+    SpaceAvailabilityBlock.deleteMany({ tenantId }),
+    SpaceImport.deleteMany({ tenantId }),
+    SpaceImportRow.deleteMany({ tenantId }),
+    SpaceChangeLog.deleteMany({ tenantId }),
+    OutboxEvent.deleteMany({ tenantId }),
     AccountToken.deleteMany({ tenantId }),
     DevOutbox.deleteMany({ tenantId }),
   ]);
@@ -269,6 +281,8 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
         const students = await seedStudentsDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
         log(`    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
         await seedStudentLifecycleDemo(ctx, { students: students.created, nextSessionId: academic.nextSessionId });
+        const campus = await seedSpacesDemo(ctx, { mohaliId: byCode('MOH') });
+        log(`    🏫 Mohali campus: Main Academic Block with ${campus.rooms} rooms and spaces (a small room, a large room, one with no seat count)`);
         log('    👪 Parent portal: parent@greenfield.demo has two children; one pending invitation; one removed access; one student leaving; one Transfer Certificate waiting for dues');
       }
     }

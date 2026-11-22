@@ -13,6 +13,7 @@ import { Department, Designation } from '../src/modules/staff/master.model';
 import { EmployeeDocument, ProfileChangeRequest } from '../src/modules/staff/identity.models';
 import { Person } from '../src/modules/staff/person.model';
 import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
+import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
 import { StudentChangeRequest, StudentDocument, StudentTransferCertificate } from '../src/modules/students/records.models';
 import { Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent } from '../src/modules/students/student.models';
 import { User } from '../src/platform/users/user.model';
@@ -88,7 +89,17 @@ interface StudentIds {
   changeRequestId: string;
 }
 
-type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds };
+interface SpaceIds {
+  buildingId: string;
+  floorId: string;
+  otherFloorId: string;
+  spaceId: string;
+  blockId: string;
+  importId: string;
+  typeId: string;
+}
+
+type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds; spaces: SpaceIds };
 
 /** Every School, Location, Setup, Master, Academic and Staff route that takes an id, pointed at the given ids. */
 function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
@@ -103,6 +114,8 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
   const employee = `${API}/employees/${st.employeeId}`;
   const kid = ids.students;
   const student = `${API}/students/${kid.studentId}`;
+  const sp = ids.spaces;
+  const room = `${API}/physical-spaces/${sp.spaceId}`;
   return {
     reads: [
       { name: 'GET school', send: (a) => a.get(s) },
@@ -152,6 +165,19 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET student external IDs', send: (c) => c.get(`${student}/external-ids`) },
       { name: 'GET student subjects', send: (c) => c.get(`${API}/student-enrollments/${kid.enrollmentId}/subjects`) },
       { name: 'GET parent and children', send: (c) => c.get(`${API}/guardians/${kid.guardianPersonId}/children`) },
+      // Buildings, floors and rooms (Module 5)
+      { name: 'GET buildings', send: (c) => c.get(`${l}/buildings`) },
+      { name: 'GET space tree', send: (c) => c.get(`${l}/space-tree`) },
+      { name: 'GET building', send: (c) => c.get(`${API}/buildings/${sp.buildingId}`) },
+      { name: 'GET floors', send: (c) => c.get(`${API}/buildings/${sp.buildingId}/floors`) },
+      { name: 'GET floor', send: (c) => c.get(`${API}/floors/${sp.floorId}`) },
+      { name: 'GET room', send: (c) => c.get(room) },
+      { name: 'GET room dependencies', send: (c) => c.get(`${room}/dependencies`) },
+      { name: 'GET room history', send: (c) => c.get(`${room}/history`) },
+      { name: 'GET room blocks', send: (c) => c.get(`${room}/availability-blocks`) },
+      { name: 'POST availability check', send: (c) => c.post(`${API}/physical-spaces/availability-check`).send({ physicalSpaceId: sp.spaceId, start: '2030-01-01T09:00:00Z', end: '2030-01-01T10:00:00Z' }) },
+      { name: 'GET room import', send: (c) => c.get(`${API}/space-imports/${sp.importId}`) },
+      { name: 'GET room import rows', send: (c) => c.get(`${API}/space-imports/${sp.importId}/rows`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -282,6 +308,36 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'issue transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/issue`).send({}) },
       { name: 'duplicate transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/duplicate`).send({ reason: 'Matrix' }) },
       { name: 'cancel transfer certificate', send: (c) => c.post(`${API}/transfer-certificates/${kid.certificateId}/cancel`) },
+      // Buildings, floors and rooms (Module 5)
+      { name: 'POST building', send: (c) => c.post(`${l}/buildings`).send({ buildingName: 'Matrix Block' }) },
+      { name: 'PATCH building', send: (c) => c.patch(`${API}/buildings/${sp.buildingId}`).send({ version: 1, buildingName: 'Hijacked' }) },
+      { name: 'building status', send: (c) => c.post(`${API}/buildings/${sp.buildingId}/status`).send({ to: 'INACTIVE' }) },
+      { name: 'DELETE building', send: (c) => c.delete(`${API}/buildings/${sp.buildingId}`) },
+      { name: 'POST floor', send: (c) => c.post(`${API}/buildings/${sp.buildingId}/floors`).send({ floorName: 'Matrix', floorNumber: 5 }) },
+      { name: 'POST floors bulk', send: (c) => c.post(`${API}/buildings/${sp.buildingId}/floors/bulk`).send({ floors: [{ name: 'Matrix' }] }) },
+      { name: 'PATCH floor', send: (c) => c.patch(`${API}/floors/${sp.floorId}`).send({ version: 1, floorName: 'Hijacked' }) },
+      { name: 'floor status', send: (c) => c.post(`${API}/floors/${sp.floorId}/status`).send({ to: 'INACTIVE' }) },
+      { name: 'DELETE floor', send: (c) => c.delete(`${API}/floors/${sp.floorId}`) },
+      { name: 'generate rooms', send: (c) => c.post(`${API}/floors/${sp.floorId}/spaces/generate`).send({ from: 1, to: 3, spaceTypeId: sp.typeId }) },
+      { name: 'preview generate rooms', send: (c) => c.post(`${API}/floors/${sp.floorId}/spaces/generate/preview`).send({ from: 1, to: 3, spaceTypeId: sp.typeId }) },
+      { name: 'duplicate floor', send: (c) => c.post(`${API}/floors/${sp.floorId}/duplicate-structure`).send({ targetFloorId: sp.otherFloorId, transform: { add: 100 } }) },
+      { name: 'copy campus', send: (c) => c.post(`${l}/copy-structure`).send({ fromLocationId: ids.academic.locationId }) },
+      { name: 'POST room', send: (c) => c.post(`${API}/physical-spaces`).send({ locationId: ids.locationId, buildingId: sp.buildingId, floorId: sp.floorId, spaceTypeId: sp.typeId, spaceName: 'Matrix' }) },
+      { name: 'POST rooms bulk', send: (c) => c.post(`${API}/physical-spaces/bulk`).send({ spaces: [{ locationId: ids.locationId, buildingId: sp.buildingId, floorId: sp.floorId, spaceTypeId: sp.typeId, spaceName: 'Matrix' }] }) },
+      { name: 'PATCH room', send: (c) => c.patch(room).send({ version: 1, spaceName: 'Hijacked' }) },
+      { name: 'DELETE room', send: (c) => c.delete(room) },
+      { name: 'room status', send: (c) => c.post(`${room}/status`).send({ to: 'INACTIVE' }) },
+      { name: 'room features', send: (c) => c.post(`${room}/features`).send({ add: ['CCTV'] }) },
+      { name: 'room tags', send: (c) => c.post(`${room}/tags`).send({ add: ['MUSIC'] }) },
+      { name: 'preview type change', send: (c) => c.post(`${room}/convert-type/preview`).send({ spaceTypeId: sp.typeId }) },
+      { name: 'move room', send: (c) => c.post(`${room}/move`).send({ buildingId: sp.buildingId, floorId: sp.otherFloorId, reason: 'Matrix' }) },
+      { name: 'archive room', send: (c) => c.post(`${room}/archive`).send({}) },
+      { name: 'POST availability block', send: (c) => c.post(`${room}/availability-blocks`).send({ startDatetime: '2030-01-01T09:00:00Z', endDatetime: '2030-01-02T09:00:00Z', reasonCode: 'OTHER' }) },
+      { name: 'cancel availability block', send: (c) => c.post(`${API}/availability-blocks/${sp.blockId}/cancel`) },
+      { name: 'PATCH room type', send: (c) => c.patch(`${API}/space-types/${sp.typeId}`).send({ name: 'Hijacked' }) },
+      { name: 'inactivate room type', send: (c) => c.post(`${API}/space-types/${sp.typeId}/inactivate`) },
+      { name: 'map room import', send: (c) => c.put(`${API}/space-imports/${sp.importId}/mapping`).send({ mapping: {} }) },
+      { name: 'commit room import', send: (c) => c.post(`${API}/space-imports/${sp.importId}/commit`) },
     ],
   };
 }
@@ -389,6 +445,16 @@ async function victim() {
     externalIdId: (await StudentExternalId.findOne({ tenantId: b.tenantId, studentId: kid.studentId }).lean())!._id,
   };
 
+  // Campus: a building with two floors, a room with a closure, and an uploaded room file.
+  const building = (await b.agent.post(`${API}/locations/${b.moh.locationId}/buildings`).send({ buildingName: 'Victim Block' }).expect(201)).body.data as { buildingId: string };
+  const floors = (await b.agent.post(`${API}/buildings/${building.buildingId}/floors/bulk`).send({ floors: [{ name: 'Ground' }, { name: 'First' }] }).expect(201)).body.data.floors as { floorId: string }[];
+  const roomTypes = (await b.agent.get(`${API}/space-types`).expect(200)).body.data as { spaceTypeId: string; code: string }[];
+  const typeId = roomTypes.find((t) => t.code === 'STANDARD_CLASSROOM')!.spaceTypeId;
+  const roomRow = (await b.agent.post(`${API}/physical-spaces`).send({ locationId: b.moh.locationId, buildingId: building.buildingId, floorId: floors[0]!.floorId, spaceTypeId: typeId, spaceName: 'Victim Room' }).expect(201)).body.data as { spaceId: string };
+  const block = (await b.agent.post(`${API}/physical-spaces/${roomRow.spaceId}/availability-blocks`).send({ startDatetime: new Date(Date.now() + 86_400_000).toISOString(), endDatetime: new Date(Date.now() + 2 * 86_400_000).toISOString(), reasonCode: 'CLEANING' }).expect(201)).body.data as { blockId: string };
+  const roomImport = (await b.agent.post(`${API}/space-imports`).field('locationId', b.moh.locationId).attach('file', Buffer.from('Name,Type\nR1,Standard Classroom\n'), { filename: 'rooms.csv', contentType: 'text/csv' }).expect(201)).body.data as { importId: string };
+  const spaces: SpaceIds = { buildingId: building.buildingId, floorId: floors[0]!.floorId, otherFloorId: floors[1]!.floorId, spaceId: roomRow.spaceId, blockId: block.blockId, importId: roomImport.importId, typeId };
+
   const academic: AcademicIds = {
     sessionId: session.academicSessionId,
     locationId: b.moh.locationId,
@@ -404,12 +470,12 @@ async function victim() {
     boardId: board.boardId,
     ruleVersionId: ruleVersion.ruleVersionId,
   };
-  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students };
+  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students, spaces };
 }
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent, StudentDocument, StudentTransferCertificate, StudentChangeRequest] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent, StudentDocument, StudentTransferCertificate, StudentChangeRequest, Building, Floor, SpaceType, PhysicalSpace, SpaceAvailabilityBlock, SpaceImport, SpaceImportRow, SpaceChangeLog, OutboxEvent] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 
@@ -423,7 +489,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
     const academicBefore = await academicSnapshot(b.tenantId);
 
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
     for (const call of [...reads, ...mutations]) {
       const res = await call.send(attacker.agent);
       expect(res.status, `${call.name} → ${res.status} ${JSON.stringify(res.body)}`).toBe(404);
@@ -471,7 +537,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('every protected route rejects an anonymous caller with 401', async () => {
     const b = await victim();
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
     for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/employees/code-availability', '/departments', '/designations']) {
@@ -492,7 +558,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
 
   it('Faculty, Staff and Parents are refused every mutation, even calling the API directly', async () => {
     const b = await victim();
-    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
+    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
     for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
       const user = await createUserAndLogin(b.tenantId, role);
       for (const call of mutations) {
@@ -524,7 +590,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('Parents cannot read any school or location data', async () => {
     const b = await victim();
     const parent = await createUserAndLogin(b.tenantId, 'PARENT');
-    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students });
+    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
     for (const call of reads) expect((await call.send(parent.agent)).status, call.name).toBe(403);
   });
 

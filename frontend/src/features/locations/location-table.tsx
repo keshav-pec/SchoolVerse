@@ -1,7 +1,6 @@
 import { Link } from 'react-router';
 import { LOCATION_TYPE_LABELS, type LocationDTO } from '@shared';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
-import { CampusAvatar } from '@/components/sv/campus-avatar';
 import { PrimaryBadge } from '@/components/sv/primary-badge';
 import { StatusPill } from '@/components/sv/status-pill';
 import { cn } from '@/lib/utils';
@@ -65,7 +64,6 @@ export function LocationTable({ items, schoolId, sort, onSort, currentPrimaryNam
               <tr key={l.locationId} className="hover:bg-canvas/60">
                 <td className="px-3 py-3">
                   <Link to={`/school-setup/locations/${l.locationId}`} className="group flex items-center gap-3 rounded-lg">
-                    <CampusAvatar code={l.locationCode} size="sm" />
                     <span className="min-w-0">
                       <span className="block max-w-[190px] truncate font-semibold text-ink group-hover:text-brand group-hover:underline">{l.displayName}</span>
                       {l.officialName && l.officialName !== l.displayName && <span className="block truncate text-xs text-muted">{l.officialName}</span>}
@@ -94,7 +92,6 @@ export function LocationTable({ items, schoolId, sort, onSort, currentPrimaryNam
       <ul className={cn('divide-y divide-line md:hidden', dimmed && 'opacity-60')} aria-label="School locations">
         {items.map((l) => (
           <li key={l.locationId} className="flex items-start gap-3 p-4">
-            <CampusAvatar code={l.locationCode} />
             <div className="min-w-0 flex-1">
               <Link to={`/school-setup/locations/${l.locationId}`} className="block truncate font-semibold text-ink hover:text-brand">
                 {l.displayName}

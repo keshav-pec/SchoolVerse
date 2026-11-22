@@ -16,4 +16,7 @@ export * from './schemas/identity';
 export * from './schemas/students';
 export * from './schemas/student-lifecycle';
 export * from './student-lifecycle-dto';
+export * from './spaces';
+export * from './space-dto';
+export * from './schemas/spaces';
 export * from './data-classification';

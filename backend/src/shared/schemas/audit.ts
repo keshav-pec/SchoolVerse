@@ -46,6 +46,13 @@ export const AUDIT_ENTITY_TYPES = [
   'promotion',
   'import',
   'student_export',
+  // Buildings, floors and rooms (Module 5)
+  'building',
+  'floor',
+  'physical_space',
+  'space_type',
+  'availability_block',
+  'space_import',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
