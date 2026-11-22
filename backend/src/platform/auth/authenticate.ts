@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
-import { permissionsFor } from '@shared';
 import { AppError } from '../../core/errors';
+import { effectivePermissions } from '../rbac/permission-providers';
 import type { UserDoc } from '../users/user.model';
 import { User } from '../users/user.model';
 import { ACCESS_COOKIE } from './cookies';
@@ -39,7 +39,7 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
     userId: user._id,
     tenantId: user.tenantId,
     role: user.role,
-    permissions: permissionsFor(user.role),
+    permissions: await effectivePermissions(user),
     sessionId: claims.sid,
     stepUpAt: session.stepUpAt ?? null,
   };

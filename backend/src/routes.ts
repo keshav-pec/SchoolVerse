@@ -4,6 +4,8 @@ import { env, isProd } from './config/env';
 import { mount, ok } from './core/http';
 import { academicRouter } from './modules/academic/academic.routes';
 import { auditRouter } from './modules/audit/audit.routes';
+import { financeRouter } from './modules/finance/finance.routes';
+import { parentFeesRouter } from './modules/finance/parent.routes';
 import { devRouter } from './modules/dependencies/dev.routes';
 import { locationRouter } from './modules/locations/location.routes';
 import { masterRouter } from './modules/master/master.routes';
@@ -47,6 +49,8 @@ mount(apiRouter, '', parentRouter);
 mount(apiRouter, '', studentRouter);
 mount(apiRouter, '', allocationRouter);
 mount(apiRouter, '', spaceRouter);
+mount(apiRouter, '/finance', financeRouter);
+mount(apiRouter, '', parentFeesRouter);
 mount(apiRouter, '/files', filesRouter);
 // The dev outbox shows the emails that would have been sent. Only when DEV_OUTBOX is on, and before the (authenticated) dev router.
 if (env.DEV_OUTBOX) mount(apiRouter, '/dev/outbox', outboxRouter);

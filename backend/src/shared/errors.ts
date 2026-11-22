@@ -215,6 +215,25 @@ export const ERROR_CODES = {
   ASSIGNMENT_NOT_ACTIVE: { status: 409, message: 'This assignment has already ended or was cancelled, so it cannot be changed.' },
   REPLACEMENT_INVALID: { status: 409, message: 'The replacement room cannot take over every section. Nothing was moved.' },
   ROLLOVER_SESSIONS_INVALID: { status: 422, message: 'Choose two different academic sessions to carry Home Classrooms from and to.' },
+
+  // Finance (Module 7)
+  PERIOD_CLOSED: { status: 409, message: 'This date falls in a period that is closed or has no open accounting period.' },
+  JOURNAL_UNBALANCED: { status: 422, message: 'The entry does not balance: money in must equal money out.' },
+  SOURCE_ALREADY_POSTED: { status: 409, message: 'This event was already posted to the books with different details.' },
+  ACCOUNT_NOT_POSTABLE: { status: 409, message: 'This account cannot take entries. Choose a detail account that is active.' },
+  PLAN_CONFLICT: { status: 409, message: 'Two fee plans match the same students. Change one of them first.' },
+  PLAN_VERSION_FROZEN: { status: 409, message: 'A published fee plan cannot be changed. Make a new version instead.' },
+  TAX_CODE_MISSING: { status: 422, message: 'This fee has no tax setting yet. Add a tax code to the fee head.' },
+  BILL_ALREADY_ISSUED: { status: 409, message: 'This bill was already issued. Issued bills never change; use a credit note.' },
+  APPROVAL_REQUIRED: { status: 409, message: 'This needs approval from another person first.' },
+  SELF_APPROVAL_BLOCKED: { status: 403, message: 'A different person has to approve your request.' },
+  FINANCE_CODE_TAKEN: { status: 409, message: 'This code is already in use.' },
+  FINANCE_RECORD_LOCKED: { status: 409, message: 'This record has been used, so this part of it cannot be changed. End or replace it instead.' },
+  IMMUTABLE_RECORD: { status: 500, message: 'This record can never be changed after it is saved.' },
+  PREVIEW_CHANGED: { status: 409, message: 'The numbers changed since you checked them. Check again before issuing.' },
+  IDEMPOTENCY_KEY_REQUIRED: { status: 400, message: 'Send an Idempotency-Key header so a retry cannot repeat this action.' },
+  FINANCE_NOT_READY: { status: 409, message: 'Finish the finance setup first (financial year, chart of accounts and fee heads).' },
+  ADJUSTMENT_INVALID: { status: 422, message: 'This adjustment is not valid for this bill.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

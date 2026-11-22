@@ -11,6 +11,7 @@ import { requestId } from './core/request-id';
 import { PUBLIC_UPLOAD_PREFIX, legacyDiskStorage, storage } from './core/storage/storage';
 import { createDocsRouter } from './docs/swagger';
 import { registerAcademicLocationDependency } from './modules/academic/register';
+import { registerFinanceDependencies } from './modules/finance/register';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
 import { registerStaffDependencies } from './modules/staff/register';
 import { registerSpaceDependencies } from './modules/spaces/register';
@@ -27,6 +28,7 @@ export function createApp() {
   registerStaffDependencies();
   registerStudentDependencies();
   registerSpaceDependencies();
+  registerFinanceDependencies();
 
   app.disable('x-powered-by');
   if (isProd) app.set('trust proxy', 1);

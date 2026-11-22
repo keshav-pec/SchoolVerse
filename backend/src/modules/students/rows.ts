@@ -10,5 +10,3 @@ export function endPatch(row: { effectiveFrom: string }, lastDay: string): { eff
 
 /** The last day of something that stops on `date`: the day before. */
 export const dayBefore = (date: string) => addDays(date, -1);
-
-export const liveFilter = (today: string) => ({ cancelledAt: null, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: today } }] });

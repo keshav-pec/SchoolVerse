@@ -7,9 +7,6 @@ import { StatusDot } from './space-bits';
 /** What the middle of the workspace is showing. */
 export type Selection = { kind: 'all' } | { kind: 'building'; buildingId: string } | { kind: 'floor'; buildingId: string; floorId: string } | { kind: 'outdoor' };
 
-export const sameSelection = (a: Selection, b: Selection) =>
-  a.kind === b.kind && (a.kind === 'building' || a.kind === 'floor' ? a.buildingId === (b as typeof a).buildingId : true) && (a.kind === 'floor' ? a.floorId === (b as typeof a).floorId : true);
-
 function Row({ active, depth, onClick, children, label }: { active: boolean; depth: number; onClick: () => void; children: React.ReactNode; label: string }) {
   return (
     <button

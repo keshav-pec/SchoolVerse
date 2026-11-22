@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ClientSession } from 'mongoose';
+import { logger } from '../../core/logger';
+import { runEnrollmentHooks } from './hooks';
 import {
   AUTO_ROLL,
   type AssignSectionData,
@@ -479,6 +481,7 @@ export async function createEnrollmentInTx(
     studentId: input.studentId,
     metadata: { className: input.offering.displayName, sessionCode: input.session.code },
   });
+  await runEnrollmentHooks({ ctx, db, enrollment, offering: input.offering }, (key, err) => logger.warn({ err, hook: key }, 'enrollment hook failed'));
   return enrollment;
 }
 

@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import type {
   AdmissionNumberPreviewDTO,
   AdmissionNumberSettingsDTO,
-  DuplicateCheckResultDTO,
   EnrollmentDTO,
   FacultyStudentListDTO,
   FacultyStudentSummaryDTO,
@@ -163,10 +162,6 @@ export const useAttention = (args: { academicSessionId?: string; locationId?: st
     enabled,
     staleTime: 30_000,
   });
-
-export function useDuplicateCheck() {
-  return useMutation({ mutationFn: (body: object) => api.post<DuplicateCheckResultDTO>('/students/duplicate-check', body) });
-}
 
 export function useValidateSubjects(enrollmentId: string | undefined) {
   return useMutation({ mutationFn: (subjectOfferingIds: string[]) => api.post<SubjectSelectionResultDTO>(`/student-enrollments/${enrollmentId}/subjects/validate-selection`, { subjectOfferingIds }) });

@@ -176,7 +176,7 @@ export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: stri
   await exitEmployee(ctx, manoj.employeeId, exitEmployeeSchema.parse({ exitDate: '2026-06-30', exitReasonCategory: 'RESIGNATION', note: 'Relocated to another city.' }));
 
   // ── the two demo logins belong to people; the admin login does not
-  for (const [email, employee] of [['faculty@greenfield.demo', priya], ['staff@greenfield.demo', rohan]] as const) {
+  for (const [email, employee] of [['faculty@greenfield.demo', priya], ['staff@greenfield.demo', rohan], ['accounts@greenfield.demo', gurpreet]] as const) {
     await User.updateOne({ _id: input.userIdsByEmail[email], tenantId: ctx.tenantId }, { $set: { personId: employee.personId } });
   }
   await seedIdentityDemo(ctx, { faculty: [priya, harpreet, neha, rajiv], staff: [rohan, gurpreet], pendingLogin: neha, requester: { employee: priya, userId: input.userIdsByEmail['faculty@greenfield.demo']! } });

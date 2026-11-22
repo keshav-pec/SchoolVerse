@@ -19,6 +19,7 @@ import { Employee } from '../modules/staff/employee.model';
 import { Department, Designation } from '../modules/staff/master.model';
 import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
+import { seedFinanceDemo, wipeFinanceTenant } from '../modules/finance/finance.seed';
 import { seedSpacesDemo } from '../modules/spaces/spaces.seed';
 import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../modules/spaces/space.models';
 import { seedStudentsDemo } from '../modules/students/students.seed';
@@ -130,6 +131,9 @@ const DEMO_TENANTS: DemoTenant[] = [
       { email: 'faculty@greenfield.demo', fullName: 'Priya Sharma', role: 'FACULTY' },
       { email: 'staff@greenfield.demo', fullName: 'Rohan Gill', role: 'STAFF' },
       { email: 'parent@greenfield.demo', fullName: 'Simran Kaur', role: 'PARENT' },
+      // Finance job bundles (Module 7): Staff logins, not new roles.
+      { email: 'accounts@greenfield.demo', fullName: 'Gurpreet Kaur', role: 'STAFF' },
+      { email: 'approver@greenfield.demo', fullName: 'Neelam Approver', role: 'STAFF' },
     ],
   },
   {
@@ -170,6 +174,7 @@ async function wipeTenant(tenantId: string) {
   await Promise.all([...documents, ...exports, ...studentDocuments, ...studentExports].map((row) => privateStorage.remove(row.objectKey)));
   // Audit events are append-only through Mongoose, so remove demo rows via the raw collection.
   await AuditEvent.collection.deleteMany({ tenantId });
+  await wipeFinanceTenant(tenantId);
   await Promise.all([
     School.deleteMany({ tenantId }),
     SchoolIdentifier.deleteMany({ tenantId }),
@@ -282,6 +287,8 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
         log(`    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
         await seedStudentLifecycleDemo(ctx, { students: students.created, nextSessionId: academic.nextSessionId });
         const campus = await seedSpacesDemo(ctx, { mohaliId: byCode('MOH') });
+        const finance = await seedFinanceDemo(ctx, { mohaliId: byCode('MOH'), userIdsByEmail });
+        log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, Class VIII plan for ${finance.students} students, a sibling concession, a late-fee rule; accounts@ is the Accountant, approver@ the Approver`);
         log(`    🏫 Mohali campus: Main Academic Block with ${campus.rooms} rooms and spaces (a small room, a large room, one with no seat count)`);
         log('    👪 Parent portal: parent@greenfield.demo has two children; one pending invitation; one removed access; one student leaving; one Transfer Certificate waiting for dues');
       }

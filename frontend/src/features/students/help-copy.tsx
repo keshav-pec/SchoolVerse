@@ -127,12 +127,6 @@ export const PORTAL_FLAG_HELP: ReactNode = (
 
 // ───────────────────────────────────────────────────────────── labels
 
-export const RELATIONSHIP_HINTS: Record<string, string> = {
-  Father: 'Usually the primary contact',
-  Mother: 'Usually the primary contact',
-  'Legal Guardian': 'Has legal care of the student',
-};
-
 export const FIX_LABELS: Record<string, string> = {
   ADD_SECTION: 'Choose Section',
   ADD_GUARDIAN: 'Add Parent',

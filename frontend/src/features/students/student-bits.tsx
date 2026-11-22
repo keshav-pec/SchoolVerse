@@ -38,13 +38,6 @@ export function placementText(classSection: ClassSectionDTO | null, rollNumber: 
 
 export const todayIso = () => new Date().toLocaleDateString('en-CA');
 
-/** `YYYY-MM-DD` for a date `n` days from today. */
-export function daysFromToday(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toLocaleDateString('en-CA');
-}
-
 export function fullName(first: string, last: string) {
   return `${first} ${last}`.trim();
 }

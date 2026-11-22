@@ -393,3 +393,59 @@ export const STUDENT_DTO_ALLOWED_CLASSES = {
   adminProfile: ['INTERNAL'],
   adminProfilePersonal: ['INTERNAL', 'PERSONAL', 'RESTRICTED'],
 } as const satisfies Record<string, readonly DataClass[]>;
+
+// ───────────────────────────────────────────────────────────── Finance (Module 7)
+
+/**
+ * Finance field classes. Money that belongs to ONE student (bills, ledger rows, payments) is PERSONAL: only staff with finance
+ * permission and the child's own linked parents see it. Bank account numbers, tax identity and approval payloads are RESTRICTED:
+ * they never appear in a DTO, only (masked) as the last four digits. A test fails when a stored field has no class here.
+ */
+const mark = (cls: DataClass, ...fields: string[]) => Object.fromEntries(fields.map((f) => [f, cls])) as Record<string, DataClass>;
+const IDS = mark('INTERNAL', 'schoolId', 'legalEntityId');
+
+export const FINANCE_DATA_CLASSIFICATION = {
+  finance_legal_entity: { ...mark('INTERNAL', 'schoolId', 'name', 'legalForm', 'gstin', 'gstRegistered', 'stateCode', 'address', 'currency', 'fyStartMonth', 'status'), ...mark('RESTRICTED', 'pan') },
+  finance_access_grant: { ...IDS, ...mark('INTERNAL', 'userId', 'bundles', 'locationIds', 'grantedBy') },
+  financial_year: { ...IDS, ...mark('INTERNAL', 'code', 'startDate', 'endDate') },
+  accounting_period: { ...IDS, ...mark('INTERNAL', 'financialYearId', 'fyCode', 'code', 'month', 'startDate', 'endDate', 'state', 'stateChangedAt', 'stateChangedBy') },
+  chart_account: { ...IDS, ...mark('INTERNAL', 'code', 'name', 'type', 'parentId', 'normalBalance', 'systemRole', 'isPostable', 'status') },
+  finance_bank_account: { ...IDS, ...mark('INTERNAL', 'label', 'bankName', 'holderName', 'last4', 'ifsc', 'purpose', 'glAccountId', 'locationIds', 'status'), ...mark('RESTRICTED', 'accountNumberEnc') },
+  cash_account: { ...IDS, ...mark('INTERNAL', 'label', 'glAccountId', 'locationIds', 'status') },
+  journal_entry: { ...IDS, ...mark('INTERNAL', 'number', 'accountingDate', 'periodId', 'eventType', 'sourceKey', 'linesHash', 'sourceType', 'sourceId', 'memo', 'totalPaise', 'locationIds', 'studentIds', 'accountIds', 'reversesId', 'postedBy', 'correlationId') },
+  journal_line: { ...IDS, ...mark('INTERNAL', 'journalId', 'lineNo', 'accountId', 'accountingDate', 'debitPaise', 'creditPaise', 'locationId', 'studentId', 'employeeId', 'vendorId') },
+  finance_approval_policy: { ...IDS, ...mark('INTERNAL', 'action', 'thresholdPaise', 'needsDifferentApprover', 'enabled', 'description') },
+  finance_approval_request: { ...IDS, ...mark('INTERNAL', 'action', 'entityType', 'entityId', 'amountPaise', 'summary', 'impact', 'reason', 'requestedBy', 'decision', 'decidedBy', 'decisionReason', 'decidedAt', 'usedAt', 'differentApproverRequired'), ...mark('RESTRICTED', 'payload') },
+  finance_audit_event: { ...IDS, ...mark('INTERNAL', 'actorId', 'actorRole', 'action', 'entityType', 'entityId', 'before', 'after', 'correlationId', 'metadata', 'occurredAt') },
+  finance_counter: { ...IDS, ...mark('INTERNAL', 'key', 'seq') },
+  tax_code: { ...IDS, ...mark('INTERNAL', 'code', 'name', 'category', 'rateBps', 'hsnSac', 'note', 'status') },
+  fee_head: { ...IDS, ...mark('INTERNAL', 'code', 'name', 'category', 'incomeAccountId', 'taxCodeId', 'priceMode', 'isRecurring', 'isOptional', 'isRefundableDeposit', 'status') },
+  fee_plan: { ...IDS, ...mark('INTERNAL', 'name', 'sessionId', 'appliesTo', 'autoAssign', 'status') },
+  fee_plan_version: { ...IDS, ...mark('INTERNAL', 'planId', 'versionNo', 'effectiveFrom', 'state', 'approvedBy', 'approvedAt', 'publishedBy', 'publishedAt') },
+  fee_plan_item: { ...IDS, ...mark('INTERNAL', 'planId', 'versionId', 'feeHeadId', 'amountPaise', 'frequency', 'dueDay', 'graceDays', 'prorationMethod', 'isOptional', 'sortOrder') },
+  student_fee_assignment: { ...IDS, ...mark('INTERNAL', 'studentId', 'enrollmentId', 'sessionId', 'locationId', 'classOfferingId', 'planVersionId', 'optionalItemIds', 'effectiveFrom', 'effectiveTo', 'source', 'state') },
+  concession_policy: { ...IDS, ...mark('INTERNAL', 'name', 'type', 'valueType', 'value', 'feeHeadIds', 'stackMode', 'capPercentBps', 'validFrom', 'validTo', 'needsEvidence', 'needsApproval', 'status') },
+  student_concession_award: { ...IDS, ...mark('INTERNAL', 'studentId', 'policyId', 'status', 'validFrom', 'validTo', 'evidenceFileId', 'requestedBy', 'decidedBy', 'decidedAt'), ...mark('PERSONAL', 'value', 'reason', 'decisionReason') },
+  late_fee_policy: { ...IDS, ...mark('INTERNAL', 'feeHeadId', 'kind', 'period', 'value', 'graceDays', 'capPaise', 'status') },
+  billing_run: { ...IDS, ...mark('INTERNAL', 'sessionId', 'locationId', 'classIds', 'periodKey', 'issueDate', 'dueDate', 'state', 'counts', 'totalPaise', 'checkpoint', 'commitKey', 'validatedAt', 'issuedAt') },
+  billing_run_row: { ...IDS, ...mark('INTERNAL', 'runId', 'rowNo', 'studentId', 'enrollmentId', 'classOfferingId', 'status', 'reasonCode', 'reasonText', 'documentId', 'skipReason'), ...mark('PERSONAL', 'totalPaise') },
+  fee_document: {
+    ...IDS, ...mark('INTERNAL', 'number', 'studentId', 'enrollmentId', 'locationId', 'sessionId', 'classOfferingId', 'kind', 'periodKey', 'issueDate', 'dueDate', 'graceDays', 'overdueAfter', 'status', 'planVersionId', 'runId', 'parentDocumentId', 'journalId'),
+    ...mark('PERSONAL', 'basePaise', 'discountPaise', 'taxableValuePaise', 'cgstPaise', 'sgstPaise', 'igstPaise', 'totalPaise', 'paidPaise', 'creditedPaise', 'balancePaise'),
+  },
+  fee_document_line: {
+    ...IDS, ...mark('INTERNAL', 'documentId', 'studentId', 'lineNo', 'feeHeadId', 'feeItemId', 'description', 'periodKey', 'qty', 'taxCodeId', 'rateBps', 'priceMode', 'incomeAccountId', 'isDeposit', 'explanation', 'concessionAwardIds', 'originalLineId', 'sourceKey'),
+    ...mark('PERSONAL', 'basePaise', 'discountPaise', 'taxableValuePaise', 'cgstPaise', 'sgstPaise', 'igstPaise', 'taxPaise', 'totalPaise'),
+  },
+  student_ledger_entry: { ...IDS, ...mark('INTERNAL', 'studentId', 'date', 'kind', 'documentId', 'collectionId', 'journalId', 'description', 'seq'), ...mark('PERSONAL', 'amountPaise') },
+  financial_adjustment: { ...IDS, ...mark('INTERNAL', 'documentId', 'newDocumentId', 'studentId', 'type', 'status', 'approvalId'), ...mark('PERSONAL', 'amountPaise', 'reason') },
+} as const satisfies Record<string, Record<string, DataClass>>;
+
+/** Finance DTO kinds. A bank account DTO is INTERNAL only: the number is a masked last four. A parent sees PERSONAL money of their own child, never RESTRICTED. */
+export const FINANCE_DTO_ALLOWED_CLASSES = {
+  bankAccount: ['INTERNAL'],
+  legalEntity: ['INTERNAL'],
+  approvalRequest: ['INTERNAL'],
+  staffBill: ['INTERNAL', 'PERSONAL'],
+  parentBill: ['INTERNAL', 'PERSONAL'],
+} as const satisfies Record<string, readonly DataClass[]>;

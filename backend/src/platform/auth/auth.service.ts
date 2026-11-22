@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { permissionsFor, type LoginInput, type SessionDTO, type SignupInput } from '@shared';
+import { type LoginInput, type SessionDTO, type SignupInput } from '@shared';
+import { effectivePermissions } from '../rbac/permission-providers';
 import { env } from '../../config/env';
 import { AppError } from '../../core/errors';
 import { logger } from '../../core/logger';
@@ -65,8 +66,8 @@ async function issueSession(user: Pick<UserDoc, '_id' | 'tenantId' | 'role'>, me
   return { session, tokens: { accessToken, refreshToken } satisfies IssuedTokens };
 }
 
-function buildSession(user: UserDoc, tenant: TenantDoc): SessionDTO {
-  return { user: toUserDTO(user), tenant: toTenantDTO(tenant), permissions: permissionsFor(user.role) };
+async function buildSession(user: UserDoc, tenant: TenantDoc): Promise<SessionDTO> {
+  return { user: toUserDTO(user), tenant: toTenantDTO(tenant), permissions: await effectivePermissions(user) };
 }
 
 async function loadTenantOrThrow(tenantId: string) {
@@ -127,7 +128,7 @@ export async function signup(input: SignupInput, meta: ClientMeta) {
   }
 
   const { tokens } = await issueSession(created.user, meta);
-  return { session: buildSession(created.user, created.tenant), tokens };
+  return { session: await buildSession(created.user, created.tenant), tokens };
 }
 
 // ───────────────────────────────────────────────────────────── login
@@ -151,7 +152,7 @@ export async function login(input: LoginInput, meta: ClientMeta) {
 
   const { tokens } = await issueSession(user, meta);
   logger.info({ userId: user._id, tenantId: user.tenantId }, 'User signed in');
-  return { session: buildSession({ ...user, lastLoginAt: now }, tenant), tokens };
+  return { session: await buildSession({ ...user, lastLoginAt: now }, tenant), tokens };
 }
 
 // ───────────────────────────────────────────────────────────── refresh (rotation + reuse detection)
@@ -195,7 +196,7 @@ export async function refresh(rawToken: string | undefined, meta: ClientMeta) {
     throw new RefreshRaceLost();
   }
 
-  return { session: buildSession(user, tenant), tokens };
+  return { session: await buildSession(user, tenant), tokens };
 }
 
 // ───────────────────────────────────────────────────────────── logout

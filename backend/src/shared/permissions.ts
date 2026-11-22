@@ -58,6 +58,47 @@ export const PERMISSIONS = [
   'space:export', // download room exports
   'space:audit:view', // a room's history
   'space:section_assignment:manage', // Home Classroom assignments (Part 3)
+  // Finance (Module 7). Nobody but the School Admin has these by default; Staff get them through job bundles (FINANCE_BUNDLES).
+  'finance:view',
+  'finance:setup:manage',
+  'finance:fee_plan:manage',
+  'finance:billing:create',
+  'finance:billing:approve',
+  'finance:concession:manage',
+  'finance:concession:approve',
+  'finance:adjustment:create',
+  'finance:adjustment:approve',
+  'finance:collection:record',
+  'finance:collection:verify',
+  'finance:receipt:cancel',
+  'finance:refund:request',
+  'finance:refund:approve',
+  'finance:refund:disburse',
+  'finance:reconciliation:manage',
+  'finance:cashier:shift',
+  'finance:cashier:supervise',
+  'finance:accounting:view',
+  'finance:accounting:post',
+  'finance:period:close',
+  'finance:expense:record',
+  'finance:expense:approve',
+  'finance:vendor:manage',
+  'finance:tax:manage',
+  'finance:tax:review',
+  'finance:report:view',
+  'finance:report:export',
+  'finance:audit:view',
+  'finance:access:manage',
+  'payroll:setup:manage',
+  'payroll:structure:manage',
+  'payroll:input:manage',
+  'payroll:run:prepare',
+  'payroll:run:approve',
+  'payroll:disbursement:manage',
+  'payroll:disbursement:verify',
+  'payroll:salary:view_sensitive',
+  'payroll:settlement:manage',
+  'payroll:report:view',
   // Setup & governance
   'setup:manage',
   'audit:view',
@@ -87,4 +128,42 @@ export function permissionsFor(role: Role): Permission[] {
 
 export function hasPermission(role: Role, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
+}
+
+// ───────────────────────────────────────────────────────────── Finance job bundles (Module 7)
+
+/**
+ * Finance work is given as job bundles, not new roles. A School Admin gives a Staff user one or more bundles; the server reads them
+ * from the database on every request, so removing a bundle takes effect at once. A bundle never widens the user's campus scope.
+ */
+export const FINANCE_BUNDLES = ['COLLECTOR', 'FEE_MANAGER', 'ACCOUNTANT', 'PAYROLL_OFFICER', 'APPROVER', 'AUDITOR'] as const;
+export type FinanceBundle = (typeof FINANCE_BUNDLES)[number];
+
+const PAYROLL_ALL = PERMISSIONS.filter((p) => p.startsWith('payroll:'));
+const ALL_APPROVE = PERMISSIONS.filter((p) => p.endsWith(':approve'));
+
+export const FINANCE_BUNDLE_PERMISSIONS: Record<FinanceBundle, readonly Permission[]> = {
+  COLLECTOR: ['finance:view', 'finance:collection:record', 'finance:cashier:shift'],
+  FEE_MANAGER: ['finance:view', 'finance:fee_plan:manage', 'finance:billing:create', 'finance:concession:manage', 'finance:adjustment:create'],
+  ACCOUNTANT: [
+    'finance:view', 'finance:accounting:view', 'finance:accounting:post', 'finance:reconciliation:manage', 'finance:collection:verify', 'finance:refund:request',
+    'finance:expense:record', 'finance:vendor:manage', 'finance:tax:manage', 'finance:tax:review', 'finance:report:view', 'finance:report:export', 'finance:cashier:supervise',
+  ],
+  PAYROLL_OFFICER: ['finance:view', ...PAYROLL_ALL.filter((p) => p !== 'payroll:run:approve')],
+  APPROVER: ['finance:view', ...ALL_APPROVE, 'finance:period:close'],
+  AUDITOR: ['finance:view', 'finance:audit:view', 'finance:accounting:view', 'finance:report:view'],
+};
+
+/** What each bundle lets a person do, in plain words (the Access tab shows these). */
+export const FINANCE_BUNDLE_LABELS: Record<FinanceBundle, { label: string; help: string }> = {
+  COLLECTOR: { label: 'Cashier', help: 'Can take fees and manage their own cash shift.' },
+  FEE_MANAGER: { label: 'Fee Manager', help: 'Can set up fee plans, prepare bills and manage concessions.' },
+  ACCOUNTANT: { label: 'Accountant', help: 'Can verify payments, match the bank, record expenses, manage tax and see reports.' },
+  PAYROLL_OFFICER: { label: 'Payroll Officer', help: 'Can prepare salaries and payslips. Cannot approve a payroll run.' },
+  APPROVER: { label: 'Approver', help: 'Can approve bills, refunds, credit notes, payroll and period close.' },
+  AUDITOR: { label: 'Auditor', help: 'Can look at finance records and the audit trail. Cannot change anything.' },
+};
+
+export function bundlePermissions(bundles: readonly FinanceBundle[]): Permission[] {
+  return [...new Set(bundles.flatMap((b) => FINANCE_BUNDLE_PERMISSIONS[b]))];
 }
