@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) and **Module 4: Student & Parent Management** ([Module4.md](Module4.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) and **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -33,6 +33,15 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 | 2 | Student & Family screens: persistent year and campus, Quick Add and Full Admission Form, student profile, Families, subject choice checker, Needs Attention, My Students | ✅ Done |
 | 3 | Parent access, documents, transfers, promotion, exit and TC, readmission, CSV import, student context service (API) | ✅ Done |
 | 4 | Parent portal, lifecycle screens (documents, parent access, transfers and exit with TC, promotion, imports, change requests), full Needs Attention, e2e, child-data security gate | ✅ Done |
+
+**Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md))
+
+| Part | Scope | Status |
+|---|---|---|
+| 1 | Buildings, floors, rooms, space types and inheritance, generators, copy and import, bulk edit, availability blocks, guarded move and assisted archive, location scope (API) | ✅ Done |
+| 2 | Space Setup workspace: campus tree, quick building and floor setup, room generator, inline inspector with autosave and undo, bulk edit, room types, import and export, availability, assisted archive, first Needs Attention | ✅ Done |
+| 3 | Home Classroom allocation, rollover, integration APIs and hardening (API) | Not started |
+| 4 | Classroom Allocation screens, full Needs Attention, QA and security gate | Not started |
 
 ## Layout
 
@@ -191,6 +200,21 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 
 **Things that differ from the plan.** The **Full Admission Form** has 11 steps: Student, Personal, Admission, Previous School, Class, Subjects, Parent, Emergency, Address, Notes, Review. The "Subject choice pending" list filter is not a filter: those students are on Needs Attention → Subjects. Part 2 added two read-only backend routes the screens need: `GET /students/attention` and `GET /guardians`.
 
+## Space Setup screens (Module 5, Part 2)
+
+| Route | Who | What |
+|---|---|---|
+| `/spaces` | School Admin (everything) · Faculty (**Rooms**, read-only) | One workspace. **Left:** the campus tree (Building → Floor, status dot and room count, search). **Middle:** the rooms of what you picked, with search, type, status and timetable filters. **Right:** the room panel (`?room=<id>`). Under 1280px the panel opens in a side drawer. |
+| `/spaces/attention` | School Admin | **Needs Attention** in three groups: Space Setup (seats missing, seats above what the room holds), Hierarchy (an active room under a closed floor or building) and Availability (rooms that are unavailable or restricted). **Fix** opens the room. A count badge sits in the sidebar. Allocation groups arrive with Classroom Allocation (Part 4). |
+| `/spaces/types` | School Admin | Room types and their defaults. Changing a default says how many rooms use it. |
+| `/spaces/imports`, `/spaces/imports/:importId` | School Admin | Upload a CSV (template download), match columns, review "N ready, M need attention" with the problems grouped and the fix for each, then import the ready rows. |
+
+**Build Campus Structure** (side panel): step 1 adds a building and several floors at once ("Ground, First, Second"); step 2 is the Room Generator (range with optional prefix, or a list of names, with a live preview of the exact codes and clashes in red); **Copy A Floor** shifts numbers (101–110 → 201–210); **Outdoor** adds a playground or ground. An empty campus offers three cards: Build Campus Structure, Import Spreadsheet, Copy From Another Location.
+
+**Room panel.** First: Name, Type, Seats for classes, Status, Home section. **More settings**: physical and exam capacity, features, "suitable for", can be timetabled, can be a home classroom. A value that comes from the type shows "from Standard Classroom" and **Customize**; only then is it editable, and "Use … default" goes back. Safe fields save when you leave them ("Saving…" → "Saved") with an **Undo** toast; if someone else changed the room the field says so and offers **Reload**. **More actions** holds Rename, Change Type (shows what changes first), Make Unavailable, Move Room (refused for a room with history, with an "Archive instead" button) and Archive (explains what depends on the room, never a raw error).
+
+**Things that differ from the plan.** The year and campus bar is the Module 4 bar (same stored choice). Needs Attention is built on the room list because `GET /spaces/attention` belongs to Part 3, so "unavailable soon" means a room whose status is Temporarily unavailable or Restricted. Searching a room by the section that uses it comes with Part 3. The two archive buttons "Choose A Replacement Room" and "Archive After This School Year" are shown switched off and say they arrive with Classroom Allocation. Wording for these screens is in `frontend/src/features/spaces/help-copy.tsx`.
+
 ## Lifecycle screens and the parent portal (Module 4, Part 4)
 
 | Route | Who | What |
@@ -251,9 +275,9 @@ A sample file for the import is `backend/seed/students-sample.csv` (with a few m
 
 | Suite | Where | Run |
 |---|---|---|
-| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students`, `parent-access` and `student-lifecycle` (Module 4), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
+| Backend (~6 s) | `backend/tests/` — one file per area: `unit` (rules, state machine, RBAC matrix, audit diff), `platform` (auth, users, tenant-scope plugin, API docs), `school`, `locations`, `security` (tenant isolation, permissions, audit API), `employees` and `identity` and `employee-data` (Module 3), `students`, `parent-access` and `student-lifecycle` (Module 4), `spaces` (Module 5), `setup`, `master`, `academic-setup`, `academic-rules`, `academic-lifecycle` | `npm test` |
 | Frontend | `frontend/src/features/*/__tests__/` (RTL, mocked `fetch`) | `npm test` |
-| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice; parent portal and lifecycle: invite → activation link → the parent sees only that child, a sibling on one login, removing one child's access, another child's URL is Not found, teacher scope, sample CSV import with a safe re-run, promotion to 2027-28, withdraw → TC (locked) → re-admit, campus move; students visual pass at 1280px and 390px). The `people-*` and `students-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
+| E2E | `frontend/e2e/` (Playwright: signup → wizard → overview, location lifecycle, Faculty read-only, academics: build → publish → activate, clone, close, Faculty read-only; people: onboarding → first sign-in, transfer and history, exit signs out, reveal with step-up, documents, name-change approval, Faculty blocked; visual pass at 1280px and 390px → `e2e/screenshots/`; students: add a student with a new parent, add a brother under the same parent, change a section and read both in History, an invalid language choice; parent portal and lifecycle: invite → activation link → the parent sees only that child, a sibling on one login, removing one child's access, another child's URL is Not found, teacher scope, sample CSV import with a safe re-run, promotion to 2027-28, withdraw → TC (locked) → re-admit, campus move; students visual pass at 1280px and 390px; spaces: build a block with three floors and generate ten rooms, edit seats inline and undo, bulk set seats for ten rooms, import a CSV and not import it twice, archive a room that is in use). The `people-*`, `students-*` and `spaces-*` specs run first, on purpose: they use the seeded Mohali campus and session that the later specs replace. | `npm run e2e` |
 
 Backend test files share one in-memory MongoDB replica set (`tests/global-setup.ts`) and each gets its own database, so they run in parallel. Everything a test needs (agents, the PRD §19 seed school, `expectError`, `auditFor`) is in `tests/helpers.ts`.
 Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" backend/tests`).

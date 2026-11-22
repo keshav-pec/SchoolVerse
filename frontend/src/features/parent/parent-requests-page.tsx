@@ -121,7 +121,7 @@ export function ParentRequestsPage() {
   const cancel = useParentMutation((id: string) => api.post(`/parent/change-requests/${id}/cancel`), { success: 'Request cancelled.' });
   const items = q.data ?? [];
   return (
-    <div className="space-y-4">
+    <div className="max-w-3xl space-y-4">
       <h1 className="text-[22px] font-extrabold">Requests</h1>
       <AskForAChange />
       <section aria-label="Earlier requests" className="rounded-card border border-line bg-white shadow-card">

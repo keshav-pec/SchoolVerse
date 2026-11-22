@@ -1,10 +1,10 @@
-import { useEffect, useMemo, type ComponentType } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
-import type { ParentChildDTO } from '@shared';
-import { FileText, House, Inbox, LogOut, UserRound } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { LogoMark } from '@/components/sv/logo';
-import { useAuth, useSession } from '@/lib/auth';
+import { ROLE_LABELS, type ParentChildDTO } from '@shared';
+import { FileText, House, Inbox, PanelLeftClose, PanelLeftOpen, UserRound } from 'lucide-react';
+import { CollapsedTip, UserMenu } from '@/layouts/app-shell';
+import { SchoolLogo } from '@/components/sv/school-logo';
+import { useSession } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { rememberChildren, useParentChildren } from './api';
 
@@ -72,52 +72,115 @@ const TABS: Tab[] = [
   { label: 'Requests', Icon: Inbox, to: () => '/parent/requests', match: (p) => p.startsWith('/parent/requests') },
 ];
 
-/** The parent portal's own simple layout: no admin sidebar, large touch targets, works from 360px wide. */
+function crumbFor(pathname: string) {
+  return TABS.find((t) => t.match(pathname))?.label ?? 'Home';
+}
+
+/**
+ * The parent portal's own layout. It follows the staff AppShell: a navy sidebar and a top bar with the breadcrumb and account menu
+ * from `md` up. On phones the same links are a bottom bar with large touch targets, and it works from 360px wide.
+ */
 export function ParentLayout() {
   const session = useSession();
-  const { logout } = useAuth();
   const location = useLocation();
   const { selectedId } = useChildSelection();
-
-  const signOut = async () => {
-    await logout();
-    window.location.replace('/login');
-  };
+  // Same remembered choice as the staff sidebar.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sv.sidebar.collapsed') === '1');
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      localStorage.setItem('sv.sidebar.collapsed', c ? '0' : '1');
+      return !c;
+    });
 
   return (
-    <div className="min-h-dvh bg-canvas pb-20 sm:pb-6">
-      <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-3 px-4">
-          <LogoMark className="size-8" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold">{session.tenant.name}</p>
-            <p className="truncate text-xs text-muted">Parent portal · {session.user.fullName}</p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => void signOut()} className="min-h-11">
-            <LogOut /> Sign Out
-          </Button>
-        </div>
-        <nav aria-label="Parent portal" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white sm:static sm:border-t-0">
-          <ul className="mx-auto grid max-w-3xl grid-cols-4 sm:flex sm:gap-1 sm:px-4">
+    <div className={cn('min-h-dvh bg-canvas pb-24 transition-[padding] duration-200 md:pb-0', collapsed ? 'md:pl-[72px]' : 'md:pl-[248px]')}>
+      <a href="#main" className="sr-only z-50 rounded-lg bg-white px-4 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3">
+        Skip to content
+      </a>
+
+      {/* Phones: a bar pinned to the bottom. Desktop: the sidebar. It sits outside the header because a blurred parent would trap `fixed`. */}
+      <aside
+        className={cn(
+          'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(15,23,42,0.06)] md:inset-y-0 md:right-auto md:flex md:flex-col md:border-t-0 md:bg-navy md:pt-5 md:pb-3 md:text-navy-text md:shadow-none md:transition-[width] md:duration-200',
+          collapsed ? 'md:w-[72px] md:px-2' : 'md:w-[248px] md:px-3',
+        )}
+      >
+        <CollapsedTip label={`${session.tenant.name} – Home`} active={collapsed}>
+        <NavLink
+          to="/parent"
+          end
+          aria-label={`${session.tenant.name} – Home`}
+          className={cn(
+            'mx-1 hidden items-center gap-2.5 rounded-[10px] border border-[#284469] bg-navy-700 px-3 py-3 transition-colors hover:bg-navy-600 focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:outline-none md:flex',
+            collapsed && 'md:mx-0 md:justify-center md:px-0',
+          )}
+        >
+          <SchoolLogo schoolName={session.tenant.name} />
+          <span className={cn('min-w-0', collapsed && 'md:hidden')}>
+            <span className="block truncate text-[13px] font-semibold text-white" title={session.tenant.name}>
+              {session.tenant.name}
+            </span>
+            <span className="block text-[11px] text-navy-muted">{ROLE_LABELS[session.user.role]} workspace</span>
+          </span>
+        </NavLink>
+        </CollapsedTip>
+        <nav aria-label="Parent portal" className="md:mt-3 md:flex-1">
+          <ul className="mx-auto grid max-w-3xl grid-cols-4 md:block md:max-w-none md:space-y-0.5">
             {TABS.map((t) => {
               const active = t.match(location.pathname);
               return (
                 <li key={t.label}>
+                  <CollapsedTip label={t.label} active={collapsed}>
                   <NavLink
                     to={t.to(selectedId)}
                     aria-current={active ? 'page' : undefined}
-                    className={cn('flex min-h-14 flex-col items-center justify-center gap-0.5 px-3 text-xs font-semibold sm:min-h-11 sm:flex-row sm:gap-2 sm:text-sm', active ? 'text-brand sm:border-b-2 sm:border-brand' : 'text-muted hover:text-ink')}
+                    className={cn(
+                      'relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-3 text-xs font-semibold transition-colors',
+                      'md:min-h-11 md:flex-row md:justify-start md:gap-3 md:rounded-lg md:px-3.5 md:text-sm md:font-medium',
+                      collapsed && 'md:justify-center md:px-0',
+                      active
+                        ? 'text-brand md:bg-navy-600 md:text-white md:before:absolute md:before:inset-y-2.5 md:before:left-0 md:before:w-[3px] md:before:rounded-full md:before:bg-[#5084ff]'
+                        : 'text-muted hover:text-ink md:text-navy-text md:hover:bg-white/5 md:hover:text-white',
+                    )}
                   >
-                    <t.Icon className="size-5 sm:size-4" />
-                    {t.label}
+                    <t.Icon className="size-5 shrink-0 md:size-[18px]" />
+                    <span className={cn(collapsed && 'md:sr-only')}>{t.label}</span>
                   </NavLink>
+                  </CollapsedTip>
                 </li>
               );
             })}
           </ul>
         </nav>
+      </aside>
+
+      <header className="sticky top-0 z-30 flex h-[62px] items-center gap-3 border-b border-line bg-white/85 px-4 backdrop-blur sm:h-[72px] sm:px-8">
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="hidden size-10 place-items-center rounded-lg text-ink hover:bg-ink/5 md:grid"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <PanelLeftOpen className="size-5" /> : <PanelLeftClose className="size-5" />}
+        </button>
+        <SchoolLogo schoolName={session.tenant.name} className="md:hidden" />
+        <p className="min-w-0 flex-1 truncate text-sm font-bold md:hidden">{session.tenant.name}</p>
+        <nav aria-label="Breadcrumb" className="hidden min-w-0 truncate text-sm text-muted md:block">
+          {session.tenant.name}
+          <span className="mx-2" aria-hidden="true">
+            /
+          </span>
+          <span className="font-semibold text-ink" aria-current="page">
+            {crumbFor(location.pathname)}
+          </span>
+        </nav>
+        <div className="ml-auto">
+          <UserMenu />
+        </div>
       </header>
-      <main id="main" className="mx-auto w-full max-w-3xl px-4 py-4">
+
+      <main id="main" className="mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-8 sm:py-6">
         <Outlet />
       </main>
     </div>

@@ -43,6 +43,14 @@ schoolRouter.get('/current', requirePermission('school:view'), async (req, res) 
   ok(res, school ? schoolService.toSchoolDTOFor(ctx, school) : null);
 });
 
+/**
+ * Just the school's display name and logo, for the sidebar and top bar. Open to every signed-in role (parents and teachers
+ * included) because it holds nothing private: the logo file itself is already a public, unguessable URL.
+ */
+schoolRouter.get('/current/branding', async (req, res) => {
+  ok(res, await schoolService.getSchoolBranding(contextOf(req)));
+});
+
 /** Live School code check + suggestion. Works before the school exists (onboarding). */
 schoolRouter.get('/code-availability', requirePermission('school:edit'), validate({ query: schoolCodeAvailabilityQuerySchema }), async (req, res) => {
   ok(res, await schoolService.checkSchoolCodeAvailability(contextOf(req), res.locals.query as SchoolCodeAvailabilityQuery));

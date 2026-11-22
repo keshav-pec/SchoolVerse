@@ -35,13 +35,19 @@ const UI_MESSAGES: Record<string, string> = {
   STUDENT_READ_ONLY: 'This student has left the school. The record is kept for history and cannot be changed.',
   VERSION_CONFLICT: 'Someone else changed this just now. Reload the page and try again.',
   ADMISSION_NUMBER_TAKEN: 'This admission number is already used by another student. Choose a different one.',
+  SPACE_CODE_TAKEN: 'Another room at this campus already uses this code. Change the code, or leave it empty and we will make one.',
+  BUILDING_CODE_TAKEN: 'Another building at this campus already uses this code. Change it, or leave it empty.',
+  FLOOR_CODE_TAKEN: 'This building already has a floor with that code. Choose a different name.',
+  GUARDED_MOVE_REQUIRED: 'This room has history, so it cannot be moved. Archive this room and add a new one, so old records stay correct.',
+  SPACE_TYPE_IN_USE: 'Active rooms still use this type. Change their type first, then try again.',
+  CONFIRMATION_REQUIRED: 'Please confirm this change first. It changes how the room is used.',
   ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
 
 /** `ACADEMIC_HAS_DEPENDENCIES` lists what depends on the item, so say it. */
 function dependencyLines(error: ApiError): string[] {
-  const deps = (error.details as { dependencies?: { message?: string }[] } | undefined)?.dependencies;
-  return Array.isArray(deps) ? deps.map((d) => d.message).filter((m): m is string => Boolean(m)) : [];
+  const deps = (error.details as { dependencies?: { message?: string; label?: string }[] } | undefined)?.dependencies;
+  return Array.isArray(deps) ? deps.map((d) => d.message ?? d.label).filter((m): m is string => Boolean(m)) : [];
 }
 
 /** A problem the screen found itself (a missing choice, a mismatch). Its message is already written for the person. */

@@ -143,3 +143,17 @@ export function RequireStudentPermission({ permission }: { permission: Permissio
   if (!can(permission)) return <NotFoundPage />;
   return <Outlet />;
 }
+
+/** Campus: anyone with `space:view` (admins, and Faculty who see the rooms they can use). Staff and Parents get the restricted page. */
+export function RequireSpaceAccess() {
+  const { can } = useAuth();
+  if (!can('space:view')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}
+
+/** Room setup pages (types, attention, imports) need a stronger permission. Others see Not Found: the page does not admit it exists. */
+export function RequireSpacePermission({ permission }: { permission: Permission }) {
+  const { can } = useAuth();
+  if (!can(permission)) return <NotFoundPage />;
+  return <Outlet />;
+}

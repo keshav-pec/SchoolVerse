@@ -28,6 +28,8 @@ export function mockApi(role: Role | null, handlers: Record<string, MockResponse
   const calls: FetchMock['calls'] = [];
   const all: Record<string, MockResponse | Handler> = {
     'GET /api/v1/auth/me': role ? { data: sessionFor(role) } : { status: 401, error: { code: 'UNAUTHENTICATED', message: 'Please sign in to continue.' } },
+    // Every portal's sidebar asks for the school's name and logo.
+    'GET /api/v1/schools/current/branding': { data: { displayName: null, logoUrl: null } },
     ...handlers,
   };
   vi.stubGlobal(

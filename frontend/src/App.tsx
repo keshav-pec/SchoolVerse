@@ -13,6 +13,12 @@ import { PeopleSettingsPage } from '@/features/people/settings-page';
 import { ParentLayout } from '@/features/parent/parent-layout';
 import { ParentChildPage, ParentDocumentsPage, ParentHomePage } from '@/features/parent/parent-pages';
 import { ParentRequestsPage } from '@/features/parent/parent-requests-page';
+import { SpaceAttentionPage } from '@/features/spaces/attention-page';
+import { SpaceImportPage } from '@/features/spaces/import-page';
+import { SpaceImportsPage } from '@/features/spaces/imports-page';
+import { SpacesLayout } from '@/features/spaces/spaces-layout';
+import { SpaceTypesPage } from '@/features/spaces/types-page';
+import { WorkspacePage } from '@/features/spaces/workspace-page';
 import { AttentionPage } from '@/features/students/attention-page';
 import { ExitsPage } from '@/features/students/exits-page';
 import { ImportPage } from '@/features/students/import-page';
@@ -57,6 +63,8 @@ import {
   RequirePeopleAdmin,
   RequireSetupAccess,
   RequireSetupComplete,
+  RequireSpaceAccess,
+  RequireSpacePermission,
 } from '@/routes/guards';
 
 function SetupHome() {
@@ -213,6 +221,32 @@ const router = createBrowserRouter([
                         children: [
                           { index: true, element: <FamiliesPage /> },
                           { path: ':personId', element: <FamilyPage /> },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    path: '/spaces',
+                    element: <RequireSpaceAccess />,
+                    children: [
+                      {
+                        element: <SpacesLayout />,
+                        children: [
+                          { index: true, element: <WorkspacePage /> },
+                          {
+                            element: <RequireSpacePermission permission="space:edit" />,
+                            children: [
+                              { path: 'attention', element: <SpaceAttentionPage /> },
+                              { path: 'types', element: <SpaceTypesPage /> },
+                            ],
+                          },
+                          {
+                            element: <RequireSpacePermission permission="space:import" />,
+                            children: [
+                              { path: 'imports', element: <SpaceImportsPage /> },
+                              { path: 'imports/:importId', element: <SpaceImportPage /> },
+                            ],
+                          },
                         ],
                       },
                     ],

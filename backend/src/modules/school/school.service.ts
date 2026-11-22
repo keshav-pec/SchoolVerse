@@ -7,6 +7,7 @@ import {
   SCHOOL_CODE_TAKEN_MESSAGE,
   SCHOOL_PROFILE_FIELDS,
   suggestSchoolCodeBase,
+  type SchoolBrandingDTO,
   type SchoolCodeAvailabilityDTO,
   type SchoolCodeAvailabilityQuery,
   type CreateIdentifierData,
@@ -98,6 +99,12 @@ export async function getSchoolOrThrow(ctx: ServiceContext, schoolId: string, se
 /** The tenant's School Master, or `null` before onboarding has created it. */
 export async function getCurrentSchool(ctx: ServiceContext) {
   return School.findOne({ tenantId: ctx.tenantId }).lean<SchoolDoc>();
+}
+
+/** The school's name and logo only, safe for any signed-in user of the tenant. `null` fields before onboarding has created the school. */
+export async function getSchoolBranding(ctx: ServiceContext): Promise<SchoolBrandingDTO> {
+  const school = await School.findOne({ tenantId: ctx.tenantId }).select('displayName logoUrl').lean<Pick<SchoolDoc, 'displayName' | 'logoUrl'>>();
+  return { displayName: school?.displayName ?? null, logoUrl: school?.logoUrl ?? null };
 }
 
 // ───────────────────────────────────────────────────────────── create / update

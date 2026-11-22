@@ -147,6 +147,23 @@ describe('School profile (SCH-LOC-01)', () => {
     await parent.agent.get(`${API}/schools/${school.schoolId}`).expect(403);
     await parent.agent.get(`${API}/schools/current`).expect(403);
   });
+
+  it('every signed-in role can read just the school name and logo (branding), and nothing else', async () => {
+    const { agent, session } = await signupAdmin();
+    expect((await agent.get(`${API}/schools/current/branding`).expect(200)).body.data).toEqual({ displayName: null, logoUrl: null });
+    const school = await createSchool(agent);
+    const uploaded = await agent.post(`${API}/schools/${school.schoolId}/logo`).attach('logo', PNG, 'logo.png').expect(200);
+
+    for (const role of ['PARENT', 'FACULTY', 'STAFF'] as const) {
+      const user = await createUserAndLogin(session.tenant.tenantId, role);
+      const body = (await user.agent.get(`${API}/schools/current/branding`).expect(200)).body.data;
+      expect(body).toEqual({ displayName: school.displayName, logoUrl: uploaded.body.data.logoUrl });
+    }
+    // Another school's logo never leaks across tenants, and signed-out callers get nothing.
+    const other = await signupAdmin();
+    expect((await other.agent.get(`${API}/schools/current/branding`).expect(200)).body.data.logoUrl).toBeNull();
+    await request(app).get(`${API}/schools/current/branding`).expect(401);
+  });
 });
 
 describe('Official identifiers (PRD §8)', () => {

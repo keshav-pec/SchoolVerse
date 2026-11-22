@@ -13,6 +13,8 @@ import {
   ListChecks,
   LogOut,
   DoorOpen,
+  DoorClosed,
+  Shapes,
   FileUp,
   Rocket,
   MapPinned,
@@ -24,6 +26,7 @@ import {
   UsersRound,
   Users,
 } from 'lucide-react';
+import { SchoolLogo } from '@/components/sv/school-logo';
 import { Avatar } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -36,7 +39,7 @@ import {
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Tooltip } from '@/components/ui/tooltip';
 import { usePendingRequestCount } from '@/features/people/api';
-import { useCurrentSchool } from '@/features/school-profile/api';
+import { useSpaceAttentionCount } from '@/features/spaces/attention';
 import { useAttentionCount } from '@/features/students/api';
 import { usePendingStudentRequests } from '@/features/students/lifecycle-api';
 import { useAuth, useSession } from '@/lib/auth';
@@ -53,7 +56,7 @@ interface NavItem {
   /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
   when?: (user: { role: string; personId: string | null }) => boolean;
   /** Shows the pending change-request count beside the label. */
-  badge?: 'requests' | 'attention' | 'student-requests';
+  badge?: 'requests' | 'attention' | 'student-requests' | 'space-attention';
 }
 
 interface NavSection {
@@ -130,6 +133,16 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    label: 'Campus',
+    items: [
+      { to: '/spaces', label: 'Space Setup', Icon: Building2, permission: 'space:edit', end: true },
+      { to: '/spaces', label: 'Rooms', Icon: DoorClosed, permission: 'space:view', hideWith: 'space:edit', end: true },
+      { to: '/spaces/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'space:edit', badge: 'space-attention' },
+      { to: '/spaces/types', label: 'Room Types', Icon: Shapes, permission: 'space:edit' },
+      { to: '/spaces/imports', label: 'Imports', Icon: FileUp, permission: 'space:import' },
+    ],
+  },
+  {
     label: 'People',
     items: [
       {
@@ -177,6 +190,11 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/spaces/attention', ['Campus', 'Needs Attention']],
+  ['/spaces/types', ['Campus', 'Room Types']],
+  ['/spaces/imports/', ['Campus', 'Imports', 'Import']],
+  ['/spaces/imports', ['Campus', 'Imports']],
+  ['/spaces', ['Campus', 'Space Setup']],
   ['/students/attention', ['Students', 'Needs Attention']],
   ['/students/requests', ['Students', 'Parent requests']],
   ['/students/promotion', ['Students', 'Promotion']],
@@ -217,7 +235,7 @@ function readOpenGroups(): string[] {
 }
 
 /** Shows a styled tooltip to the right of an icon, only while the sidebar is collapsed. */
-function CollapsedTip({ label, active, children }: { label: string; active: boolean; children: React.ReactElement }) {
+export function CollapsedTip({ label, active, children }: { label: string; active: boolean; children: React.ReactElement }) {
   return active ? (
     <Tooltip content={label} side="right">
       {children}
@@ -257,13 +275,8 @@ function SidebarContent({
   }, [pathname]);
   const pending = usePendingRequestCount(can('employee:approve_changes'));
   const attention = useAttentionCount(can('student:view'), {});
+  const spaceAttention = useSpaceAttentionCount(can('space:edit'));
   const studentRequests = usePendingStudentRequests(can('student:approve_changes'));
-  // Same cached query the profile page updates, so a new, replaced or removed logo shows here at once.
-  const savedLogo = useCurrentSchool(can('school:view')).data?.logoUrl ?? null;
-  // A logo whose file can't be loaded falls back to the icon instead of a broken image.
-  const [brokenLogo, setBrokenLogo] = useState<string | null>(null);
-  const logoUrl = savedLogo && savedLogo !== brokenLogo ? savedLogo : null;
-
   return (
     <div
       className={cn(
@@ -288,23 +301,7 @@ function SidebarContent({
           )
         }
       >
-        <span
-          className={cn(
-            'grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg',
-            logoUrl ? 'bg-white' : 'bg-brand/30 text-brand-300',
-          )}
-        >
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={`${session.tenant.name} logo`}
-              className="size-full object-cover object-center"
-              onError={() => setBrokenLogo(logoUrl)}
-            />
-          ) : (
-            <Building2 className="size-[18px]" />
-          )}
-        </span>
+        <SchoolLogo schoolName={session.tenant.name} />
         <div className={cn('min-w-0', collapsed && 'hidden')}>
           <p className="truncate text-[13px] font-semibold text-white" title={session.tenant.name}>
             {session.tenant.name}
@@ -334,6 +331,8 @@ function SidebarContent({
                   sum +
                   (item.badge === 'attention'
                     ? (attention.data ?? 0)
+                    : item.badge === 'space-attention'
+                      ? spaceAttention
                     : item.badge === 'student-requests'
                       ? (studentRequests.data ?? 0)
                       : item.badge === 'requests'
@@ -407,6 +406,14 @@ function SidebarContent({
                           {attention.data}
                         </span>
                       )}
+                      {!collapsed && badge === 'space-attention' && spaceAttention > 0 && (
+                        <span
+                          className="ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy"
+                          aria-label={`${spaceAttention} rooms need attention`}
+                        >
+                          {spaceAttention}
+                        </span>
+                      )}
                       {!collapsed && badge === 'student-requests' && (studentRequests.data ?? 0) > 0 && (
                         <span
                           className={cn(
@@ -442,7 +449,8 @@ function SidebarContent({
   );
 }
 
-function UserMenu() {
+/** The avatar + Sign out menu in the top bar. Shared with the parent portal so every portal looks the same. */
+export function UserMenu() {
   const session = useSession();
   const { logout } = useAuth();
 

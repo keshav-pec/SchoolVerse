@@ -97,7 +97,7 @@ test('admin invites a new parent; the parent opens the activation link, signs in
   await parent.waitForURL(/\/login/);
   await login(parent, PARENT_EMAIL);
   await parent.waitForURL(/\/parent/);
-  await expect(parent.getByRole('heading', { level: 1, name: 'Tara Bhatia' })).toBeVisible();
+  await expect(parent.getByLabel('Selected child').getByRole('heading', { name: 'Tara Bhatia' })).toBeVisible();
   // One child: no switcher, and no admin controls at all.
   await expect(parent.getByRole('tablist', { name: 'Choose a child' })).toHaveCount(0);
   await expect(parent.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
@@ -131,7 +131,7 @@ test('admin adds a sibling under the same parent; the parent’s switcher shows 
   const switcher = parent.getByRole('tablist', { name: 'Choose a child' });
   await expect(switcher.getByRole('tab')).toHaveCount(2);
   await switcher.getByRole('tab', { name: /kabir bhatia/i }).click();
-  await expect(parent.getByRole('heading', { level: 1, name: 'Kabir Bhatia' })).toBeVisible();
+  await expect(parent.getByLabel('Selected child').getByRole('heading', { name: 'Kabir Bhatia' })).toBeVisible();
   await expect(parent).toHaveURL(new RegExp(`child=${family.second}`));
   await parent.context().close();
 });
@@ -150,7 +150,7 @@ test('admin removes access for one child: the parent’s next load drops that ch
   await expectToast(page, /can no longer see/i);
 
   await parent.reload();
-  await expect(parent.getByRole('heading', { level: 1, name: 'Tara Bhatia' })).toBeVisible();
+  await expect(parent.getByLabel('Selected child').getByRole('heading', { name: 'Tara Bhatia' })).toBeVisible();
   await expect(parent.getByRole('tablist', { name: 'Choose a child' })).toHaveCount(0);
   await parent.goto(`/parent/children/${family.second}`);
   await expect(parent.getByRole('heading', { name: /you no longer have access to this child/i })).toBeVisible();

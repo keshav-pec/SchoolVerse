@@ -113,6 +113,12 @@ export interface SchoolSetupDTO {
   completedAt: string | null;
 }
 
+/** What every signed-in user may see about the school: its name and logo (shown in the sidebar and top bar). */
+export interface SchoolBrandingDTO {
+  displayName: string | null;
+  logoUrl: string | null;
+}
+
 export interface SchoolDTO {
   schoolId: string;
   tenantId: string;

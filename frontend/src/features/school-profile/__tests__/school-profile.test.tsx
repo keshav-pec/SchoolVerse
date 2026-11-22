@@ -77,6 +77,7 @@ describe('School Profile page', () => {
     mockApi('SCHOOL_ADMIN', {
       ...base,
       [`GET ${API}/schools/current`]: { data: { ...school, logoUrl: '/uploads/t1/school-logos/old.png' } },
+      [`GET ${API}/schools/current/branding`]: { data: { displayName: school.displayName, logoUrl: '/uploads/t1/school-logos/old.png' } },
       [`GET ${API}/profile-change-requests`]: { data: [] },
       [`POST ${API}/schools/${SCHOOL_ID}/logo`]: { data: { ...school, logoUrl: LOGO } },
     });

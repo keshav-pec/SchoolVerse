@@ -25,17 +25,17 @@ export default defineConfig({
     viewport: { width: 1280, height: 860 },
   },
   projects: [
-    // The people and students specs use the seeded Mohali campus and the seeded ACTIVE session (Maths for VIII-A/B, Class VIII
+    // The people, students and spaces specs use the seeded Mohali campus and the seeded ACTIVE session (Maths for VIII-A/B, Class VIII
     // sections, Class VI languages). The academics and locations specs later replace that session and deactivate Mohali, so
     // these run first, on purpose.
     {
       name: 'people',
-      testMatch: /(people|students)-.*\.spec\.ts/,
+      testMatch: /(people|students|spaces)-.*\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
     },
     {
       name: 'chromium',
-      testIgnore: /(people|students)-.*\.spec\.ts/,
+      testIgnore: /(people|students|spaces)-.*\.spec\.ts/,
       dependencies: ['people'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
     },

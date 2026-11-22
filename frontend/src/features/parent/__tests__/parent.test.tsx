@@ -59,27 +59,65 @@ function portal(route: string, extra: Record<string, MockResponse> = {}, kids = 
 }
 
 describe('Parent portal (Module 4, Part 4)', () => {
-  it('the child switcher shows both children, starts with the first, and switching shows the other child', async () => {
+  it('Home has a hero greeting and quick links like the other portals; the switcher shows both children and switching changes the card', async () => {
     portal('/parent');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Riya Sharma' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /good (morning|afternoon|evening)/i })).toBeInTheDocument();
+    const card = await screen.findByLabelText('Selected child');
+    expect(within(card).getByRole('heading', { name: 'Riya Sharma' })).toBeInTheDocument();
+    expect(card).toHaveTextContent('VIII-A');
     const switcher = screen.getByRole('tablist', { name: 'Choose a child' });
     expect(within(switcher).getAllByRole('tab')).toHaveLength(2);
     expect(within(switcher).getByRole('tab', { name: /riya sharma/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByLabelText('Class and section')).toHaveTextContent('VIII-A');
-    expect(screen.getByLabelText('Subjects')).toHaveTextContent('Maths');
+
+    const actions = screen.getByRole('region', { name: /what you can do/i });
+    expect(within(actions).getAllByRole('link').map((l) => l.getAttribute('href'))).toEqual([`/parent/children/${RIYA}`, `/parent/documents?child=${RIYA}`, '/parent/requests']);
 
     await userEvent.setup().click(within(switcher).getByRole('tab', { name: /arjun sharma/i }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Arjun Sharma' })).toBeInTheDocument();
+    expect(await within(await screen.findByLabelText('Selected child')).findByRole('heading', { name: 'Arjun Sharma' })).toBeInTheDocument();
     expect(within(switcher).getByRole('tab', { name: /arjun sharma/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('My Child shows the full cards: class, subjects, primary parent', async () => {
+    portal(`/parent/children/${RIYA}`);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Riya Sharma' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Class and section')).toHaveTextContent('VIII-A');
+    expect(screen.getByLabelText('Subjects')).toHaveTextContent('Maths');
+    expect(screen.getByLabelText('Primary parent')).toHaveTextContent('Simran Kaur');
   });
 
   it('shows no admin controls: only the four portal links, no sidebar, no edit buttons', async () => {
     portal('/parent');
-    await screen.findByRole('heading', { level: 1, name: 'Riya Sharma' });
+    await screen.findByLabelText('Selected child');
     const nav = screen.getByRole('navigation', { name: 'Parent portal' });
     expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Home', 'My Child', 'Documents', 'Requests']);
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
     for (const name of [/add student/i, /edit/i, /remove access/i, /change section/i, /delete/i]) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+  });
+
+  it('the portal nav is outside the blurred header, so the phone bar can pin to the bottom of the screen', async () => {
+    portal('/parent');
+    await screen.findByLabelText('Selected child');
+    // backdrop-filter on an ancestor turns `fixed` into "fixed to that ancestor", which is what hid the bar before.
+    const nav = screen.getByRole('navigation', { name: 'Parent portal' });
+    expect(within(screen.getByRole('banner')).queryByRole('navigation', { name: 'Parent portal' })).not.toBeInTheDocument();
+    expect(nav.closest('aside')?.className).toMatch(/(^|\s)fixed(\s|$)/);
+  });
+
+  it('shows the logo the school set, even though parents cannot open the school profile', async () => {
+    const api = portal('/parent', { [`GET ${API}/schools/current/branding`]: { data: { displayName: 'Greenfield Public School', logoUrl: '/uploads/t1/school-logos/logo.png' } } });
+    await screen.findByLabelText('Selected child');
+    const logos = await screen.findAllByRole('img', { name: /logo/i });
+    expect(logos.length).toBeGreaterThan(0);
+    for (const img of logos) expect(img).toHaveAttribute('src', '/uploads/t1/school-logos/logo.png');
+    expect(api.callsTo('/schools/current', 'GET').every((c) => c.path.endsWith('/branding'))).toBe(true);
+  });
+
+  it('has the same top bar as the other portals: a breadcrumb and the account menu', async () => {
+    portal('/parent/documents');
+    await screen.findByRole('heading', { name: 'Documents' });
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(crumbs).toHaveTextContent('Documents');
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: /open account menu/i })).toBeInTheDocument();
   });
 
   it('another family’s child is "Not found"; a child whose access was removed during the visit says so', async () => {
