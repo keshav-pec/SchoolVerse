@@ -1,5 +1,7 @@
 import { Schema, model } from 'mongoose';
 import {
+  ASSIGNMENT_SOURCES,
+  HOME_ASSIGNMENT_STATUSES,
   BLOCK_REASON_CODES,
   BLOCK_STATUSES,
   BLOCK_TYPES,
@@ -13,6 +15,8 @@ import {
   SPACE_STATUSES,
   STRUCTURE_STATUSES,
   SUITABILITY_TAG_CODES,
+  type AssignmentSource,
+  type AssignmentStoredStatus,
   type BlockReasonCode,
   type BlockStatus,
   type BlockType,
@@ -380,3 +384,93 @@ const outboxSchema = new Schema<OutboxEventDoc>(
 outboxSchema.index({ tenantId: 1, createdAt: -1 });
 outboxSchema.plugin(tenantScopePlugin);
 export const OutboxEvent = model<OutboxEventDoc>('OutboxEvent', outboxSchema);
+
+// ───────────────────────────────────────────────────────────── Home Classroom assignments (Part 3)
+
+export interface CapacityOverrideDoc {
+  reason: string;
+  byUserId: string;
+  at: Date;
+  /** What the numbers were when the admin chose to keep the room, so a section that grows later is flagged again. */
+  strength: number | null;
+  capacity: number | null;
+}
+
+/**
+ * A section's Home Classroom for a period. Effective-dated: changing a room ends the old row the day before and starts a new one;
+ * nothing is overwritten. `effectiveTo: null` means "until the session ends". Whether a row is planned, running or over is worked out
+ * from the dates; `status` only records that it was ended (a last day was set) or cancelled (it never took effect).
+ */
+export interface SectionSpaceAssignmentDoc extends BaseDoc, AuditFields {
+  tenantId: string;
+  academicSessionId: string;
+  sectionOfferingId: string;
+  physicalSpaceId: string;
+  /** Copied from the section, so the location scope needs no second lookup. */
+  locationId: string;
+  /** No Shift module yet: an opaque label. With no shift, any overlapping assignment to the same room is a clash. */
+  shiftId: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  assignmentSource: AssignmentSource;
+  status: AssignmentStoredStatus;
+  capacityOverride: CapacityOverrideDoc | null;
+  assignedBy: string | null;
+  reason: string | null;
+  version: number;
+}
+
+const capacityOverrideSchema = new Schema<CapacityOverrideDoc>(
+  { reason: { type: String, required: true, maxlength: 300 }, byUserId: { type: String, required: true }, at: { type: Date, required: true }, strength: { type: Number, default: null }, capacity: { type: Number, default: null } },
+  { _id: false },
+);
+
+const assignmentSchema = new Schema<SectionSpaceAssignmentDoc>(
+  {
+    ...uuidPrimaryKey,
+    tenantId: { type: String, required: true, immutable: true },
+    academicSessionId: { type: String, required: true, immutable: true },
+    sectionOfferingId: { type: String, required: true, immutable: true },
+    physicalSpaceId: { type: String, required: true, immutable: true },
+    locationId: { type: String, required: true, immutable: true },
+    shiftId: { type: String, default: null },
+    effectiveFrom: { type: String, required: true },
+    effectiveTo: { type: String, default: null },
+    assignmentSource: { type: String, enum: ASSIGNMENT_SOURCES, default: 'MANUAL' },
+    status: { type: String, enum: HOME_ASSIGNMENT_STATUSES, default: 'ACTIVE' },
+    capacityOverride: { type: capacityOverrideSchema, default: null },
+    assignedBy: { type: String, default: null },
+    reason: { type: String, default: null, maxlength: 300 },
+    version: { type: Number, default: 1 },
+    ...auditFields,
+  },
+  baseSchemaOptions('section_space_assignments'),
+);
+assignmentSchema.index({ tenantId: 1, sectionOfferingId: 1, effectiveFrom: 1 });
+assignmentSchema.index({ tenantId: 1, physicalSpaceId: 1, effectiveFrom: 1 });
+assignmentSchema.index({ tenantId: 1, academicSessionId: 1, locationId: 1, status: 1 });
+assignmentSchema.plugin(tenantScopePlugin);
+export const SectionSpaceAssignment = model<SectionSpaceAssignmentDoc>('SectionSpaceAssignment', assignmentSchema);
+
+/**
+ * One row per room and per section. A transaction that adds an assignment bumps these rows first, so two requests for the same room
+ * (or the same section) collide: the database makes one of them retry, and the retry sees what the other saved.
+ */
+export interface SpaceAssignmentLockDoc extends BaseDoc {
+  tenantId: string;
+  key: string;
+  counter: number;
+}
+
+const lockSchema = new Schema<SpaceAssignmentLockDoc>(
+  {
+    ...uuidPrimaryKey,
+    tenantId: { type: String, required: true, immutable: true },
+    key: { type: String, required: true, immutable: true },
+    counter: { type: Number, default: 0 },
+  },
+  baseSchemaOptions('space_assignment_locks'),
+);
+lockSchema.index({ tenantId: 1, key: 1 }, { unique: true });
+lockSchema.plugin(tenantScopePlugin);
+export const SpaceAssignmentLock = model<SpaceAssignmentLockDoc>('SpaceAssignmentLock', lockSchema);

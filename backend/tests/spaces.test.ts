@@ -1,15 +1,20 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type {
+  AssignmentChangeResultDTO, BulkAssignmentResultDTO, HomeClassroomListDTO, ReadinessDTO, RecommendationSetDTO, ReplaceRoomResultDTO, RolloverCommitDTO, RolloverSummaryDTO, SectionHomeClassroomDTO, SpaceAttentionDTO, SpaceReportDTO,
   ArchiveSpaceResultDTO, AvailabilityBlockDTO, AvailabilityCheckDTO, BuildingDTO, BulkEditResultDTO, CopyPreviewDTO, FloorDTO, GeneratePreviewDTO, GenerateResultDTO,
   SpaceContextDTO, SpaceDTO, SpaceImportCommitDTO, SpaceImportDTO, SpaceListDTO, SpaceTreeDTO, SpaceTypeDTO, TypeConversionPreviewDTO,
 } from '@shared';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import { registerSpaceDependency, unregisterSpaceDependency } from '../src/modules/spaces/dependencies';
-import { OutboxEvent, PhysicalSpace, SpaceChangeLog } from '../src/modules/spaces/space.models';
+import { ClassOffering, SectionOffering } from '../src/modules/academic/offering.model';
+import { AcademicSession } from '../src/modules/academic/session.model';
+import { addDays } from '../src/core/dates';
+import { StudentSectionAssignment } from '../src/modules/students/student.models';
+import { OutboxEvent, PhysicalSpace, SectionSpaceAssignment, SpaceChangeLog } from '../src/modules/spaces/space.models';
 import { SecurityEvent } from '../src/platform/identity/security-event.model';
 import { seedDemo } from '../src/scripts/seed';
-import { addActiveEmployee, API, createUserAndLogin, data, expectError, get, loginAs, seededSchool, staffSchool, useTestDatabase, type Agent } from './helpers';
+import { addActiveEmployee, API, createUserAndLogin, data, expectError, forceStatus, get, loginAs, seededSchool, staffSchool, today, useTestDatabase, type Agent } from './helpers';
 
 useTestDatabase();
 
@@ -475,6 +480,584 @@ describe('audit, events, export and access (SPACE-27, 73, 76, 77)', () => {
     expect(byCode['109']).toMatchObject({ academicCapacity: 60 });
     expect(byCode['PLAY']!.buildingId).toBeNull();
     expect(byCode['ACT']!.academicCapacity).toBeNull();
+  });
+});
+
+// ───────────────────────────────────────────────────────────── Module 5, Part 3: Home Classrooms
+
+/** A school with Class VIII (sections A, B, C) in an active 2026-27 session and a Mohali campus with rooms of different sizes. */
+async function homeSchool() {
+  const t = await staffSchool();
+  const c = { locationId: t.moh.locationId };
+  const post = async <T>(path: string, body: unknown, status = 201) => {
+    const res = await t.agent.post(`${API}${path}`).send(body as object);
+    expect(res.status, JSON.stringify(res.body)).toBe(status);
+    return data(res) as T;
+  };
+  const building = await post<BuildingDTO>(`/locations/${c.locationId}/buildings`, { buildingName: 'Main Block', buildingCode: 'MAB' });
+  const { floors } = await post<{ floors: FloorDTO[] }>(`/buildings/${building.buildingId}/floors/bulk`, { floors: [{ name: 'Ground' }, { name: 'First' }] });
+  const floor = Object.fromEntries(floors.map((f) => [f.floorCode, f])) as Record<string, FloorDTO>;
+  const types = Object.fromEntries((await get<SpaceTypeDTO[]>(t, '/space-types')).map((x) => [x.code, x])) as Record<string, SpaceTypeDTO>;
+  const room = (name: string, seats: number | null, over: Record<string, unknown> = {}) =>
+    post<SpaceDTO>('/physical-spaces', { locationId: c.locationId, buildingId: building.buildingId, floorId: floor.F1!.floorId, spaceTypeId: types.STANDARD_CLASSROOM!.spaceTypeId, spaceName: name, roomNumber: name.replace(/\D/g, '') || undefined, academicCapacity: seats, physicalCapacity: seats ? seats + 4 : undefined, ...over });
+  /** Puts `n` students in a section the way Module 4 does: open placements, counted live. */
+  const fill = async (sectionId: string, n: number, from = '2026-04-01', classOfferingId = t.classOfferingId) => {
+    await StudentSectionAssignment.insertMany(Array.from({ length: n }, () => ({ _id: randomUUID(), tenantId: t.tenantId, studentId: randomUUID(), enrollmentId: randomUUID(), classOfferingId, sectionId, effectiveFrom: from, effectiveTo: null, cancelledAt: null })));
+  };
+  const assign = (sectionOfferingId: string, physicalSpaceId: string, extra: Record<string, unknown> = {}) => t.agent.post(`${API}/section-space-assignments`).send({ sectionOfferingId, physicalSpaceId, ...extra });
+  const give = async (sectionOfferingId: string, physicalSpaceId: string, extra: Record<string, unknown> = {}) => {
+    const res = await assign(sectionOfferingId, physicalSpaceId, extra);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return data(res) as AssignmentChangeResultDTO;
+  };
+  return { ...t, ...c, building, floor, types, post, room, fill, assign, give };
+}
+
+describe('Home Classroom assignment rules (SPACE-32 to 34, 37, 38)', () => {
+  it('QA SPACE-32: a section gets a room; the context shows it; dates default to today and the row is effective-dated', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    await h.fill(h.sections.A, 35);
+    const { assignment, warnings } = await h.give(h.sections.A, r.spaceId);
+    expect(assignment).toMatchObject({ phase: 'ACTIVE', source: 'MANUAL', effectiveTo: null, section: { label: '8-A', strength: 35 }, room: { spaceName: 'Room 101', academicCapacity: 40 }, status: 'ACTIVE', version: 1 });
+    expect(assignment.effectiveFrom).toBe(today());
+    expect(warnings).toEqual([]);
+    const ctx = await get<SpaceContextDTO>(h, `/physical-spaces/${r.spaceId}`);
+    expect(ctx.homeClassroom).toEqual({ sectionOfferingId: h.sections.A, label: '8-A' });
+    const now = await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom`);
+    expect(now.homeClassroom?.room.spaceName).toBe('Room 101');
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom?date=2026-03-01`)).homeClassroom).toBeNull();
+    expect((await get<HomeClassroomListDTO>(h, `/section-space-assignments?sectionOfferingId=${h.sections.A}`)).total).toBe(1);
+    expect((await get<HomeClassroomListDTO>(h, '/section-space-assignments?phase=current')).total).toBe(1);
+    expect((await get<HomeClassroomListDTO>(h, '/section-space-assignments?phase=planned')).total).toBe(0);
+  });
+
+  it('QA SPACE-33: one test per rule — inactive room, inactive floor, other campus, not eligible, overlap, wrong session, bad dates', async () => {
+    const h = await homeSchool();
+    const good = await h.room('Room 101', 40);
+    const off = await h.room('Room 102', 40);
+    await h.agent.post(`${API}/physical-spaces/${off.spaceId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    expectError(await h.assign(h.sections.A, off.spaceId), 409, 'ROOM_NOT_ACTIVE');
+    // The floor above is not active: the room itself is untouched.
+    const ground = await h.room('Room 001', 40, { floorId: h.floor.GF!.floorId });
+    await h.agent.post(`${API}/floors/${h.floor.GF!.floorId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    const parent = expectError(await h.assign(h.sections.A, ground.spaceId), 409, 'ROOM_PARENT_INACTIVE');
+    expect(parent.message).toMatch(/Ground is inactive/);
+    // A room at another campus.
+    const chdBuilding = await h.post<BuildingDTO>(`/locations/${h.chd.locationId}/buildings`, { buildingName: 'CHD Block' });
+    const chdFloor = (await h.post<{ floors: FloorDTO[] }>(`/buildings/${chdBuilding.buildingId}/floors/bulk`, { floors: [{ name: 'First' }] })).floors[0]!;
+    const far = await h.room('Far Room', 40, { locationId: h.chd.locationId, buildingId: chdBuilding.buildingId, floorId: chdFloor.floorId });
+    expectError(await h.assign(h.sections.A, far.spaceId), 409, 'ROOM_OTHER_CAMPUS');
+    // A lab and a playground cannot be a Home Classroom.
+    const lab = await h.room('Chem Lab', 30, { spaceTypeId: h.types.CHEMISTRY_LAB!.spaceTypeId });
+    expectError(await h.assign(h.sections.A, lab.spaceId), 409, 'ROOM_NOT_ELIGIBLE');
+    const play = await h.post<SpaceDTO>('/physical-spaces', { locationId: h.locationId, spaceTypeId: h.types.PLAYGROUND!.spaceTypeId, spaceName: 'Playground' });
+    expectError(await h.assign(h.sections.A, play.spaceId), 409, 'ROOM_NOT_ELIGIBLE');
+    // Wrong session, and dates outside the session or backwards.
+    expectError(await h.assign(h.sections.A, good.spaceId, { academicSessionId: randomUUID() }), 409, 'SECTION_NOT_IN_SESSION');
+    expectError(await h.assign(h.sections.A, good.spaceId, { effectiveFrom: '2025-01-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    expectError(await h.assign(h.sections.A, good.spaceId, { effectiveFrom: '2026-09-01', effectiveTo: '2026-08-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    expectError(await h.assign(h.sections.A, good.spaceId, { effectiveTo: '2028-01-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    // Overlap: B cannot take A's room; the message says who has it.
+    await h.give(h.sections.A, good.spaceId);
+    const clash = expectError(await h.assign(h.sections.B, good.spaceId), 409, 'ROOM_ALREADY_ASSIGNED');
+    expect(clash.message).toMatch(/8-A already uses Room 101/);
+    // The same section cannot have two rooms for the same dates unless it replaces.
+    const second = await h.room('Room 103', 40);
+    const exists = expectError(await h.assign(h.sections.A, second.spaceId), 409, 'HOME_CLASSROOM_EXISTS');
+    expect(exists.details).toMatchObject({ sameRoom: false, actions: ['REPLACE_ROOM'] });
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId })).toBe(1);
+    // A closed session is history.
+    await forceStatus(h.tenantId, h.sessionId, 'CLOSED');
+    expectError(await h.assign(h.sections.B, second.spaceId), 409, 'SESSION_READ_ONLY');
+  });
+
+  it('QA SPACE-34: a short room says so with the numbers and two ways out; "keep anyway" needs a reason and is audited', async () => {
+    const h = await homeSchool();
+    const small = await h.room('Room 110', 40);
+    await h.room('Room 109', 60);
+    await h.fill(h.sections.C, 42);
+    const short = expectError(await h.assign(h.sections.C, small.spaceId), 409, 'ROOM_TOO_SMALL');
+    expect(short.message).toBe('8-C has 42 students, but Room 110 holds 40.');
+    expect(short.details).toMatchObject({ sectionStrength: 42, roomCapacity: 40, shortBy: 2, actions: ['CHOOSE_LARGER_ROOM', 'KEEP_ROOM_ANYWAY'], suggestedRoom: { spaceName: 'Room 109' } });
+    expectError(await h.assign(h.sections.C, small.spaceId, { capacityOverride: { reason: '' } }), 400, 'VALIDATION_FAILED');
+    const kept = await h.give(h.sections.C, small.spaceId, { capacityOverride: { reason: 'Two students leave in May' } });
+    expect(kept.assignment.capacityOverride).toMatchObject({ reason: 'Two students leave in May', strength: 42, capacity: 40 });
+    expect(kept.warnings[0]).toMatchObject({ code: 'ROOM_TOO_SMALL' });
+    expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, action: 'section_space_assignment.capacity_override' })).toBe(1);
+    // A room with no seat count only warns.
+    const noSeats = await h.post<SpaceTypeDTO>('/space-types', { name: 'Activity Room', isSchedulable: true, isHomeClassroomEligible: true, defaultAcademicCapacity: null });
+    const unknown = await h.room('Room 111', null, { spaceTypeId: noSeats.spaceTypeId });
+    await h.fill(h.sections.A, 10);
+    expect((await h.give(h.sections.A, unknown.spaceId)).warnings[0]).toMatchObject({ code: 'CAPACITY_UNKNOWN' });
+  });
+
+  it('QA SPACE-37: with no shift any overlap is blocked; two different named shifts may share a room; the same shift may not', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    await h.give(h.sections.A, r.spaceId, { shiftId: 'MORNING' });
+    expectError(await h.assign(h.sections.B, r.spaceId), 409, 'ROOM_ALREADY_ASSIGNED');
+    expectError(await h.assign(h.sections.B, r.spaceId, { shiftId: 'MORNING' }), 409, 'ROOM_ALREADY_ASSIGNED');
+    await h.give(h.sections.B, r.spaceId, { shiftId: 'AFTERNOON' });
+    expectError(await h.assign(h.sections.C, r.spaceId), 409, 'ROOM_ALREADY_ASSIGNED');
+  });
+
+  it('QA SPACE-38: two requests for one room at once — exactly one wins and the other is told the room is taken', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    const [x, y] = await Promise.all([h.assign(h.sections.A, r.spaceId), h.assign(h.sections.B, r.spaceId)]);
+    expect([x.status, y.status].sort()).toEqual([201, 409]);
+    expect([x, y].find((res) => res.status === 409)!.body.error.code).toBe('ROOM_ALREADY_ASSIGNED');
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId })).toBe(1);
+    // The same section asking for two rooms at once also ends with one row.
+    const r2 = await h.room('Room 102', 40);
+    const r3 = await h.room('Room 103', 40);
+    const both = await Promise.all([h.assign(h.sections.C, r2.spaceId), h.assign(h.sections.C, r3.spaceId)]);
+    expect(both.map((b) => b.status).sort()).toEqual([201, 409]);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId, sectionOfferingId: h.sections.C })).toBe(1);
+  });
+
+  it('QA SPACE-39: changing a room ends the old row the day before and starts a new one; history keeps both', async () => {
+    const h = await homeSchool();
+    const [a, b] = [await h.room('Room 101', 40), await h.room('Room 102', 40)];
+    const first = await h.give(h.sections.A, a.spaceId, { effectiveFrom: '2026-04-01' });
+    const change = data(await h.agent.post(`${API}/section-space-assignments/${first.assignment.assignmentId}/replace`).send({ physicalSpaceId: b.spaceId, effectiveFrom: '2026-10-01', reason: 'Damp wall' }).expect(200)) as AssignmentChangeResultDTO;
+    expect(change.assignment).toMatchObject({ room: { spaceName: 'Room 102' }, effectiveFrom: '2026-10-01', effectiveTo: null, reason: 'Damp wall' });
+    expect(change.replaced).toMatchObject({ status: 'ENDED', effectiveTo: '2026-09-30', room: { spaceName: 'Room 101' } });
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom?date=2026-09-30`)).homeClassroom?.room.spaceName).toBe('Room 101');
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom?date=2026-10-01`)).homeClassroom?.room.spaceName).toBe('Room 102');
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId, sectionOfferingId: h.sections.A })).toBe(2);
+    // Room 101 is free again from October, so another section can have it from then.
+    await h.give(h.sections.B, a.spaceId, { effectiveFrom: '2026-10-01' });
+    // POST with replaceExisting does the same in one step.
+    const c = await h.room('Room 103', 40);
+    const viaPost = await h.give(h.sections.A, c.spaceId, { effectiveFrom: '2026-12-01', replaceExisting: true });
+    expect(viaPost.replaced).toMatchObject({ effectiveTo: '2026-11-30' });
+    const types = (await OutboxEvent.find({ tenantId: h.tenantId, type: /^section\.home_classroom/ }).lean()).map((e) => e.type);
+    expect(types.filter((x) => x === 'section.home_classroom.changed')).toHaveLength(2);
+    expect(types).toContain('section.home_classroom.assigned');
+  });
+
+  it('QA SPACE-40: edit dates with a version, end on a last day, cancel one that has not started; ended rows cannot change', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    const future = addDays(today(), 10);
+    const planned = (await h.give(h.sections.A, r.spaceId, { effectiveFrom: future })).assignment;
+    expect(planned.phase).toBe('PLANNED');
+    const upd = data(await h.agent.patch(`${API}/section-space-assignments/${planned.assignmentId}`).send({ version: 1, effectiveFrom: addDays(future, 2), reason: 'Moved later' }).expect(200)) as AssignmentChangeResultDTO;
+    expect(upd.assignment).toMatchObject({ effectiveFrom: addDays(future, 2), version: 2 });
+    expectError(await h.agent.patch(`${API}/section-space-assignments/${planned.assignmentId}`).send({ version: 1, reason: 'Stale' }), 409, 'VERSION_CONFLICT');
+    const cancelled = data(await h.agent.post(`${API}/section-space-assignments/${planned.assignmentId}/cancel`).send({}).expect(200)) as AssignmentChangeResultDTO;
+    expect(cancelled.assignment.phase).toBe('CANCELLED');
+    expectError(await h.agent.patch(`${API}/section-space-assignments/${planned.assignmentId}`).send({ version: 3, reason: 'No' }), 409, 'ASSIGNMENT_NOT_ACTIVE');
+    // A cancelled row frees the room.
+    const running = (await h.give(h.sections.B, r.spaceId, { effectiveFrom: '2026-04-01' })).assignment;
+    expectError(await h.agent.patch(`${API}/section-space-assignments/${running.assignmentId}`).send({ version: 1, effectiveFrom: '2026-05-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    expectError(await h.agent.post(`${API}/section-space-assignments/${running.assignmentId}/cancel`).send({}), 409, 'ASSIGNMENT_NOT_ACTIVE');
+    expectError(await h.agent.post(`${API}/section-space-assignments/${running.assignmentId}/end`).send({ effectiveTo: '2026-03-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    expectError(await h.agent.post(`${API}/section-space-assignments/${running.assignmentId}/end`).send({ effectiveTo: '2028-01-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    const last = addDays(today(), 5);
+    const ended = data(await h.agent.post(`${API}/section-space-assignments/${running.assignmentId}/end`).send({ effectiveTo: last, reason: 'Section merged' }).expect(200)) as AssignmentChangeResultDTO;
+    expect(ended.assignment).toMatchObject({ status: 'ENDED', effectiveTo: last, phase: 'ACTIVE' });
+    expectError(await h.agent.post(`${API}/section-space-assignments/${running.assignmentId}/end`).send({ effectiveTo: last }), 409, 'ASSIGNMENT_NOT_ACTIVE');
+    expect(await OutboxEvent.countDocuments({ tenantId: h.tenantId, type: 'section.home_classroom.ended' })).toBe(2);
+    expect((data(await h.agent.get(`${API}/section-space-assignments/${running.assignmentId}`).expect(200)) as { status: string }).status).toBe('ENDED');
+  });
+});
+
+describe('recommendations and bulk accept (SPACE-35, 36, 61)', () => {
+  it('QA SPACE-35: best fit, no room used twice, biggest section first; 8-C (42) goes to the only room that holds it', async () => {
+    const h = await homeSchool();
+    await h.room('Room 101', 40);
+    await h.room('Room 102', 40);
+    await h.room('Room 109', 60);
+    await h.room('Room 110', 30);
+    await h.fill(h.sections.A, 35);
+    await h.fill(h.sections.B, 38);
+    await h.fill(h.sections.C, 42);
+    const set = data(await h.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: h.sessionId, locationId: h.locationId }).expect(200)) as RecommendationSetDTO;
+    const room = (label: string) => set.recommendations.find((r) => r.section.label === label)!;
+    expect(room('8-C').room.spaceName).toBe('Room 109');
+    expect(room('8-A').room.spaceName).not.toBe(room('8-B').room.spaceName);
+    expect(['Room 101', 'Room 102']).toContain(room('8-A').room.spaceName);
+    expect(room('8-A').reasons[0]).toBe('Best fit: 35 students in a 40-seat room');
+    expect(new Set(set.recommendations.map((r) => r.room.spaceId)).size).toBe(3);
+    expect(set.summary).toEqual({ sections: 3, eligibleRooms: 4, ready: 3, needsReview: 0, alreadyAssigned: 0 });
+    expect(set.message).toBe('We found 3 sections and 4 eligible rooms. 3 are ready.');
+    expect(room('8-A').score).toBeGreaterThan(70);
+  });
+
+  it('QA SPACE-35: a section bigger than every free room needs review, with the closest room suggested', async () => {
+    const h = await homeSchool();
+    await h.room('Room 101', 40);
+    await h.room('Room 102', 40);
+    await h.fill(h.sections.A, 35);
+    await h.fill(h.sections.C, 42);
+    const set = data(await h.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: h.sessionId, locationId: h.locationId }).expect(200)) as RecommendationSetDTO;
+    expect(set.recommendations.map((r) => r.section.label)).toEqual(['8-A', '8-B']);
+    expect(set.unresolved).toHaveLength(1);
+    expect(set.unresolved[0]).toMatchObject({ reason: 'ALL_TOO_SMALL', status: 'NEEDS_REVIEW', section: { label: '8-C' }, message: '42 students, but the closest room holds 40.', closestRoom: { academicCapacity: 40 } });
+    expect(set.message).toMatch(/1 needs your attention/);
+    const none = await homeSchool();
+    const empty = data(await none.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: none.sessionId, locationId: none.locationId }).expect(200)) as RecommendationSetDTO;
+    expect(empty.unresolved.map((u) => u.reason)).toEqual(['NO_ELIGIBLE_ROOM', 'NO_ELIGIBLE_ROOM', 'NO_ELIGIBLE_ROOM']);
+    const taken = await homeSchool();
+    const only = await taken.room('Room 101', 40);
+    await taken.give(taken.sections.A, only.spaceId);
+    const left = data(await taken.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: taken.sessionId, locationId: taken.locationId }).expect(200)) as RecommendationSetDTO;
+    expect(left.alreadyAssigned).toHaveLength(1);
+    expect(left.unresolved.map((u) => u.reason)).toEqual(['ALL_TAKEN', 'ALL_TAKEN']);
+  });
+
+  it('QA SPACE-36: a section whose room closed is offered a replacement; labs, closed and archived rooms are never offered', async () => {
+    const h = await homeSchool();
+    const a = await h.room('Room 101', 40);
+    await h.room('Room 102', 40);
+    await h.room('Chem Lab', 30, { spaceTypeId: h.types.CHEMISTRY_LAB!.spaceTypeId });
+    const closed = await h.room('Room 103', 40);
+    await h.agent.post(`${API}/physical-spaces/${closed.spaceId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    const first = await h.give(h.sections.A, a.spaceId);
+    await h.agent.post(`${API}/physical-spaces/${a.spaceId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    const set = data(await h.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: h.sessionId, locationId: h.locationId, sectionOfferingIds: [h.sections.A] }).expect(200)) as RecommendationSetDTO;
+    expect(set.recommendations).toHaveLength(1);
+    expect(set.recommendations[0]).toMatchObject({ room: { spaceName: 'Room 102' }, replacesAssignmentId: first.assignment.assignmentId });
+    expect(set.summary.eligibleRooms).toBe(1);
+  });
+
+  it('QA SPACE-36: the same room as last year wins over best fit when it still fits', async () => {
+    const h = await homeSchool();
+    await h.room('Room 101', 40);
+    const big = await h.room('Room 102', 45);
+    await h.fill(h.sections.A, 38);
+    await h.give(h.sections.A, big.spaceId);
+    const next = data(await h.agent.post(`${API}/academic-sessions/${h.sessionId}/clone`).send({ name: 'Academic Year 2027-28', code: '2027-28', startDate: '2027-04-01', endDate: '2028-03-31' }).expect(201)) as { academicSessionId: string };
+    const newA = (await SectionOffering.findOne({ tenantId: h.tenantId, sessionId: next.academicSessionId, sectionCode: 'A' }).lean())!;
+    await h.fill(newA._id, 38, '2027-04-01', newA.classOfferingId);
+    const set = data(await h.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: next.academicSessionId, locationId: h.locationId, sectionOfferingIds: [newA._id] }).expect(200)) as RecommendationSetDTO;
+    expect(set.recommendations[0]).toMatchObject({ room: { spaceName: 'Room 102' }, reasons: expect.arrayContaining(['Same room as last year']) });
+  });
+
+  it('QA SPACE-61: bulk accept saves the valid ones, reports the failed one with its reason, and a second run is safe', async () => {
+    const h = await homeSchool();
+    const [r1, r2] = [await h.room('Room 101', 40), await h.room('Room 102', 40)];
+    const items = [{ sectionOfferingId: h.sections.A, physicalSpaceId: r1.spaceId }, { sectionOfferingId: h.sections.B, physicalSpaceId: r1.spaceId }, { sectionOfferingId: h.sections.C, physicalSpaceId: r2.spaceId }];
+    const res = data(await h.agent.post(`${API}/section-space-assignments/bulk`).send({ items, source: 'SYSTEM_RECOMMENDED' }).expect(200)) as BulkAssignmentResultDTO;
+    expect(res.done.map((d) => d.label)).toEqual(['8-A', '8-C']);
+    expect(res.failed).toHaveLength(1);
+    expect(res.failed[0]).toMatchObject({ label: '8-B', code: 'ROOM_ALREADY_ASSIGNED' });
+    expect(res.failed[0]!.message).toMatch(/8-A already uses Room 101/);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId, assignmentSource: 'SYSTEM_RECOMMENDED' })).toBe(2);
+    expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, action: 'section_space_assignment.recommendation_accepted' })).toBe(2);
+    const again = data(await h.agent.post(`${API}/section-space-assignments/bulk`).send({ items, source: 'SYSTEM_RECOMMENDED' }).expect(200)) as BulkAssignmentResultDTO;
+    expect(again.done).toHaveLength(0);
+    expect(again.alreadyDone.map((d) => d.label)).toEqual(['8-A', '8-C']);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId })).toBe(2);
+    expectError(await h.agent.post(`${API}/section-space-assignments/bulk`).send({ items, source: 'PREVIOUS_SESSION_COPY' }), 400, 'VALIDATION_FAILED');
+  });
+});
+
+describe('rollover and session closure (SPACE-41 to 45)', () => {
+  /** Five sections with rooms; the next session is a clone with F added and B removed. */
+  async function rolloverSetup() {
+    const h = await homeSchool();
+    const d = await h.post<{ sectionOfferingId: string }[]>(`/class-offerings/${h.classOfferingId}/sections`, { codes: ['D', 'E'] });
+    const ids: Record<string, string> = { ...h.sections, D: d[0]!.sectionOfferingId, E: d[1]!.sectionOfferingId };
+    const rooms: Record<string, SpaceDTO> = {};
+    for (const [i, code] of ['A', 'B', 'C', 'D', 'E'].entries()) rooms[code] = await h.room(`Room 10${i + 1}`, 40);
+    for (const code of ['A', 'B', 'C', 'D', 'E']) await h.give(ids[code]!, rooms[code]!.spaceId, { effectiveFrom: '2026-04-01' });
+    const next = data(await h.agent.post(`${API}/academic-sessions/${h.sessionId}/clone`).send({ name: 'Academic Year 2027-28', code: '2027-28', startDate: '2027-04-01', endDate: '2028-03-31' }).expect(201)) as { academicSessionId: string };
+    const newSections = await SectionOffering.find({ tenantId: h.tenantId, sessionId: next.academicSessionId }).lean();
+    const nid = Object.fromEntries(newSections.map((s) => [s.sectionCode, s._id])) as Record<string, string>;
+    const klass = (await ClassOffering.findOne({ tenantId: h.tenantId, sessionId: next.academicSessionId }).lean())!;
+    await SectionOffering.deleteOne({ tenantId: h.tenantId, _id: nid.B }); // B has no matching section next year
+    await PhysicalSpace.updateOne({ tenantId: h.tenantId, _id: rooms.D!.spaceId }, { $set: { operationalStatus: 'INACTIVE' } }); // D's room is gone
+    await h.fill(nid.C!, 45, '2027-04-01', klass._id); // C grew past its 40-seat room
+    const f = (await SectionOffering.create({ tenantId: h.tenantId, classOfferingId: klass._id, sessionId: next.academicSessionId, locationId: h.locationId, sectionCode: 'F', displayName: 'F', sequenceOrder: 9 })).toObject();
+    await h.agent.post(`${API}/section-space-assignments`).send({ sectionOfferingId: f._id, physicalSpaceId: rooms.E!.spaceId, effectiveFrom: '2027-04-01' }).expect(201); // F already took E's room
+    return { ...h, ids, nid, rooms, next: next.academicSessionId, body: { fromSessionId: h.sessionId, toSessionId: next.academicSessionId, locationId: h.locationId } };
+  }
+
+  it('QA SPACE-41: the preview lists exceptions first with a reason each and says how many can be carried forward', async () => {
+    const r = await rolloverSetup();
+    const preview = data(await r.agent.post(`${API}/section-space-assignments/rollover/preview`).send(r.body).expect(200)) as RolloverSummaryDTO;
+    const byLabel = Object.fromEntries(preview.rows.map((x) => [x.fromSection.label, x]));
+    expect(byLabel['8-A']).toMatchObject({ status: 'READY', reason: null });
+    expect(byLabel['8-B']).toMatchObject({ status: 'REVIEW', reason: 'SECTION_NOT_FOUND', toSection: null });
+    expect(byLabel['8-C']).toMatchObject({ status: 'REVIEW', reason: 'CAPACITY_CHANGED' });
+    expect(byLabel['8-C']!.message).toBe('45 students now, but Room 103 holds 40.');
+    expect(byLabel['8-D']).toMatchObject({ status: 'REVIEW', reason: 'ROOM_ARCHIVED' });
+    expect(byLabel['8-E']).toMatchObject({ status: 'REVIEW', reason: 'ROOM_TAKEN' });
+    expect(byLabel['8-E']!.message).toMatch(/8-F already uses Room 105/);
+    expect(preview).toMatchObject({ total: 5, ready: 1, review: 4, done: 0, message: '1 of 5 mappings can be carried forward. 4 need a look.' });
+    expect(preview.rows[preview.rows.length - 1]!.status).toBe('READY');
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.next })).toBe(1);
+  });
+
+  it('QA SPACE-42: commit copies only the ready rows, leaves last year untouched, and a second run changes nothing', async () => {
+    const r = await rolloverSetup();
+    const before = await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.sessionId });
+    const done = data(await r.agent.post(`${API}/section-space-assignments/rollover/commit`).send(r.body).expect(200)) as RolloverCommitDTO;
+    expect(done).toMatchObject({ carried: 1, skipped: 0, total: 5, message: '1 of 5 sections carried forward.' });
+    const copied = await SectionSpaceAssignment.find({ tenantId: r.tenantId, academicSessionId: r.next, assignmentSource: 'PREVIOUS_SESSION_COPY' }).lean();
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).toMatchObject({ sectionOfferingId: r.nid.A, physicalSpaceId: r.rooms.A!.spaceId, effectiveFrom: '2027-04-01', effectiveTo: null });
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.sessionId })).toBe(before);
+    const again = data(await r.agent.post(`${API}/section-space-assignments/rollover/commit`).send(r.body).expect(200)) as RolloverCommitDTO;
+    expect(again).toMatchObject({ carried: 0, alreadyDone: 1 });
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.next })).toBe(2);
+    expect(await AuditEvent.countDocuments({ tenantId: r.tenantId, action: 'section_space_assignment.previous_session_copy' })).toBe(1);
+    expect(await AuditEvent.countDocuments({ tenantId: r.tenantId, action: 'section_space_assignment.rollover_committed' })).toBe(2);
+    expectError(await r.agent.post(`${API}/section-space-assignments/rollover/preview`).send({ ...r.body, toSessionId: r.sessionId }), 400, 'VALIDATION_FAILED');
+    // History shows both sessions.
+    expect((await get<HomeClassroomListDTO>(r, `/section-space-assignments?sectionOfferingId=${r.nid.A}`)).total).toBe(1);
+    expect((await get<HomeClassroomListDTO>(r, `/section-space-assignments?sectionOfferingId=${r.ids.A}`)).total).toBe(1);
+  });
+
+  it('QA SPACE-43: a draft session that is deleted takes its carried-forward rows with it', async () => {
+    const r = await rolloverSetup();
+    await r.agent.post(`${API}/section-space-assignments/rollover/commit`).send(r.body).expect(200);
+    await r.agent.delete(`${API}/academic-sessions/${r.next}`).expect(204);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.next })).toBe(0);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: r.tenantId, academicSessionId: r.sessionId })).toBe(5);
+  });
+
+  it('QA SPACE-45: closing a session never archives rooms or deletes assignments; a live Home Classroom blocks switching a section off', async () => {
+    const h = await homeSchool();
+    const room = await h.room('Room 101', 40);
+    await h.give(h.sections.A, room.spaceId);
+    // Module 2 asks before a section is made inactive on an active session.
+    const blocked = expectError(await h.agent.patch(`${API}/sections/${h.sections.A}`).send({ displayName: 'A', sequenceOrder: 0, status: 'INACTIVE' }), 409, 'ACADEMIC_HAS_DEPENDENCIES');
+    expect(JSON.stringify(blocked)).toMatch(/Home Classroom/);
+    await forceStatus(h.tenantId, h.sessionId, 'CLOSED');
+    expect((await PhysicalSpace.findOne({ tenantId: h.tenantId, _id: room.spaceId }).lean())!.operationalStatus).toBe('ACTIVE');
+    const rows = await get<HomeClassroomListDTO>(h, '/section-space-assignments');
+    expect(rows.total).toBe(1);
+    expect(rows.items[0]!.status).toBe('ACTIVE');
+    expect(await AcademicSession.countDocuments({ tenantId: h.tenantId, status: 'CLOSED' })).toBe(1);
+  });
+});
+
+describe('integration answers, availability and archive with replacement (SPACE-63 to 72, 52)', () => {
+  it('QA SPACE-63: the available list excludes an Office, blocked and closed rooms; the check explains; a closure never removes the assignment', async () => {
+    const h = await homeSchool();
+    const [a, b] = [await h.room('Room 101', 40), await h.room('Room 102', 30)];
+    const office = await h.room('Staff Room', 10, { spaceTypeId: h.types.OFFICE!.spaceTypeId });
+    const closed = await h.room('Room 103', 40);
+    await h.agent.post(`${API}/physical-spaces/${closed.spaceId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    const start = addDays(today(), 2);
+    const q = (extra = '') => `/physical-spaces/available?locationId=${h.locationId}&start=${start}T09:00:00Z&end=${start}T10:00:00Z${extra}`;
+    const names = async (extra = '') => (await get<{ items: SpaceDTO[]; total: number }>(h, q(extra))).items.map((s) => s.spaceName);
+    expect(await names()).toEqual(['Room 102', 'Room 101']);
+    expect(await names('&minCapacity=35')).toEqual(['Room 101']);
+    expect(await names()).not.toContain(office.spaceName);
+    // A closure on Room 101 removes it from the list and explains itself, but keeps its Home Classroom.
+    await h.give(h.sections.A, a.spaceId);
+    await h.agent.post(`${API}/physical-spaces/${a.spaceId}/availability-blocks`).send({ startDatetime: `${start}T00:00:00Z`, endDatetime: `${addDays(start, 3)}T00:00:00Z`, reasonCode: 'MAINTENANCE', reason: 'Roof repair' }).expect(201);
+    expect(await names()).toEqual(['Room 102']);
+    const check = data(await h.agent.post(`${API}/physical-spaces/availability-check`).send({ physicalSpaceId: a.spaceId, start: `${start}T09:00:00Z`, end: `${start}T10:00:00Z` }).expect(200)) as { available: boolean; reasons: { code: string }[] };
+    expect(check).toMatchObject({ available: false, reasons: [{ code: 'BLOCK_ACTIVE' }] });
+    const list = await get<HomeClassroomListDTO>(h, '/section-space-assignments');
+    expect(list.items[0]).toMatchObject({ status: 'ACTIVE', phase: 'ACTIVE' });
+    expect(list.items[0]!.warnings.map((w) => w.code)).toEqual(['BLOCK_IN_PERIOD']);
+    void b;
+  });
+
+  it('QA SPACE-64: recommend ranks rooms for a purpose, and readiness lists what each room is missing and says it does not book periods', async () => {
+    const h = await homeSchool();
+    await h.room('Room 101', 40);
+    await h.room('Room 102', 30);
+    const noSeats = await h.post<SpaceTypeDTO>('/space-types', { name: 'Activity Room', isSchedulable: true, isHomeClassroomEligible: true, defaultAcademicCapacity: null });
+    await h.room('Room 103', null, { spaceTypeId: noSeats.spaceTypeId });
+    await h.room('Staff Room', 5, { spaceTypeId: h.types.OFFICE!.spaceTypeId });
+    const rec = data(await h.agent.post(`${API}/physical-spaces/recommend`).send({ purpose: 'TIMETABLE', locationId: h.locationId, minCapacity: 28 }).expect(200)) as { items: { room: SpaceDTO; score: number; reasons: string[] }[] };
+    expect(rec.items.map((i) => i.room.spaceName)).toEqual(['Room 102', 'Room 101']);
+    expect(rec.items[0]!.reasons[0]).toBe('Holds 30, you need 28');
+    const exam = data(await h.agent.post(`${API}/physical-spaces/recommend`).send({ purpose: 'EXAM', locationId: h.locationId, minCapacity: 35 }).expect(200)) as { items: { room: SpaceDTO }[] };
+    expect(exam.items.map((i) => i.room.spaceName)).toEqual(['Room 101']);
+    const ready = await get<ReadinessDTO>(h, `/spaces/readiness?locationId=${h.locationId}`);
+    expect(ready.totals).toEqual({ rooms: 3, ready: 2, notReady: 1 });
+    expect(ready.items.find((i) => i.spaceName === 'Room 103')).toMatchObject({ ready: false, missing: [{ code: 'ACADEMIC_CAPACITY' }] });
+    expect(ready.items.map((i) => i.spaceName)).not.toContain('Staff Room');
+    expect(ready.boundary).toMatch(/does not check whether a room is already booked/);
+  });
+
+  it('QA SPACE-52: archiving a used room explains and suggests a replacement; Choose Replacement moves every section, then archives', async () => {
+    const h = await homeSchool();
+    const [a, spare] = [await h.room('Room 101', 40), await h.room('Room 102', 40)];
+    await h.fill(h.sections.A, 36);
+    await h.give(h.sections.A, a.spaceId, { effectiveFrom: '2026-04-01' });
+    const explain = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/archive`).send({}).expect(200)) as ArchiveSpaceResultDTO;
+    expect(explain).toMatchObject({ archived: false, suggestedReplacementId: spare.spaceId, actions: ['CHOOSE_REPLACEMENT', 'ARCHIVE_AFTER_SESSION'] });
+    expect(explain.dependencies).toEqual([{ kind: 'HOME_CLASSROOM', label: 'Home Classroom of 8-A in Academic Year 2026-27.', count: 1 }]);
+    // A move of a used room is refused; so is a hard delete.
+    expectError(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/move`).send({ buildingId: h.building.buildingId, floorId: h.floor.GF!.floorId, reason: 'x' }), 409, 'GUARDED_MOVE_REQUIRED');
+    // A type change lists what would be rechecked.
+    const preview = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/convert-type/preview`).send({ spaceTypeId: h.types.CHEMISTRY_LAB!.spaceTypeId }).expect(200)) as { rechecks: string[] };
+    expect(preview.rechecks.join(' ')).toMatch(/8-A uses this room as its Home Classroom/);
+
+    const done = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/replace`).send({ mode: 'NOW', replacementSpaceId: spare.spaceId }).expect(200)) as ReplaceRoomResultDTO;
+    expect(done).toMatchObject({ archived: true, moved: [{ label: '8-A', fromRoom: 'Room 101', toRoom: 'Room 102' }] });
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom`)).homeClassroom?.room.spaceName).toBe('Room 102');
+    expect((await get<SectionHomeClassroomDTO>(h, `/sections/${h.sections.A}/home-classroom?date=${addDays(today(), -1)}`)).homeClassroom?.room.spaceName).toBe('Room 101');
+    expect((await PhysicalSpace.findOne({ tenantId: h.tenantId, _id: a.spaceId }).lean())!.operationalStatus).toBe('ARCHIVED');
+    expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, action: 'physical_space.replaced' })).toBe(1);
+  });
+
+  it('QA SPACE-52: a replacement that cannot take every section moves nothing; AFTER_SESSION stores the date and the room counts as archived from then', async () => {
+    const h = await homeSchool();
+    const [a, tiny, ok] = [await h.room('Room 101', 40), await h.room('Room 102', 20), await h.room('Room 103', 40)];
+    await h.fill(h.sections.A, 36);
+    await h.give(h.sections.A, a.spaceId, { effectiveFrom: '2026-04-01' });
+    const refused = expectError(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/replace`).send({ mode: 'NOW', replacementSpaceId: tiny.spaceId }), 409, 'REPLACEMENT_INVALID');
+    expect(refused.message).toMatch(/8-A/);
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId })).toBe(1);
+    expect((await SectionSpaceAssignment.findOne({ tenantId: h.tenantId }).lean())!.physicalSpaceId).toBe(a.spaceId);
+    expectError(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/replace`).send({ mode: 'NOW' }), 400, 'VALIDATION_FAILED');
+    const later = data(await h.agent.post(`${API}/physical-spaces/${a.spaceId}/replace`).send({ mode: 'AFTER_SESSION' }).expect(200)) as ReplaceRoomResultDTO;
+    expect(later).toMatchObject({ archived: false, archiveAfterDate: '2027-04-01' });
+    expect(later.space.archiveAfterDate).toBe('2027-04-01');
+    expect((await get<SpaceContextDTO>(h, `/physical-spaces/${a.spaceId}`)).homeClassroom?.label).toBe('8-A');
+    // The room stays usable until its session ends: another section can have it for the dates after the first one leaves.
+    await h.agent.post(`${API}/section-space-assignments/${(await SectionSpaceAssignment.findOne({ tenantId: h.tenantId }).lean())!._id}/end`).send({ effectiveTo: '2026-12-31' }).expect(200);
+    await h.give(h.sections.B, a.spaceId, { effectiveFrom: '2027-01-05' });
+    // A room due to be archived earlier than the dates asked for is refused.
+    await PhysicalSpace.updateOne({ tenantId: h.tenantId, _id: a.spaceId }, { $set: { archiveAfterDate: '2027-02-01' } });
+    expectError(await h.assign(h.sections.C, a.spaceId, { effectiveFrom: '2027-03-01' }), 409, 'ROOM_ARCHIVING');
+    void ok;
+  });
+});
+
+describe('Needs Attention, reports, events and access (SPACE-60, 73 to 79)', () => {
+  it('QA SPACE-60: the five groups, their counts and fixes, and a fix that clears the row', async () => {
+    const h = await homeSchool();
+    const small = await h.room('Room 101', 40);
+    const spare = await h.room('Room 102', 60);
+    const noSeats = await h.post<SpaceTypeDTO>('/space-types', { name: 'Activity Room', isSchedulable: true, isHomeClassroomEligible: true, defaultAcademicCapacity: null });
+    await h.room('Activity Room', null, { spaceTypeId: noSeats.spaceTypeId });
+    const upstairs = await h.room('Room 201', 40, { floorId: h.floor.GF!.floorId });
+    await h.fill(h.sections.A, 35);
+    await h.fill(h.sections.B, 38);
+    await h.give(h.sections.A, small.spaceId);
+    await h.agent.post(`${API}/floors/${h.floor.GF!.floorId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    await h.agent.patch(`${API}/physical-spaces/${small.spaceId}`).send({ version: 1, academicCapacity: 30 }).expect(200);
+    const start = addDays(today(), 2);
+    await h.agent.post(`${API}/physical-spaces/${small.spaceId}/availability-blocks`).send({ startDatetime: `${start}T00:00:00Z`, endDatetime: `${addDays(start, 1)}T00:00:00Z`, reasonCode: 'CLEANING' }).expect(201);
+
+    const a = await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`);
+    const group = (g: string) => a.groups.find((x) => x.group === g)!;
+    expect(a.counts.byGroup).toEqual({ CLASSROOM_ALLOCATION: 2, CAPACITY: 1, SPACE_SETUP: 1, AVAILABILITY: 1, HIERARCHY: 1 });
+    expect(a.counts.needsAttention).toBe(6);
+    expect(group('CLASSROOM_ALLOCATION').rows.map((r) => [r.fix, r.title])).toEqual([['ASSIGN_ROOM', '8-B has no Home Classroom'], ['ASSIGN_ROOM', '8-C has no Home Classroom']]);
+    expect(group('CLASSROOM_ALLOCATION').rows[0]!.suggestedRoom?.spaceName).toBe('Room 102');
+    expect(group('CAPACITY').rows[0]).toMatchObject({ fix: 'CHOOSE_LARGER_ROOM', detail: '35 students, but Room 101 holds 30.', suggestedRoom: { spaceName: 'Room 102' } });
+    expect(group('SPACE_SETUP').rows[0]).toMatchObject({ fix: 'SET_CAPACITY', title: 'Activity Room has no seat count' });
+    expect(group('AVAILABILITY').rows[0]).toMatchObject({ fix: 'REVIEW_BLOCK', physicalSpaceId: small.spaceId });
+    expect(group('HIERARCHY').rows[0]).toMatchObject({ fix: 'FIX_HIERARCHY', physicalSpaceId: upstairs.spaceId });
+    expect(a.kpis).toMatchObject({ recommendedAutomaticallyPercent: 0, rolloverReusePercent: 0 });
+    // Fix the capacity row: move A to the 60-seat room, and the group is empty.
+    const row = group('CAPACITY').rows[0]!;
+    await h.agent.post(`${API}/section-space-assignments/${row.assignmentId}/replace`).send({ physicalSpaceId: spare.spaceId }).expect(200);
+    const after = await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`);
+    expect(after.counts.byGroup.CAPACITY).toBe(0);
+    expect(after.counts.byGroup.AVAILABILITY).toBe(0);
+    // "Keep Room Anyway" clears the capacity row, but a section that grows is flagged again.
+    const keep = await h.room('Room 103', 40);
+    await h.fill(h.sections.C, 41);
+    await h.give(h.sections.C, keep.spaceId, { capacityOverride: { reason: 'Leaving in May' } });
+    expect((await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`)).counts.byGroup.CAPACITY).toBe(0);
+    await h.fill(h.sections.C, 3);
+    expect((await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`)).counts.byGroup.CAPACITY).toBe(1);
+  });
+
+  it('QA SPACE-60: a room that was archived or switched off under a Home Classroom puts the section back on the list', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    await h.give(h.sections.A, r.spaceId);
+    expect((await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`)).counts.byGroup.CLASSROOM_ALLOCATION).toBe(2);
+    await h.agent.post(`${API}/physical-spaces/${r.spaceId}/status`).send({ to: 'INACTIVE' }).expect(200);
+    const a = await get<SpaceAttentionDTO>(h, `/spaces/attention?locationId=${h.locationId}`);
+    expect(a.counts.byGroup.CLASSROOM_ALLOCATION).toBe(3);
+    expect(a.groups[0]!.rows.find((x) => x.sectionOfferingId === h.sections.A)).toMatchObject({ title: "8-A's room cannot be used", fix: 'ASSIGN_ROOM' });
+  });
+
+  it('QA SPACE-79: the eight reports render, CSV downloads are audited, and a formula cell is not run', async () => {
+    const h = await homeSchool();
+    const [a, b] = [await h.room('=Room 101', 40), await h.room('Room 102', 40, { physicalCapacity: null })];
+    await h.fill(h.sections.A, 45);
+    await h.give(h.sections.A, a.spaceId, { capacityOverride: { reason: 'Kept' } });
+    await h.agent.post(`${API}/physical-spaces/${b.spaceId}/status`).send({ to: 'TEMPORARILY_UNAVAILABLE' }).expect(200);
+    const gone = await h.room('Room 103', 40);
+    await h.agent.post(`${API}/physical-spaces/${gone.spaceId}/archive`).send({}).expect(200);
+    for (const type of ['space-inventory', 'classroom-allocation', 'sections-without-home-classroom', 'capacity-mismatch', 'schedulable-spaces', 'temporarily-unavailable', 'archived-spaces', 'setup-completeness']) {
+      const report = await get<SpaceReportDTO>(h, `/spaces/reports/${type}`);
+      expect(report.type, type).toBe(type);
+      expect(report.columns.length, type).toBeGreaterThan(0);
+    }
+    const alloc = await get<SpaceReportDTO>(h, '/spaces/reports/classroom-allocation');
+    expect(alloc.rows).toHaveLength(1);
+    expect(alloc.rows[0]).toMatchObject({ section: '8-A', students: 45, seats: 40, phase: 'Active' });
+    expect((await get<SpaceReportDTO>(h, '/spaces/reports/sections-without-home-classroom')).rows.map((r) => r.section)).toEqual(['8-B', '8-C']);
+    expect((await get<SpaceReportDTO>(h, '/spaces/reports/archived-spaces')).rows.map((r) => r.name)).toEqual(['Room 103']);
+    expect((await get<SpaceReportDTO>(h, '/spaces/reports/temporarily-unavailable')).rows.map((r) => r.name)).toEqual(['Room 102']);
+    const complete = await get<SpaceReportDTO>(h, '/spaces/reports/setup-completeness');
+    expect(complete.rows[0]).toMatchObject({ name: 'Room 102', missing: 'Physical capacity' });
+    expect(complete.summary).toBe('1 of 2 rooms are complete (50%). The list shows what each of the others still needs.');
+    const csv = await h.agent.get(`${API}/spaces/reports/space-inventory?format=csv`).expect(200);
+    expect(csv.headers['content-type']).toMatch(/text\/csv/);
+    expect(csv.text).toContain("'=Room 101");
+    expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, action: 'space_report.exported' })).toBe(14);
+    expectError(await h.agent.get(`${API}/spaces/reports/nonsense`), 400, 'VALIDATION_FAILED');
+  });
+
+  it('QA SPACE-73: Home Classroom events are written in the same transaction as the change; a failed save leaves none', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    const before = await OutboxEvent.countDocuments({ tenantId: h.tenantId });
+    expectError(await h.assign(h.sections.A, r.spaceId, { effectiveFrom: '2020-01-01' }), 422, 'ASSIGNMENT_DATES_INVALID');
+    expect(await OutboxEvent.countDocuments({ tenantId: h.tenantId })).toBe(before);
+    const first = await h.give(h.sections.A, r.spaceId);
+    const events = await OutboxEvent.find({ tenantId: h.tenantId, type: 'section.home_classroom.assigned' }).lean();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload).toMatchObject({ assignmentId: first.assignment.assignmentId, sectionOfferingId: h.sections.A, physicalSpaceId: r.spaceId });
+    expect(await AuditEvent.countDocuments({ tenantId: h.tenantId, entityType: 'section_space_assignment', entityId: first.assignment.assignmentId })).toBe(1);
+  });
+
+  it('QA SPACE-74: another school gets 404 for every id; a teacher can read but not change; another campus is refused and written down', async () => {
+    const h = await homeSchool();
+    const r = await h.room('Room 101', 40);
+    const made = await h.give(h.sections.A, r.spaceId);
+    const other = await seededSchool('Riverside');
+    for (const path of [`/section-space-assignments/${made.assignment.assignmentId}`, `/sections/${h.sections.A}/home-classroom`]) expectError(await other.agent.get(`${API}${path}`), 404, 'NOT_FOUND');
+    expectError(await other.agent.post(`${API}/section-space-assignments`).send({ sectionOfferingId: h.sections.B, physicalSpaceId: r.spaceId }), 404, 'NOT_FOUND');
+    expectError(await other.agent.post(`${API}/section-space-assignments/${made.assignment.assignmentId}/end`).send({ effectiveTo: today() }), 404, 'NOT_FOUND');
+    expect((await get<HomeClassroomListDTO>(other, '/section-space-assignments')).total).toBe(0);
+    const bulk = data(await other.agent.post(`${API}/section-space-assignments/bulk`).send({ items: [{ sectionOfferingId: h.sections.B, physicalSpaceId: r.spaceId }] }).expect(200)) as BulkAssignmentResultDTO;
+    expect(bulk.failed[0]!.code).toBe('NOT_FOUND');
+    expect(await SectionSpaceAssignment.countDocuments({ tenantId: h.tenantId })).toBe(1);
+
+    const teacher = await addActiveEmployee(h);
+    const login = await loginAs(h, 'FACULTY', teacher);
+    const mine = data(await login.agent.get(`${API}/sections/${h.sections.A}/home-classroom`).expect(200)) as SectionHomeClassroomDTO;
+    expect(mine.homeClassroom?.room.spaceName).toBe('Room 101');
+    expect((await get<HomeClassroomListDTO>({ agent: login.agent }, '/section-space-assignments')).total).toBe(1);
+    expectError(await login.agent.post(`${API}/section-space-assignments`).send({ sectionOfferingId: h.sections.B, physicalSpaceId: r.spaceId }), 403, 'FORBIDDEN');
+    expectError(await login.agent.post(`${API}/section-space-assignments/bulk`).send({ items: [{ sectionOfferingId: h.sections.B, physicalSpaceId: r.spaceId }] }), 403, 'FORBIDDEN');
+    expectError(await login.agent.patch(`${API}/section-space-assignments/${made.assignment.assignmentId}`).send({ version: 1, reason: 'x' }), 403, 'FORBIDDEN');
+    expectError(await login.agent.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: h.sessionId, locationId: h.locationId }), 403, 'FORBIDDEN');
+    expectError(await login.agent.get(`${API}/spaces/attention`), 403, 'FORBIDDEN');
+    expectError(await login.agent.get(`${API}/spaces/reports/space-inventory`), 403, 'FORBIDDEN');
+    expectError(await login.agent.get(`${API}/spaces/readiness?locationId=${h.locationId}`), 403, 'FORBIDDEN');
+    expectError(await login.agent.post(`${API}/physical-spaces/${r.spaceId}/replace`).send({ mode: 'AFTER_SESSION' }), 403, 'FORBIDDEN');
+    expectError(await login.agent.get(`${API}/section-space-assignments?locationId=${h.chd.locationId}`), 403, 'FORBIDDEN');
+    // A teacher at Mohali cannot ask for a Chandigarh section's room, nor for rooms free at Chandigarh.
+    expectError(await login.agent.get(`${API}/physical-spaces/available?locationId=${h.chd.locationId}&start=${today()}T09:00:00Z&end=${today()}T10:00:00Z`), 403, 'FORBIDDEN');
+    expect(await SecurityEvent.countDocuments({ tenantId: h.tenantId, type: 'CROSS_SCOPE_DENIED', actorUserId: login.userId })).toBe(2);
+    const staff = await createUserAndLogin(h.tenantId, 'STAFF');
+    const parent = await createUserAndLogin(h.tenantId, 'PARENT');
+    for (const who of [staff, parent]) {
+      expectError(await who.agent.get(`${API}/section-space-assignments`), 403, 'FORBIDDEN');
+      expectError(await who.agent.get(`${API}/sections/${h.sections.A}/home-classroom`), 403, 'FORBIDDEN');
+    }
   });
 });
 

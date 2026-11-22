@@ -33,6 +33,7 @@ import { todayFor } from '../staff/status';
 import { emitSpaceEvent, recordSpaceAudit } from './audit';
 import { spaceCodeFrom } from './codes';
 import { conversionWarnings } from './dependencies';
+import { currentHomeClassroomOf } from './home-lookup';
 import { assertInScope, assertLocationWritable, assertSpaceWritable, assertVersion, loadLocation, loadSpace, loadSpaceType, requireSchool, spaceScope, type SpaceScope } from './guards';
 import { assertSpaceTransition } from './lifecycle';
 import { loadLookups, pathOf, toBlockDTO, toSpaceDTO, toSpaceDTOOne, toSpaceDTOs, type SpaceLookups } from './mappers';
@@ -265,14 +266,15 @@ export async function loadVisibleSpace(ctx: ServiceContext, id: string, db?: Cli
 export async function getSpaceContext(ctx: ServiceContext, id: string): Promise<SpaceContextDTO> {
   const doc = await loadVisibleSpace(ctx, id);
   const today = await todayFor(ctx);
-  const [dto, location, blocks] = await Promise.all([
+  const [dto, location, blocks, homeClassroom] = await Promise.all([
     toSpaceDTOOne(ctx, doc, today),
     loadLocation(ctx, doc.locationId),
     SpaceAvailabilityBlock.find({ tenantId: ctx.tenantId, physicalSpaceId: id, status: 'ACTIVE', endDatetime: { $gt: new Date() } }).sort({ startDatetime: 1 }).limit(10).lean<SpaceAvailabilityBlockDoc[]>(),
+    currentHomeClassroomOf(ctx, id, today),
   ]);
   const now = new Date();
   const dtos = blocks.map((b) => toBlockDTO(b, now));
-  return { ...dto, locationName: location.displayName, path: pathOf(dto), activeBlock: dtos.find((b) => b.phase === 'NOW') ?? null, upcomingBlocks: dtos.filter((b) => b.phase === 'UPCOMING'), homeClassroom: null };
+  return { ...dto, locationName: location.displayName, path: pathOf(dto), activeBlock: dtos.find((b) => b.phase === 'NOW') ?? null, upcomingBlocks: dtos.filter((b) => b.phase === 'UPCOMING'), homeClassroom };
 }
 
 // ───────────────────────────────────────────────────────────── change one room

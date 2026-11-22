@@ -1,3 +1,4 @@
+import type { ClientSession } from 'mongoose';
 import type { GuardianLinkDTO, StudentContextDTO, StudentContextRequest, StudentStatus } from '@shared';
 import { EXITED_STUDENT_STATUSES } from '@shared';
 import { AppError } from '../../core/errors';
@@ -102,6 +103,23 @@ export async function listStudentsForSection(ctx: ServiceContext, sectionId: str
     .sort((a, b) => naturalCompare(a.rollNumber ?? '~', b.rollNumber ?? '~') || a.fullName.localeCompare(b.fullName, 'en', { sensitivity: 'base' }));
 }
 
+/**
+ * Module 5 — "section strength": how many students sit in each section on a date (default today). Counted live from the open section
+ * placements; never typed, never copied. A student who left has had their placement closed, so they are not counted. Sections with no
+ * one in them are returned as 0.
+ */
+export async function countStudentsBySection(ctx: ServiceContext, sectionIds: string[], date?: string, db?: ClientSession): Promise<Map<string, number>> {
+  const day = date ?? (await todayFor(ctx, db));
+  const counts = new Map<string, number>(sectionIds.map((id) => [id, 0]));
+  if (sectionIds.length === 0) return counts;
+  const rows = await StudentSectionAssignment.aggregate<{ _id: string; n: number }>([
+    { $match: { tenantId: ctx.tenantId, sectionId: { $in: sectionIds }, cancelledAt: null, effectiveFrom: { $lte: day }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: day } }] } },
+    { $group: { _id: '$sectionId', n: { $sum: 1 } } },
+  ]).session(db ?? null);
+  for (const row of rows) counts.set(row._id, row.n);
+  return counts;
+}
+
 export function listGuardiansForStudent(ctx: ServiceContext, studentId: string): Promise<GuardianLinkDTO[]> {
   return listGuardians(ctx, studentId);
 }
@@ -117,5 +135,5 @@ export async function assertStudentUsable(ctx: ServiceContext, studentId: string
   return student.status;
 }
 
-export const studentService = { getStudentContext, listStudentsForSection, listGuardiansForStudent, assertStudentUsable };
+export const studentService = { getStudentContext, listStudentsForSection, countStudentsBySection, listGuardiansForStudent, assertStudentUsable };
 export { fullNameOf };

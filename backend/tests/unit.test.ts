@@ -19,8 +19,9 @@ import { floorCodeFor, floorFromName } from '@shared';
 import { buildingCodeFrom, shiftTrailingNumber, spaceCodeFrom } from '../src/modules/spaces/codes';
 import { assertSpaceTransition, assertStructureTransition } from '../src/modules/spaces/lifecycle';
 import { effectiveStatusOf, resolveSpace, warningsFor } from '../src/modules/spaces/resolve';
+import { endOf, isLive, periodsOverlap, phaseOf, runsOn, shiftsClash } from '../src/modules/spaces/assignment.rules';
 import { suggestSpaceMapping } from '../src/modules/spaces/import.service';
-import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
+import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SectionSpaceAssignment, SpaceAssignmentLock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
 import {
   DATA_CLASSIFICATION,
   DTO_ALLOWED_CLASSES,
@@ -980,6 +981,7 @@ describe('room data classification (SEC-SPACE-01)', () => {
     const cases: [keyof typeof DATA_CLASSIFICATION, { schema: { paths: Record<string, unknown> } }][] = [
       ['building', Building], ['floor', Floor], ['space_type', SpaceType], ['physical_space', PhysicalSpace], ['space_availability_block', SpaceAvailabilityBlock],
       ['space_import', SpaceImport], ['space_import_row', SpaceImportRow], ['space_change_log', SpaceChangeLog], ['outbox_event', OutboxEvent],
+      ['section_space_assignment', SectionSpaceAssignment], ['space_assignment_lock', SpaceAssignmentLock],
     ];
     for (const [entity, model] of cases) expect(businessPaths(model.schema).sort(), entity).toEqual(Object.keys(DATA_CLASSIFICATION[entity]).sort());
   });
@@ -1051,5 +1053,34 @@ describe('room codes, floors and import columns (SPACE-06, 12, 21, 27)', () => {
   it('matches import columns from common headers', () => {
     const m = suggestSpaceMapping(['Block', 'Level', 'Room Name', 'Room Type', 'Seats', 'Facilities']);
     expect(m).toMatchObject({ building: 'Block', floor: 'Level', spaceName: 'Room Name', type: 'Room Type', academicCapacity: 'Seats', features: 'Facilities' });
+  });
+});
+
+describe('Home Classroom date and shift rules (SPACE-33, 37)', () => {
+  const row = (over: object = {}) => ({ status: 'ACTIVE' as const, effectiveFrom: '2026-04-01', effectiveTo: null as string | null, ...over });
+  const END = '2027-03-31';
+  it('phases come from the dates; a row with no last day runs to the end of its session', () => {
+    expect(phaseOf(row(), END, '2026-03-01')).toBe('PLANNED');
+    expect(phaseOf(row(), END, '2026-11-22')).toBe('ACTIVE');
+    expect(phaseOf(row(), END, '2027-04-01')).toBe('ENDED');
+    expect(phaseOf(row({ effectiveTo: '2026-09-30', status: 'ENDED' }), END, '2026-09-30')).toBe('ACTIVE');
+    expect(phaseOf(row({ effectiveTo: '2026-09-30', status: 'ENDED' }), END, '2026-10-01')).toBe('ENDED');
+    expect(phaseOf(row({ status: 'CANCELLED' }), END, '2026-11-22')).toBe('CANCELLED');
+    expect(endOf({ effectiveTo: null }, END)).toBe(END);
+    expect(runsOn(row(), '2026-04-01', END)).toBe(true);
+    expect(runsOn(row({ status: 'CANCELLED' }), '2026-04-01', END)).toBe(false);
+    expect(isLive(row({ effectiveTo: '2026-05-01' }), END, '2026-06-01')).toBe(false);
+    expect(isLive(row(), END, '2026-06-01')).toBe(true);
+  });
+  it('periods overlap on a shared day; touching days overlap, a gap does not', () => {
+    expect(periodsOverlap(row({ effectiveTo: '2026-09-30' }), row({ effectiveFrom: '2026-09-30' }), END)).toBe(true);
+    expect(periodsOverlap(row({ effectiveTo: '2026-09-30' }), row({ effectiveFrom: '2026-10-01' }), END)).toBe(false);
+    expect(periodsOverlap(row(), row({ effectiveFrom: '2027-01-01' }), END)).toBe(true);
+  });
+  it('shifts: no shift always clashes; two named shifts clash only when equal', () => {
+    expect(shiftsClash(null, 'MORNING')).toBe(true);
+    expect(shiftsClash('MORNING', undefined)).toBe(true);
+    expect(shiftsClash('MORNING', 'MORNING')).toBe(true);
+    expect(shiftsClash('MORNING', 'AFTERNOON')).toBe(false);
   });
 });

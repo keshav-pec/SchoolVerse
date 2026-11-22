@@ -210,3 +210,63 @@ export const FUTURE_SPACE_REGISTRANTS = ['Timetable', 'Exams', 'Attendance', 'As
 
 export const ARCHIVE_ACTIONS = ['CHOOSE_REPLACEMENT', 'ARCHIVE_AFTER_SESSION'] as const;
 export type ArchiveAction = (typeof ARCHIVE_ACTIONS)[number];
+
+// ───────────────────────────────────────────────────────────── Home Classroom (Part 3)
+
+/** Where an assignment came from. Recommendations the admin accepted are `SYSTEM_RECOMMENDED`. */
+export const ASSIGNMENT_SOURCES = ['MANUAL', 'SYSTEM_RECOMMENDED', 'PREVIOUS_SESSION_COPY', 'BULK', 'IMPORT'] as const;
+export type AssignmentSource = (typeof ASSIGNMENT_SOURCES)[number];
+/** What a client may claim when it saves in bulk. A previous-session copy is only made by the rollover. */
+export const BULK_ASSIGNMENT_SOURCES = ['MANUAL', 'SYSTEM_RECOMMENDED', 'BULK', 'IMPORT'] as const;
+
+/** Stored. `ENDED` has a last day; `CANCELLED` was never in force. What is running today is worked out from the dates (`HomeClassroomPhase`). */
+export const HOME_ASSIGNMENT_STATUSES = ['ACTIVE', 'ENDED', 'CANCELLED'] as const;
+export type AssignmentStoredStatus = (typeof HOME_ASSIGNMENT_STATUSES)[number];
+export const HOME_CLASSROOM_PHASES = ['PLANNED', 'ACTIVE', 'ENDED', 'CANCELLED'] as const;
+export type HomeClassroomPhase = (typeof HOME_CLASSROOM_PHASES)[number];
+
+/** Why a section got no recommended room. */
+export const UNRESOLVED_REASONS = ['NO_ELIGIBLE_ROOM', 'ALL_TOO_SMALL', 'ALL_TAKEN'] as const;
+export type UnresolvedReason = (typeof UNRESOLVED_REASONS)[number];
+
+export const ROLLOVER_REVIEW_REASONS = ['ROOM_ARCHIVED', 'CAPACITY_CHANGED', 'SECTION_NOT_FOUND', 'ROOM_TAKEN'] as const;
+export type RolloverReviewReason = (typeof ROLLOVER_REVIEW_REASONS)[number];
+
+export const RECOMMENDATION_PURPOSES = ['HOME_CLASSROOM', 'TIMETABLE', 'EXAM'] as const;
+export type RecommendationPurpose = (typeof RECOMMENDATION_PURPOSES)[number];
+
+export const REPLACE_MODES = ['NOW', 'AFTER_SESSION'] as const;
+export type ReplaceMode = (typeof REPLACE_MODES)[number];
+
+/** The things the Needs Attention list groups by, and the fix each row offers. */
+export const ATTENTION_GROUPS = ['CLASSROOM_ALLOCATION', 'CAPACITY', 'SPACE_SETUP', 'AVAILABILITY', 'HIERARCHY'] as const;
+export type SpaceAttentionGroup = (typeof ATTENTION_GROUPS)[number];
+export const ATTENTION_GROUP_LABELS: Record<SpaceAttentionGroup, string> = {
+  CLASSROOM_ALLOCATION: 'Classroom Allocation',
+  CAPACITY: 'Capacity',
+  SPACE_SETUP: 'Space Setup',
+  AVAILABILITY: 'Availability',
+  HIERARCHY: 'Hierarchy',
+};
+export const ATTENTION_FIXES = ['ASSIGN_ROOM', 'CHOOSE_LARGER_ROOM', 'SET_CAPACITY', 'REVIEW_BLOCK', 'FIX_HIERARCHY'] as const;
+export type SpaceAttentionFix = (typeof ATTENTION_FIXES)[number];
+
+export const SPACE_REPORT_TYPES = ['space-inventory', 'classroom-allocation', 'sections-without-home-classroom', 'capacity-mismatch', 'schedulable-spaces', 'temporarily-unavailable', 'archived-spaces', 'setup-completeness'] as const;
+export type SpaceReportType = (typeof SPACE_REPORT_TYPES)[number];
+export const SPACE_REPORT_TITLES: Record<SpaceReportType, string> = {
+  'space-inventory': 'Room list',
+  'classroom-allocation': 'Classroom allocation',
+  'sections-without-home-classroom': 'Sections without a Home Classroom',
+  'capacity-mismatch': 'Sections bigger than their room',
+  'schedulable-spaces': 'Rooms that can be scheduled',
+  'temporarily-unavailable': 'Rooms that are unavailable',
+  'archived-spaces': 'Archived rooms',
+  'setup-completeness': 'Room setup completeness',
+};
+
+/** What a room can be missing before the Timetable can use it. */
+export const READINESS_GAPS = ['ACADEMIC_CAPACITY', 'NOT_SCHEDULABLE', 'NOT_ACTIVE'] as const;
+export type ReadinessGap = (typeof READINESS_GAPS)[number];
+
+/** How far ahead "Availability" looks for a closure under a Home Classroom. */
+export const ATTENTION_BLOCK_DAYS = 7;

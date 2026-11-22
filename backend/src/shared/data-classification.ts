@@ -335,6 +335,12 @@ export const DATA_CLASSIFICATION = {
   space_import_row: { importId: 'INTERNAL', rowNumber: 'INTERNAL', raw: 'INTERNAL', status: 'INTERNAL', issues: 'INTERNAL', spaceId: 'INTERNAL' },
   space_change_log: { physicalSpaceId: 'INTERNAL', type: 'INTERNAL', from: 'INTERNAL', to: 'INTERNAL', reason: 'INTERNAL', actorId: 'INTERNAL' },
   outbox_event: { type: 'INTERNAL', payload: 'INTERNAL' },
+  // Part 3: a Home Classroom links a section to a room. No personal data: the section's students are counted, never copied.
+  section_space_assignment: {
+    academicSessionId: 'INTERNAL', sectionOfferingId: 'INTERNAL', physicalSpaceId: 'INTERNAL', locationId: 'INTERNAL', shiftId: 'INTERNAL', effectiveFrom: 'INTERNAL', effectiveTo: 'INTERNAL',
+    assignmentSource: 'INTERNAL', status: 'INTERNAL', capacityOverride: 'INTERNAL', assignedBy: 'INTERNAL', reason: 'INTERNAL', version: 'INTERNAL',
+  },
+  space_assignment_lock: { key: 'INTERNAL', counter: 'INTERNAL' },
   dev_outbox: {
     to: 'PERSONAL',
     template: 'INTERNAL',

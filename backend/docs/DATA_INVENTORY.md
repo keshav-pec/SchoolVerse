@@ -384,6 +384,159 @@ A unit test fails when a schema path has no class or the map names a field that 
 | key | INTERNAL |
 | seq | INTERNAL |
 
+### building
+
+| Field | Class |
+|---|---|
+| schoolId | INTERNAL |
+| locationId | INTERNAL |
+| buildingCode | INTERNAL |
+| buildingName | INTERNAL |
+| buildingType | INTERNAL |
+| status | INTERNAL |
+| effectiveFrom | INTERNAL |
+| effectiveTo | INTERNAL |
+| displayOrder | INTERNAL |
+| version | INTERNAL |
+
+### floor
+
+| Field | Class |
+|---|---|
+| schoolId | INTERNAL |
+| locationId | INTERNAL |
+| buildingId | INTERNAL |
+| floorCode | INTERNAL |
+| floorName | INTERNAL |
+| floorNumber | INTERNAL |
+| levelType | INTERNAL |
+| status | INTERNAL |
+| effectiveFrom | INTERNAL |
+| effectiveTo | INTERNAL |
+| version | INTERNAL |
+
+### space_type
+
+| Field | Class |
+|---|---|
+| schoolId | INTERNAL |
+| code | INTERNAL |
+| name | INTERNAL |
+| isSchedulable | INTERNAL |
+| isHomeClassroomEligible | INTERNAL |
+| defaultSuitabilityTags | INTERNAL |
+| defaultAcademicCapacity | INTERNAL |
+| isOutdoor | INTERNAL |
+| isSystem | INTERNAL |
+| status | INTERNAL |
+
+### physical_space
+
+| Field | Class |
+|---|---|
+| schoolId | INTERNAL |
+| locationId | INTERNAL |
+| buildingId | INTERNAL |
+| floorId | INTERNAL |
+| spaceCode | INTERNAL |
+| spaceName | INTERNAL |
+| roomNumber | INTERNAL |
+| spaceTypeId | INTERNAL |
+| physicalCapacity | INTERNAL |
+| academicCapacity | INTERNAL |
+| examCapacity | INTERNAL |
+| schedulableOverride | INTERNAL |
+| homeClassroomEligibleOverride | INTERNAL |
+| features | INTERNAL |
+| suitabilityOverrides | INTERNAL |
+| operationalStatus | INTERNAL |
+| archiveAfterDate | INTERNAL |
+| readinessRecheckAt | INTERNAL |
+| version | INTERNAL |
+
+### space_availability_block
+
+| Field | Class |
+|---|---|
+| physicalSpaceId | INTERNAL |
+| locationId | INTERNAL |
+| blockType | INTERNAL |
+| startDatetime | INTERNAL |
+| endDatetime | INTERNAL |
+| reasonCode | INTERNAL |
+| reason | INTERNAL |
+| recurrenceRule | INTERNAL |
+| status | INTERNAL |
+| cancelledAt | INTERNAL |
+| cancelledBy | INTERNAL |
+
+### space_import
+
+| Field | Class |
+|---|---|
+| schoolId | INTERNAL |
+| locationId | INTERNAL |
+| fileName | INTERNAL |
+| fileHash | INTERNAL |
+| status | INTERNAL |
+| headers | INTERNAL |
+| mapping | INTERNAL |
+| rowCount | INTERNAL |
+
+### space_import_row
+
+| Field | Class |
+|---|---|
+| importId | INTERNAL |
+| rowNumber | INTERNAL |
+| raw | INTERNAL |
+| status | INTERNAL |
+| issues | INTERNAL |
+| spaceId | INTERNAL |
+
+### space_change_log
+
+| Field | Class |
+|---|---|
+| physicalSpaceId | INTERNAL |
+| type | INTERNAL |
+| from | INTERNAL |
+| to | INTERNAL |
+| reason | INTERNAL |
+| actorId | INTERNAL |
+
+### outbox_event
+
+| Field | Class |
+|---|---|
+| type | INTERNAL |
+| payload | INTERNAL |
+
+### section_space_assignment
+
+| Field | Class |
+|---|---|
+| academicSessionId | INTERNAL |
+| sectionOfferingId | INTERNAL |
+| physicalSpaceId | INTERNAL |
+| locationId | INTERNAL |
+| shiftId | INTERNAL |
+| effectiveFrom | INTERNAL |
+| effectiveTo | INTERNAL |
+| assignmentSource | INTERNAL |
+| status | INTERNAL |
+| capacityOverride | INTERNAL |
+| assignedBy | INTERNAL |
+| reason | INTERNAL |
+| version | INTERNAL |
+
+### space_assignment_lock
+
+| Field | Class |
+|---|---|
+| key | INTERNAL |
+| counter | INTERNAL |
+
 ### dev_outbox
 
 | Field | Class |

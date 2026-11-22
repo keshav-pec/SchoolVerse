@@ -13,7 +13,7 @@ import { Department, Designation } from '../src/modules/staff/master.model';
 import { EmployeeDocument, ProfileChangeRequest } from '../src/modules/staff/identity.models';
 import { Person } from '../src/modules/staff/person.model';
 import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
-import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
+import { Building, Floor, OutboxEvent, PhysicalSpace, SectionSpaceAssignment, SpaceAssignmentLock, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../src/modules/spaces/space.models';
 import { StudentChangeRequest, StudentDocument, StudentTransferCertificate } from '../src/modules/students/records.models';
 import { Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent } from '../src/modules/students/student.models';
 import { User } from '../src/platform/users/user.model';
@@ -97,6 +97,10 @@ interface SpaceIds {
   blockId: string;
   importId: string;
   typeId: string;
+  assignmentId: string;
+  sectionId: string;
+  sessionId: string;
+  otherSessionId: string;
 }
 
 type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds; spaces: SpaceIds };
@@ -178,6 +182,15 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'POST availability check', send: (c) => c.post(`${API}/physical-spaces/availability-check`).send({ physicalSpaceId: sp.spaceId, start: '2030-01-01T09:00:00Z', end: '2030-01-01T10:00:00Z' }) },
       { name: 'GET room import', send: (c) => c.get(`${API}/space-imports/${sp.importId}`) },
       { name: 'GET room import rows', send: (c) => c.get(`${API}/space-imports/${sp.importId}/rows`) },
+      // Home Classrooms (Module 5, Part 3)
+      { name: 'GET Home Classroom list', send: (c) => c.get(`${API}/section-space-assignments?academicSessionId=${sp.sessionId}&locationId=${ids.locationId}`) },
+      { name: 'GET Home Classroom', send: (c) => c.get(`${API}/section-space-assignments/${sp.assignmentId}`) },
+      { name: 'GET section Home Classroom', send: (c) => c.get(`${API}/sections/${sp.sectionId}/home-classroom`) },
+      { name: 'GET available rooms', send: (c) => c.get(`${API}/physical-spaces/available?locationId=${ids.locationId}&start=2030-01-01T09:00:00Z&end=2030-01-01T10:00:00Z`) },
+      { name: 'POST recommend rooms', send: (c) => c.post(`${API}/physical-spaces/recommend`).send({ purpose: 'TIMETABLE', locationId: ids.locationId }) },
+      { name: 'GET readiness', send: (c) => c.get(`${API}/spaces/readiness?locationId=${ids.locationId}`) },
+      { name: 'GET room attention', send: (c) => c.get(`${API}/spaces/attention?locationId=${ids.locationId}`) },
+      { name: 'GET room report', send: (c) => c.get(`${API}/spaces/reports/space-inventory?locationId=${ids.locationId}`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -338,6 +351,15 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'inactivate room type', send: (c) => c.post(`${API}/space-types/${sp.typeId}/inactivate`) },
       { name: 'map room import', send: (c) => c.put(`${API}/space-imports/${sp.importId}/mapping`).send({ mapping: {} }) },
       { name: 'commit room import', send: (c) => c.post(`${API}/space-imports/${sp.importId}/commit`) },
+      { name: 'POST Home Classroom', send: (c) => c.post(`${API}/section-space-assignments`).send({ sectionOfferingId: sp.sectionId, physicalSpaceId: sp.spaceId }) },
+      { name: 'PATCH Home Classroom', send: (c) => c.patch(`${API}/section-space-assignments/${sp.assignmentId}`).send({ version: 1, reason: 'Hijacked' }) },
+      { name: 'end Home Classroom', send: (c) => c.post(`${API}/section-space-assignments/${sp.assignmentId}/end`).send({ effectiveTo: '2026-12-31' }) },
+      { name: 'cancel Home Classroom', send: (c) => c.post(`${API}/section-space-assignments/${sp.assignmentId}/cancel`).send({}) },
+      { name: 'replace Home Classroom room', send: (c) => c.post(`${API}/section-space-assignments/${sp.assignmentId}/replace`).send({ physicalSpaceId: sp.spaceId }) },
+      { name: 'Home Classroom recommendations', send: (c) => c.post(`${API}/sections/home-classroom-recommendations`).send({ sessionId: sp.sessionId, locationId: ids.locationId }) },
+      { name: 'rollover preview', send: (c) => c.post(`${API}/section-space-assignments/rollover/preview`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
+      { name: 'rollover commit', send: (c) => c.post(`${API}/section-space-assignments/rollover/commit`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
+      { name: 'replace room', send: (c) => c.post(`${room}/replace`).send({ mode: 'AFTER_SESSION' }) },
     ],
   };
 }
@@ -453,7 +475,7 @@ async function victim() {
   const roomRow = (await b.agent.post(`${API}/physical-spaces`).send({ locationId: b.moh.locationId, buildingId: building.buildingId, floorId: floors[0]!.floorId, spaceTypeId: typeId, spaceName: 'Victim Room' }).expect(201)).body.data as { spaceId: string };
   const block = (await b.agent.post(`${API}/physical-spaces/${roomRow.spaceId}/availability-blocks`).send({ startDatetime: new Date(Date.now() + 86_400_000).toISOString(), endDatetime: new Date(Date.now() + 2 * 86_400_000).toISOString(), reasonCode: 'CLEANING' }).expect(201)).body.data as { blockId: string };
   const roomImport = (await b.agent.post(`${API}/space-imports`).field('locationId', b.moh.locationId).attach('file', Buffer.from('Name,Type\nR1,Standard Classroom\n'), { filename: 'rooms.csv', contentType: 'text/csv' }).expect(201)).body.data as { importId: string };
-  const spaces: SpaceIds = { buildingId: building.buildingId, floorId: floors[0]!.floorId, otherFloorId: floors[1]!.floorId, spaceId: roomRow.spaceId, blockId: block.blockId, importId: roomImport.importId, typeId };
+  const spaces: SpaceIds = { buildingId: building.buildingId, floorId: floors[0]!.floorId, otherFloorId: floors[1]!.floorId, spaceId: roomRow.spaceId, blockId: block.blockId, importId: roomImport.importId, typeId, assignmentId: '', sectionId: '', sessionId: '', otherSessionId: randomUUID() };
 
   const academic: AcademicIds = {
     sessionId: session.academicSessionId,
@@ -470,12 +492,17 @@ async function victim() {
     boardId: board.boardId,
     ruleVersionId: ruleVersion.ruleVersionId,
   };
+  // A Home Classroom: the victim's section in the victim's room.
+  const home = (await b.agent.post(`${API}/section-space-assignments`).send({ sectionOfferingId: academic.sectionId, physicalSpaceId: roomRow.spaceId }).expect(201)).body.data.assignment as { assignmentId: string };
+  spaces.assignmentId = home.assignmentId;
+  spaces.sectionId = academic.sectionId;
+  spaces.sessionId = academic.sessionId;
   return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students, spaces };
 }
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
 async function academicSnapshot(tenantId: string) {
-  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent, StudentDocument, StudentTransferCertificate, StudentChangeRequest, Building, Floor, SpaceType, PhysicalSpace, SpaceAvailabilityBlock, SpaceImport, SpaceImportRow, SpaceChangeLog, OutboxEvent] as unknown as (typeof Subject)[];
+  const models = [AcademicSession, AcademicTerm, ClassOffering, SectionOffering, SubjectOffering, Subject, EducationBoard, SubjectChoiceGroup, SubjectChoiceConstraint, AcademicProgramme, Person, Employee, Department, Designation, LocationAssignment, AcademicAssignment, Responsibility, RestrictedPersonData, EmployeeDocument, ProfileChangeRequest, User, Student, StudentAdmission, StudentEnrollment, StudentExternalId, StudentGuardianLink, StudentSectionAssignment, StudentSubjectEnrollment, StudentTransferEvent, StudentDocument, StudentTransferCertificate, StudentChangeRequest, Building, Floor, SpaceType, PhysicalSpace, SpaceAvailabilityBlock, SpaceImport, SpaceImportRow, SpaceChangeLog, OutboxEvent, SectionSpaceAssignment, SpaceAssignmentLock] as unknown as (typeof Subject)[];
   return Promise.all(models.map((m) => m.find({ tenantId }).sort({ _id: 1 }).lean()));
 }
 

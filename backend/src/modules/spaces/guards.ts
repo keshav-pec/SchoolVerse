@@ -92,3 +92,9 @@ export async function assertInScope(ctx: ServiceContext, scope: SpaceScope, loca
   await recordSecurityEvent({ tenantId: ctx.tenantId, type: 'CROSS_SCOPE_DENIED', actorUserId: ctx.userId, targetId, ip: ctx.ip ?? null, outcome: 'DENIED', metadata: { resource, locationId } });
   throw new AppError('FORBIDDEN', "You don't have access to this campus.");
 }
+
+/** A campus id sent by the caller: another school's id is a 404 (like every other id), another campus of this school is refused (403). */
+export async function assertLocationAccess(ctx: ServiceContext, locationId: string): Promise<void> {
+  await loadLocation(ctx, locationId);
+  await assertInScope(ctx, await spaceScope(ctx), locationId, 'location', locationId);
+}

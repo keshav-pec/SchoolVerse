@@ -53,6 +53,7 @@ export const AUDIT_ENTITY_TYPES = [
   'space_type',
   'availability_block',
   'space_import',
+  'section_space_assignment',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

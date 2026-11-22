@@ -199,6 +199,22 @@ export const ERROR_CODES = {
   SPACE_IMPORT_NOT_READY: { status: 409, message: 'Check the file first. It has not been checked yet.' },
   SPACE_IMPORT_MAPPING_INCOMPLETE: { status: 422, message: 'Match the required columns before checking the file.' },
   SPACE_IMPORT_DONE: { status: 409, message: 'This file has already been imported.' },
+
+  // Home Classrooms (Module 5, Part 3)
+  ROOM_NOT_ACTIVE: { status: 409, message: 'This room is not active, so it cannot be a Home Classroom.' },
+  ROOM_PARENT_INACTIVE: { status: 409, message: 'The floor or building this room is in is not active.' },
+  ROOM_OTHER_CAMPUS: { status: 409, message: 'The section and the room must be at the same campus.' },
+  ROOM_NOT_ELIGIBLE: { status: 409, message: 'This kind of room cannot be a Home Classroom.' },
+  ROOM_ALREADY_ASSIGNED: { status: 409, message: 'Another section already uses this room for these dates.' },
+  ROOM_TOO_SMALL: { status: 409, message: 'This room has fewer seats than the section has students.' },
+  ROOM_ARCHIVING: { status: 409, message: 'This room is due to be archived before these dates end.' },
+  SECTION_NOT_IN_SESSION: { status: 409, message: 'This section does not belong to that academic session.' },
+  SECTION_NOT_ACTIVE: { status: 409, message: 'This section is not active.' },
+  ASSIGNMENT_DATES_INVALID: { status: 422, message: 'The dates must be inside the academic session, and the end must not be before the start.' },
+  HOME_CLASSROOM_EXISTS: { status: 409, message: 'This section already has a Home Classroom for these dates. Replace it instead.' },
+  ASSIGNMENT_NOT_ACTIVE: { status: 409, message: 'This assignment has already ended or was cancelled, so it cannot be changed.' },
+  REPLACEMENT_INVALID: { status: 409, message: 'The replacement room cannot take over every section. Nothing was moved.' },
+  ROLLOVER_SESSIONS_INVALID: { status: 422, message: 'Choose two different academic sessions to carry Home Classrooms from and to.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

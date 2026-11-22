@@ -19,4 +19,6 @@ export * from './student-lifecycle-dto';
 export * from './spaces';
 export * from './space-dto';
 export * from './schemas/spaces';
+export * from './space-allocation-dto';
+export * from './schemas/space-allocation';
 export * from './data-classification';

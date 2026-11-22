@@ -1,5 +1,6 @@
 import { registerLocationDependency } from '../dependencies/registry';
 import { registerBuiltInSpaceDependencies } from './dependencies';
+import { registerHomeClassroomDependency } from './home-dependencies';
 import { Building, PhysicalSpace } from './space.models';
 
 let registered = false;
@@ -12,6 +13,7 @@ export function registerSpaceDependencies() {
   if (registered) return;
   registered = true;
   registerBuiltInSpaceDependencies();
+  registerHomeClassroomDependency();
   registerLocationDependency({
     key: 'spaces.structure',
     label: 'Buildings and rooms',
