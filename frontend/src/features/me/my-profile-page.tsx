@@ -41,7 +41,7 @@ import { countryOptions } from '@/lib/options';
 import { DevOutboxHint } from '../auth/dev-outbox-hint';
 import { useOwnDocuments, useOwnRequests, usePeopleMutation, useSelfProfile } from '../people/api';
 import { DocumentsPanel } from '../people/documents-panel';
-import { RequestStatusBadge } from '../people/requests-page';
+import { RequestStatusBadge } from '@/components/sv/change-requests';
 import { addressLine } from '../people/tabs/contact-tab';
 import { RequestChangeDialog } from './request-change-dialog';
 

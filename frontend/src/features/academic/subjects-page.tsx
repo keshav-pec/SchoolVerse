@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, ChevronLeft, ChevronRight, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { SUBJECT_CATEGORIES, SUBJECT_CATEGORY_LABELS, type SubjectCategory, type SubjectDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { ApiError, api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
@@ -255,11 +256,7 @@ export function SubjectsPage() {
           </ul>
           <nav className="mt-4 flex items-center justify-between text-sm text-muted" aria-label="Pagination">
             <span>{total} subject{total === 1 ? '' : 's'}</span>
-            <span className="flex items-center gap-2">
-              <Button variant="outline" size="icon-sm" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft /></Button>
-              Page {page} of {pages}
-              <Button variant="outline" size="icon-sm" aria-label="Next page" disabled={page >= pages} onClick={() => setPage(page + 1)}><ChevronRight /></Button>
-            </span>
+            <Pager page={page} pages={pages} onPage={setPage} />
           </nav>
         </>
       )}

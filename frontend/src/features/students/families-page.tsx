@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router';
-import { ChevronLeft, ChevronRight, Search, SearchX, UsersRound, X } from 'lucide-react';
+import { Search, SearchX, UsersRound, X } from 'lucide-react';
 import type { FamilySummaryDTO } from '@shared';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useListParams } from '@/hooks/use-list-params';
 import { formatPhone } from '@/lib/format';
 import { useFamilies } from './api';
@@ -102,17 +103,7 @@ export function FamiliesPage() {
               <p aria-live="polite">
                 {total} {total === 1 ? 'family' : 'families'}
               </p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setParam({ page: String(page - 1) }, true)} aria-label="Previous page">
-                  <ChevronLeft />
-                </Button>
-                <span>
-                  Page {page} of {pages}
-                </span>
-                <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setParam({ page: String(page + 1) }, true)} aria-label="Next page">
-                  <ChevronRight />
-                </Button>
-              </div>
+              <Pager page={page} pages={pages} onPage={(p) => setParam({ page: String(p) }, true)} />
             </div>
           </>
         )}

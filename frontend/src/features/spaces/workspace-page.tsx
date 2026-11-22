@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useDebouncedValue } from '@/hooks/use-debounce';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -307,17 +308,7 @@ export function WorkspacePage() {
                 {pages > 1 && (
                   <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2">
                     <p className="text-sm text-muted">{total} rooms</p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                        Previous
-                      </Button>
-                      <span className="text-sm text-muted">
-                        Page {page} of {pages}
-                      </span>
-                      <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                        Next
-                      </Button>
-                    </div>
+                    <Pager page={page} pages={pages} onPage={setPage} />
                   </div>
                 )}
               </Card>

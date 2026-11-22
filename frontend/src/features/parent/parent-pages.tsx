@@ -13,7 +13,8 @@ import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { formatDateOnly } from '@/lib/format';
 import { firstName, greetingFor } from '@/lib/utils';
-import { formatSize, useDocumentDownload } from '../students/tabs/documents-tab';
+import { formatSize } from '@/components/sv/documents';
+import { useDocumentDownload } from '../students/tabs/documents-tab';
 import { useParentChild, useParentDocuments, wasSeen } from './api';
 import { ChildSwitcher, useChildSelection } from './parent-layout';
 

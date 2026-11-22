@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { LOCATION_STATUSES, LOCATION_STATUS_LABELS, LOCATION_TYPES, LOCATION_TYPE_LABELS, type LocationStatus } from '@shared';
-import { ChevronLeft, ChevronRight, Info, Plus, Search, SearchX, X } from 'lucide-react';
+import { Info, Plus, Search, SearchX, X } from 'lucide-react';
 import { EmptyMap } from '@/components/illustrations/empty-map';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useListParams } from '@/hooks/use-list-params';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -239,17 +240,7 @@ export function LocationsPage() {
                 Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total} location{total === 1 ? '' : 's'}
               </p>
               {pageCount > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setParam({ page: String(page - 1) }, true)}>
-                    <ChevronLeft /> Previous
-                  </Button>
-                  <span>
-                    Page {page} of {pageCount}
-                  </span>
-                  <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => setParam({ page: String(page + 1) }, true)}>
-                    Next <ChevronRight />
-                  </Button>
-                </div>
+                <Pager page={page} pages={pageCount} onPage={(p) => setParam({ page: String(p) }, true)} />
               )}
             </div>
           </>

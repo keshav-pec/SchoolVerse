@@ -1,8 +1,6 @@
 import { EMPLOYEE_CATEGORY_LABELS } from '@shared';
 import {
   Building2,
-  ChevronLeft,
-  ChevronRight,
   Mail,
   Phone,
   Search,
@@ -10,12 +8,12 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useListParams } from '@/hooks/use-list-params';
 import { formatPhone } from '@/lib/format';
 import { useEmployees } from './api';
@@ -142,29 +140,7 @@ export function ColleaguesPage() {
             <p aria-live="polite">
               {total} {total === 1 ? 'colleague' : 'colleagues'}
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                aria-label="Previous page"
-              >
-                <ChevronLeft />
-              </Button>
-              <span>
-                Page {page} of {pages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= pages}
-                onClick={() => setPage(page + 1)}
-                aria-label="Next page"
-              >
-                <ChevronRight />
-              </Button>
-            </div>
+            <Pager page={page} pages={pages} onPage={setPage} />
           </div>
         </>
       )}

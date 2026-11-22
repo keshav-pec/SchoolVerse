@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useMatch, useNavigate } from 'react-router';
 import { ENROLLMENT_STATUSES, ENROLLMENT_STATUS_LABELS, STUDENT_STATUSES, STUDENT_STATUS_LABELS, type StudentDirectoryDTO } from '@shared';
-import { ChevronLeft, ChevronRight, ListChecks, ListFilter, Plus, Search, SearchX, UserPlus, UsersRound, X } from 'lucide-react';
+import { ListChecks, ListFilter, Plus, Search, SearchX, UserPlus, UsersRound, X } from 'lucide-react';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
 import { TabIntro } from '@/components/sv/help';
+import { Pager } from '@/components/sv/pager';
 import { useListParams } from '@/hooks/use-list-params';
 import { cn } from '@/lib/utils';
 import { useClassOfferings, useSections } from '../academic/api';
@@ -313,17 +314,7 @@ export function StudentsPage() {
               <p aria-live="polite">
                 {total} {total === 1 ? 'student' : 'students'}
               </p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setParam({ page: String(page - 1) }, true)} aria-label="Previous page">
-                  <ChevronLeft />
-                </Button>
-                <span>
-                  Page {page} of {pages}
-                </span>
-                <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setParam({ page: String(page + 1) }, true)} aria-label="Next page">
-                  <ChevronRight />
-                </Button>
-              </div>
+              <Pager page={page} pages={pages} onPage={(p) => setParam({ page: String(p) }, true)} />
             </div>
           </>
         )}

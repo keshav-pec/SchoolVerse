@@ -1,19 +1,15 @@
-import { useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { IMPORT_MAX_BYTES, type ImportDTO, type ImportMode } from '@shared';
-import { Download, FileSpreadsheet, FileUp, Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/sv/empty-state';
-import { ErrorState } from '@/components/sv/error-state';
+import { CsvFileField, EarlierImportsCard } from '@/components/sv/csv-import';
 import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
 import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
-import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useStudentMutation } from './api';
 import { useStudentContext } from './context';
@@ -35,7 +31,6 @@ export function ImportsPage() {
   const [mode, setMode] = useState<ImportMode>('EXISTING_STUDENTS');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
   const create = useStudentMutation((form: FormData) => api.upload<ImportDTO>('/students/imports', form), { quiet: true });
 
   const submit = async () => {
@@ -94,22 +89,7 @@ export function ImportsPage() {
               ))}
             </div>
           </fieldset>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="import-file" className="text-sm font-semibold">
-              CSV file
-            </label>
-            <input
-              ref={input}
-              id="import-file"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-soft file:px-4 file:py-2.5 file:font-semibold file:text-brand"
-            />
-            <p className="text-[13px] text-muted">
-              Students go to {ctx.session?.code ?? 'this year'} at {ctx.location?.displayName ?? 'this campus'}. Save an Excel sheet as “CSV” first. Up to 2,000 rows.
-            </p>
-          </div>
+          <CsvFileField id="import-file" onFile={setFile} hint={<>Students go to {ctx.session?.code ?? 'this year'} at {ctx.location?.displayName ?? 'this campus'}. Save an Excel sheet as “CSV” first. Up to 2,000 rows.</>} />
           {error && <Alert tone="danger">{error}</Alert>}
           <Button type="submit" loading={create.isPending} loadingText="Uploading…">
             <Upload /> Upload And Match Columns
@@ -117,34 +97,10 @@ export function ImportsPage() {
         </form>
       </Card>
 
-      <Card className="p-0" aria-label="Earlier imports">
-        <h2 className="border-b border-line px-4 py-3 text-base font-bold">Earlier imports</h2>
-        {list.isLoading ? (
-          <Skeleton className="m-4 h-16" />
-        ) : list.isError ? (
-          <ErrorState error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} />
-        ) : (list.data ?? []).length === 0 ? (
-          <EmptyState illustration={<FileSpreadsheet className="size-12 text-muted" aria-hidden="true" />} title="No imports yet" description="Files you upload show here, so you can come back and finish them." />
-        ) : (
-          <ul className="divide-y divide-line">
-            {(list.data ?? []).map((i) => (
-              <li key={i.importId} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <FileUp className="size-5 text-brand" aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{i.fileName}</p>
-                  <p className="text-[13px] text-muted">
-                    {formatDateTime(i.createdAt)} · {i.summary.message}
-                  </p>
-                </div>
-                <Badge tone={i.status === 'COMMITTED' ? 'success' : 'warning'}>{IMPORT_STATUS_TEXT[i.status]}</Badge>
-                <Button asChild size="sm" variant="outline">
-                  <Link to={`/students/imports/${i.importId}`}>Open</Link>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <EarlierImportsCard
+        query={list}
+        items={(list.data ?? []).map((i) => ({ importId: i.importId, fileName: i.fileName, createdAt: i.createdAt, message: i.summary.message, statusText: IMPORT_STATUS_TEXT[i.status], committed: i.status === 'COMMITTED', href: `/students/imports/${i.importId}` }))}
+      />
     </>
   );
 }

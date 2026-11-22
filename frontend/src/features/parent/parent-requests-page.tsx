@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { messageFor } from '@/lib/errors';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { RequestStatusBadge } from '../people/requests-page';
+import { RequestStatusBadge } from '@/components/sv/change-requests';
 import { useOwnRequests, useParentMutation } from './api';
 import { useChildSelection } from './parent-layout';
 

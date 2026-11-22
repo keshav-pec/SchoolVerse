@@ -1,19 +1,17 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { IMPORT_FIELD_LABELS, IMPORT_FIELDS, IMPORT_REQUIRED_FIELDS, type ImportCommitResultDTO, type ImportDTO, type ImportField, type ImportIssueLevel } from '@shared';
-import { ArrowLeft, CircleCheck, Download, FileCheck2, Link2, RefreshCw, Rocket } from 'lucide-react';
+import { Download, Link2, RefreshCw, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
-import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Combobox } from '@/components/ui/combobox';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/sv/confirm-dialog';
+import { ColumnMappingStep, ImportRowsCard, ImportsBackLink, IssueGroupsCard, useImportRowFilter } from '@/components/sv/csv-import';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
 import { api, ApiError } from '@/lib/api';
-import { messageFor } from '@/lib/errors';
 import { useStudentMutation } from './api';
 import { IMPORT_STATUS_TEXT } from './imports-page';
 import { importIssuesCsvUrl, useImport, useImportIssues, useImportRows } from './lifecycle-api';
@@ -22,83 +20,38 @@ import { StudentNotFound } from './not-found';
 const LEVEL_TONE: Record<ImportIssueLevel, 'danger' | 'warning' | 'brand'> = { ERROR: 'danger', WARNING: 'warning', INFO: 'brand' };
 const LEVEL_TEXT: Record<ImportIssueLevel, string> = { ERROR: 'Must fix', WARNING: 'Check', INFO: 'Good to know' };
 
-/** Step 1: the columns we matched by ourselves, and a picker only for the ones we could not match. */
+/** Step 1: match the columns, then the server checks every row. */
 function MappingStep({ imp, onDone }: { imp: ImportDTO; onDone: () => void }) {
-  const [mapping, setMapping] = useState<Partial<Record<ImportField, string | null>>>(imp.mapping);
-  const [showAll, setShowAll] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const save = useStudentMutation(async (_: void) => {
+  const save = useStudentMutation(async (mapping: Partial<Record<ImportField, string | null>>) => {
     await api.post<ImportDTO>(`/students/imports/${imp.importId}/map`, { mapping });
     return api.post<ImportDTO>(`/students/imports/${imp.importId}/validate`);
   }, { quiet: true });
-
-  const matched = IMPORT_FIELDS.filter((f) => imp.mapping[f]);
-  const unmatched = IMPORT_FIELDS.filter((f) => !imp.mapping[f]);
-  const shown = showAll ? IMPORT_FIELDS : unmatched;
-  const missing = IMPORT_REQUIRED_FIELDS.filter((f) => !mapping[f]);
-  const options = [{ value: '', label: 'Not in the file' }, ...imp.headers.map((h) => ({ value: h, label: h }))];
-
   return (
-    <Card className="space-y-4" aria-label="Match the columns">
-      <CardHeader className="mb-0">
-        <CardTitle className="text-lg">1. Match the columns</CardTitle>
-      </CardHeader>
-      <Alert tone={matched.length > 0 ? 'success' : 'info'}>
-        We matched {matched.length} of {IMPORT_FIELDS.length} columns by ourselves{matched.length > 0 ? `: ${matched.map((f) => `${IMPORT_FIELD_LABELS[f]} ← “${imp.mapping[f]}”`).join(', ')}` : ''}. Only fix the ones below.
-      </Alert>
-      {shown.length === 0 ? (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <CircleCheck className="size-4 text-success" aria-hidden="true" /> Every column is matched.
-        </p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2" aria-label="Columns to match">
-          {shown.map((f) => (
-            <li key={f} className="flex items-center gap-3">
-              <span className="w-36 shrink-0 text-sm font-semibold">
-                {IMPORT_FIELD_LABELS[f]}
-                {IMPORT_REQUIRED_FIELDS.includes(f) && <span className="text-danger"> *</span>}
-              </span>
-              <Combobox aria-label={`File column for ${IMPORT_FIELD_LABELS[f]}`} className="h-9 flex-1" value={mapping[f] ?? ''} onChange={(v) => setMapping((m) => ({ ...m, [f]: v || null }))} options={options} searchPlaceholder="Search columns…" />
-            </li>
-          ))}
-        </ul>
-      )}
-      <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
-        {showAll ? 'Show only unmatched columns' : 'Change a matched column'}
-      </Button>
-      {missing.length > 0 && <Alert tone="warning">Match {missing.map((f) => IMPORT_FIELD_LABELS[f]).join(' and ')} before checking. Every student needs them.</Alert>}
-      {error && <Alert tone="danger">{error}</Alert>}
-      <Button
-        disabled={missing.length > 0}
-        loading={save.isPending}
-        loadingText="Checking every row…"
-        onClick={async () => {
-          setError(null);
-          try {
-            await save.mutateAsync();
-            onDone();
-          } catch (err) {
-            setError(messageFor(err));
-          }
-        }}
-      >
-        <FileCheck2 /> Check The File
-      </Button>
-    </Card>
+    <ColumnMappingStep
+      fields={IMPORT_FIELDS}
+      labels={IMPORT_FIELD_LABELS}
+      required={IMPORT_REQUIRED_FIELDS}
+      matched={imp.mapping}
+      headers={imp.headers}
+      noun="student"
+      checking={save.isPending}
+      onCheck={async (mapping) => {
+        await save.mutateAsync(mapping);
+        onDone();
+      }}
+    />
   );
 }
 
 /** Step 2: the summary, the problems grouped by kind (with the fix), the rows that need attention, and Import Ready Rows. */
 function ReviewStep({ imp, onRemap }: { imp: ImportDTO; onRemap: () => void }) {
   const issues = useImportIssues(imp.importId, true);
-  const [allRows, setAllRows] = useState(false);
-  const [page, setPage] = useState(1);
-  const rows = useImportRows(imp.importId, { status: allRows ? undefined : 'NEEDS_ATTENTION', page }, true);
+  const filter = useImportRowFilter();
+  const rows = useImportRows(imp.importId, filter.args, true);
   const [confirming, setConfirming] = useState(false);
   const recheck = useStudentMutation((_: void) => api.post<ImportDTO>(`/students/imports/${imp.importId}/validate`), { success: 'Checked again.' });
   const commit = useStudentMutation((_: void) => api.post<ImportCommitResultDTO>(`/students/imports/${imp.importId}/commit`), { quiet: true });
   const summary = issues.data?.summary ?? imp.summary;
-  const pages = rows.data ? Math.max(1, Math.ceil(rows.data.total / rows.data.pageSize)) : 1;
 
   return (
     <div className="space-y-4">
@@ -122,104 +75,42 @@ function ReviewStep({ imp, onRemap }: { imp: ImportDTO; onRemap: () => void }) {
         </Button>
       </Card>
 
-      <Card className="p-0" aria-label="Problems by kind">
-        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
-          <h2 className="flex-1 text-base font-bold">Problems by kind</h2>
+      <IssueGroupsCard
+        query={issues}
+        action={
           <Button asChild variant="outline" size="sm">
             <a href={importIssuesCsvUrl(imp.importId)} download>
               <Download /> Download Error Report
             </a>
           </Button>
-        </div>
-        {issues.isLoading ? (
-          <Skeleton className="m-4 h-16" />
-        ) : issues.isError ? (
-          <ErrorState error={issues.error} onRetry={() => void issues.refetch()} retrying={issues.isFetching} />
-        ) : (issues.data?.groups ?? []).length === 0 ? (
-          <p className="flex items-center gap-2 px-4 py-4 text-sm text-muted">
-            <CircleCheck className="size-4 text-success" aria-hidden="true" /> No problems found.
-          </p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {issues.data!.groups.map((g) => (
-              <li key={g.code} className="space-y-1 px-4 py-3" data-testid="issue-group">
-                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                  <Badge tone={LEVEL_TONE[g.level]}>{LEVEL_TEXT[g.level]}</Badge>
-                  {g.title}
-                  <span className="font-normal text-muted">
-                    · {g.count} row{g.count === 1 ? '' : 's'}
-                  </span>
-                </p>
-                <p className="text-[13px] text-muted">
-                  Fix: {g.suggestedFix} Rows {g.rowNumbers.slice(0, 12).join(', ')}
-                  {g.rowNumbers.length > 12 ? '…' : ''}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+        }
+        groups={(issues.data?.groups ?? []).map((g) => ({
+          code: g.code,
+          title: g.title,
+          count: g.count,
+          badge: <Badge tone={LEVEL_TONE[g.level]}>{LEVEL_TEXT[g.level]}</Badge>,
+          fix: `${g.suggestedFix} Rows ${g.rowNumbers.slice(0, 12).join(', ')}${g.rowNumbers.length > 12 ? '…' : ''}`,
+        }))}
+      />
 
-      <Card className="p-0" aria-label="Rows">
-        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
-          <h2 className="flex-1 text-base font-bold">{allRows ? 'All rows' : 'Rows that need attention'}</h2>
-          <Button variant="ghost" size="sm" onClick={() => { setAllRows((v) => !v); setPage(1); }}>
-            {allRows ? 'Show only problem rows' : 'Show all rows'}
-          </Button>
-        </div>
-        {rows.isLoading ? (
-          <Skeleton className="m-4 h-24" />
-        ) : rows.isError ? (
-          <ErrorState error={rows.error} onRetry={() => void rows.refetch()} retrying={rows.isFetching} />
-        ) : (rows.data?.items ?? []).length === 0 ? (
-          <p className="px-4 py-4 text-sm text-muted">{allRows ? 'No rows.' : 'No row needs attention.'}</p>
-        ) : (
-          <>
-            <ul className="divide-y divide-line">
-              {rows.data!.items.map((r) => (
-                <li key={r.rowId} className="px-4 py-2.5 text-sm">
-                  <p className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs text-muted">Row {r.rowNumber}</span>
-                    <span className="font-semibold">{r.values.studentName || 'No name'}</span>
-                    <span className="text-muted">
-                      {[r.values.className, r.values.sectionName].filter(Boolean).join('-')}
-                      {r.values.admissionNumber ? ` · ${r.values.admissionNumber}` : ''}
-                    </span>
-                    <Badge tone={r.status === 'READY' || r.status === 'IMPORTED' ? 'success' : r.status === 'SKIPPED' ? 'neutral' : 'warning'}>{r.status === 'NEEDS_ATTENTION' ? 'Needs attention' : r.status === 'READY' ? 'Ready' : r.status === 'IMPORTED' ? 'Imported' : 'Skipped'}</Badge>
-                    {r.studentId && (
-                      <Link to={`/students/${r.studentId}`} className="text-brand hover:underline">
-                        Open student
-                      </Link>
-                    )}
-                  </p>
-                  {r.issues.length > 0 && (
-                    <ul className="mt-1 space-y-0.5 text-[13px] text-muted">
-                      {r.issues.map((i, ix) => (
-                        <li key={ix}>
-                          <span className={i.level === 'ERROR' ? 'font-semibold text-danger' : undefined}>{i.message}</span> {i.suggestedFix}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {pages > 1 && (
-              <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-2">
-                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <span className="text-sm text-muted">
-                  Page {page} of {pages}
-                </span>
-                <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                  Next
-                </Button>
-              </div>
-            )}
-          </>
-        )}
-      </Card>
+      <ImportRowsCard
+        filter={filter}
+        query={rows}
+        data={
+          rows.data && {
+            ...rows.data,
+            items: rows.data.items.map((r) => ({
+              rowId: r.rowId,
+              rowNumber: r.rowNumber,
+              status: r.status,
+              name: r.values.studentName ?? '',
+              detail: `${[r.values.className, r.values.sectionName].filter(Boolean).join('-')}${r.values.admissionNumber ? ` · ${r.values.admissionNumber}` : ''}`,
+              link: r.studentId ? { to: `/students/${r.studentId}`, label: 'Open student' } : null,
+              issues: r.issues.map((i) => ({ title: i.message, fix: i.suggestedFix, strong: i.level === 'ERROR' })),
+            })),
+          }
+        }
+      />
 
       {confirming && (
         <ConfirmDialog
@@ -254,9 +145,7 @@ export function ImportPage() {
 
   return (
     <>
-      <Link to="/students/imports" className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-brand">
-        <ArrowLeft className="size-4" /> Imports
-      </Link>
+      <ImportsBackLink to="/students/imports" />
       <PageHeader eyebrow="Import" title={imp.fileName} description={`${imp.mode === 'EXISTING_STUDENTS' ? 'Existing students' : 'New admissions'} · ${IMPORT_STATUS_TEXT[imp.status]}`} />
       {mapping ? <MappingStep imp={imp} onDone={() => setRemap(false)} /> : <ReviewStep imp={imp} onRemap={() => setRemap(true)} />}
     </>

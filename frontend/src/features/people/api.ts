@@ -240,12 +240,4 @@ export function useAddSuggestedMasters(kind: 'departments' | 'designations') {
   return { run: () => add.mutate(), pending: add.isPending };
 }
 
-/** Opens a signed download link the way a browser would, without leaving the page. */
-export function openSignedLink(url: string) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+export { openSignedLink } from '@/components/sv/documents';

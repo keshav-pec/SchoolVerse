@@ -8,8 +8,6 @@ import {
   type EmployeeDirectoryDTO,
 } from '@shared';
 import {
-  ChevronLeft,
-  ChevronRight,
   Download,
   ListFilter,
   Plus,
@@ -29,6 +27,7 @@ import { EmployeeStatusPill } from '@/components/sv/employee-status';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
 import { PageHeader } from '@/components/sv/page-header';
+import { Pager } from '@/components/sv/pager';
 import { useListParams } from '@/hooks/use-list-params';
 import { cn } from '@/lib/utils';
 import { useActiveLocations } from '../academic/api';
@@ -321,29 +320,7 @@ export function PeoplePage() {
               <p aria-live="polite">
                 {total} {total === 1 ? 'person' : 'people'}
               </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={filters.page! <= 1}
-                  onClick={() => setParam({ page: String(filters.page! - 1) }, true)}
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft />
-                </Button>
-                <span>
-                  Page {filters.page} of {pages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={filters.page! >= pages}
-                  onClick={() => setParam({ page: String(filters.page! + 1) }, true)}
-                  aria-label="Next page"
-                >
-                  <ChevronRight />
-                </Button>
-              </div>
+              <Pager page={filters.page!} pages={pages} onPage={(p) => setParam({ page: String(p) }, true)} />
             </div>
           </>
         )}
