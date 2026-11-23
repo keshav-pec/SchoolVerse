@@ -261,6 +261,22 @@ export const ERROR_CODES = {
   PERIOD_NOT_CLOSED: { status: 409, message: 'This month is not closed.' },
   PERIOD_LOCKED: { status: 409, message: 'This month is locked and cannot be reopened.' },
   IMPORT_INVALID: { status: 422, message: 'This file has problems. Fix them and upload it again.' },
+
+  // Timetable (Module 6)
+  PLAN_EXISTS: { status: 409, message: 'This campus already has a timetable plan for this session.' },
+  PLAN_READ_ONLY: { status: 409, message: 'This timetable plan is archived. Restore it before changing it.' },
+  PLAN_DATES_INVALID: { status: 422, message: 'The plan dates must be inside the session, and the end must not be before the start.' },
+  OPERATING_DAY_IN_USE: { status: 409, message: 'Lessons are already placed on this day. Clear them first.' },
+  PERIOD_OVERLAP: { status: 409, message: 'This period overlaps another period of the same day.' },
+  PERIOD_INVALID: { status: 422, message: 'This period is not valid.' },
+  BELL_IN_USE: { status: 409, message: 'This is already used by lessons or classes, so it cannot be removed.' },
+  BELL_NAME_TAKEN: { status: 409, message: 'Another set of Daily Periods already has this name.' },
+  REQUIREMENT_INVALID: { status: 422, message: 'These Subject Needs are not valid.' },
+  AVAILABILITY_INVALID: { status: 422, message: 'These times are not valid.' },
+  GROUP_NAME_TAKEN: { status: 409, message: 'Another Teaching Group in this plan already has this name.' },
+  GROUP_INVALID: { status: 422, message: 'This Teaching Group is not valid.' },
+  NOT_READY: { status: 409, message: 'The timetable setup is not ready yet. Finish the missing steps first.' },
+  WRONG_CAMPUS: { status: 409, message: 'This belongs to a different campus than the timetable plan.' },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

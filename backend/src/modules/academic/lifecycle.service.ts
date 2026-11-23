@@ -5,6 +5,7 @@ import { duplicateKeyFields } from '../../db/errors';
 import { withTransaction } from '../../db/transaction';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { recordAcademicAudit } from './audit';
+import { findAcademicDependencies } from './dependencies';
 import { assertSessionTransition, SESSION_ACTION_AUDIT } from './lifecycle';
 import { AcademicSession } from './session.model';
 import { getSessionDTO, getSessionOrThrow } from './session.service';
@@ -43,6 +44,11 @@ export async function changeSessionStatus(ctx: ServiceContext, academicSessionId
         const issues = await computeValidation(ctx, before, db);
         if (issues.some((i) => i.level === 'ERROR')) return { blocked: issues };
         validation = await storeValidationSummary(ctx, academicSessionId, issues, new Date(), db);
+      }
+      if (action === 'close') {
+        // Other modules (the Timetable) may still be using this session.
+        const dependencies = await findAcademicDependencies({ tenantId: ctx.tenantId, academicSessionId, entityType: 'academic_session', entityId: academicSessionId, session: db });
+        if (dependencies.length > 0) throw new AppError('ACADEMIC_HAS_DEPENDENCIES', `This session cannot be closed yet. ${dependencies.map((d) => d.message).join(' ')}`, { dependencies });
       }
       if (action === 'activate') {
         const conflict = await anotherSessionActive(ctx, before.schoolId, academicSessionId, db);

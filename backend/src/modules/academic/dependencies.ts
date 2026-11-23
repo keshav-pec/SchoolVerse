@@ -16,6 +16,8 @@ export const ACADEMIC_ENTITY_TYPES = [
   'choice_group',
   'constraint',
   'programme',
+  /** Asked when a session is about to be closed. */
+  'academic_session',
 ] as const;
 export type AcademicEntityType = (typeof ACADEMIC_ENTITY_TYPES)[number];
 

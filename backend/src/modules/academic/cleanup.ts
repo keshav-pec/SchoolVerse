@@ -8,6 +8,8 @@ import { AcademicProgramme, SubjectChoiceConstraint, SubjectChoiceGroup } from '
 export interface OfferingCleanupScope {
   sessionId?: string;
   sectionOfferingIds?: string[];
+  subjectOfferingIds?: string[];
+  classOfferingIds?: string[];
 }
 type OfferingCleanup = (tenantId: string, scope: OfferingCleanupScope, db: ClientSession) => Promise<void>;
 const offeringCleanups = new Map<string, OfferingCleanup>();

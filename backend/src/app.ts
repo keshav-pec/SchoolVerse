@@ -15,6 +15,7 @@ import { registerFinanceDependencies } from './modules/finance/register';
 import { registerSimulatedDependencies } from './modules/dependencies/simulated-references';
 import { registerStaffDependencies } from './modules/staff/register';
 import { registerSpaceDependencies } from './modules/spaces/register';
+import { registerTimetableDependencies } from './modules/timetable/register';
 import { registerStudentDependencies } from './modules/students/register';
 import { apiRouter } from './routes';
 
@@ -29,6 +30,7 @@ export function createApp() {
   registerStudentDependencies();
   registerSpaceDependencies();
   registerFinanceDependencies();
+  registerTimetableDependencies();
 
   app.disable('x-powered-by');
   if (isProd) app.set('trust proxy', 1);

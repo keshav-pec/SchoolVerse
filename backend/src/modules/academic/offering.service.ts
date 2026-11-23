@@ -210,7 +210,7 @@ export async function deleteClassOfferingContents(tenantId: string, classOfferin
   const offeringIds = (await SubjectOffering.find({ tenantId, classOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((o) => o._id);
   const rules = await removeRulesForClassOffering(tenantId, classOfferingId, db);
   await removeRulesForSubjectOfferings(tenantId, offeringIds, db);
-  await runOfferingCleanup(tenantId, { sectionOfferingIds: (await SectionOffering.find({ tenantId, classOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((x) => x._id) }, db);
+  await runOfferingCleanup(tenantId, { sectionOfferingIds: (await SectionOffering.find({ tenantId, classOfferingId }).select('_id').session(db).lean<{ _id: string }[]>()).map((x) => x._id), subjectOfferingIds: offeringIds, classOfferingIds: [classOfferingId] }, db);
   const [sections, subjectOfferings] = await Promise.all([
     SectionOffering.deleteMany({ tenantId, classOfferingId }, { session: db }),
     SubjectOffering.deleteMany({ tenantId, classOfferingId }, { session: db }),
@@ -578,6 +578,7 @@ export async function deleteSubjectOffering(ctx: ServiceContext, subjectOffering
     const { offering: before, session } = await getSubjectOfferingOrThrow(ctx, subjectOfferingId, db);
     assertDeletable(session);
     await removeRulesForSubjectOfferings(ctx.tenantId, [subjectOfferingId], db);
+    await runOfferingCleanup(ctx.tenantId, { subjectOfferingIds: [subjectOfferingId] }, db);
     await SubjectOffering.deleteOne({ _id: subjectOfferingId, tenantId: ctx.tenantId }, { session: db });
     await recordAcademicAudit(ctx, db, {
       entityType: 'subject_offering',

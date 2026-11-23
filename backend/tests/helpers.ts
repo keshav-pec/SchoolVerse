@@ -723,3 +723,27 @@ export async function finalise(t: PaySchool, runId: string) {
   return payOk<PayrollRunDTO>(await pay(t.approver2, `/runs/${runId}/finalize`, { version: a.version }));
 }
 export const lineAmount = (lines: RunLineDTO[], key: string) => lines.find((l) => l.componentKey === key)?.amountPaise;
+
+// ───────────────────────────────────────────────────────────── timetable (Module 6)
+
+/**
+ * The staff school (Class VIII at Mohali, sections A B C, Maths + Science, ACTIVE session) with a timetable plan for Mohali.
+ * `post`, `put` and `patch` send as the School Admin and return the raw response; `ok` unwraps a 2xx body.
+ */
+export async function timetableSchool(options: { operatingDays?: string[] } = {}) {
+  const t = await staffSchool();
+  const send = (method: 'post' | 'put' | 'patch' | 'delete') => (path: string, body: unknown = {}, agent: Agent = t.agent) => agent[method](`${API}${path}`).send(body as object);
+  const tt = { post: send('post'), put: send('put'), patch: send('patch'), del: send('delete') };
+  const unwrap = <T>(res: { status: number; body: { data: T } }, status = 200): T => {
+    expect(res.status, JSON.stringify(res.body)).toBe(status);
+    return res.body.data;
+  };
+  const planRes = await tt.post('/timetable-plans', { locationId: t.moh.locationId, academicSessionId: t.sessionId, ...(options.operatingDays ? { operatingDays: options.operatingDays } : {}) });
+  const plan = unwrap<import('@shared').TimetablePlanDTO>(planRes, 201);
+  const planId = plan.planId;
+  /** 08:00-14:05 with 45-minute periods, a break and lunch: seven lessons a day and 5 minutes over. */
+  const regular = { name: 'Regular', kind: 'REGULAR', start: '08:00', end: '14:05', periodMinutes: 45, breaks: [{ name: 'Short Break', start: '10:15', end: '10:30', type: 'BREAK' }, { name: 'Lunch', start: '12:00', end: '12:30', type: 'LUNCH' }] };
+  const getData = async <T>(path: string, status = 200): Promise<T> => unwrap<T>(await t.agent.get(`${API}${path}`), status);
+  return { ...t, tt, unwrap, plan, planId, regular, getData };
+}
+export type TimetableSchool = Awaited<ReturnType<typeof timetableSchool>>;

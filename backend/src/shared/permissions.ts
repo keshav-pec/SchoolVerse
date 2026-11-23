@@ -1,4 +1,5 @@
 import type { Role } from './enums';
+import { TIMETABLE_BUNDLES, type TimetableBundle } from './timetable';
 
 /**
  * Permission catalog (PRD §7). Server-side enforcement is the source of truth;
@@ -99,6 +100,23 @@ export const PERMISSIONS = [
   'payroll:salary:view_sensitive',
   'payroll:settlement:manage',
   'payroll:report:view',
+  // Timetable (Module 6). Faculty get `timetable:view` only. Staff get the rest through job bundles (TIMETABLE_BUNDLES).
+  'timetable:view',
+  'timetable:setup:manage', // plan, school week, Daily Periods, Subject Needs, Teaching Groups
+  'timetable:draft:create',
+  'timetable:entry:create',
+  'timetable:entry:edit',
+  'timetable:entry:delete',
+  'timetable:bulk:manage',
+  'timetable:smart_draft:run',
+  'timetable:conflict:override',
+  'timetable:review',
+  'timetable:publish',
+  'timetable:faculty_availability:manage',
+  'timetable:substitution:manage',
+  'timetable:override:manage',
+  'timetable:report:view',
+  'timetable:audit:view',
   // Setup & governance
   'setup:manage',
   'audit:view',
@@ -113,7 +131,7 @@ const LIMITED_VIEW: Permission[] = ['school:view', 'location:view', 'academic:vi
 const COLLEAGUE_VIEW: Permission[] = [...LIMITED_VIEW, 'employee:directory'];
 
 /** Faculty may look up rooms; the server narrows what they see to schedulable rooms at their own locations. */
-const FACULTY_VIEW: Permission[] = [...COLLEAGUE_VIEW, 'space:view'];
+const FACULTY_VIEW: Permission[] = [...COLLEAGUE_VIEW, 'space:view', 'timetable:view'];
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   SCHOOL_ADMIN: PERMISSIONS,
@@ -167,3 +185,19 @@ export const FINANCE_BUNDLE_LABELS: Record<FinanceBundle, { label: string; help:
 export function bundlePermissions(bundles: readonly FinanceBundle[]): Permission[] {
   return [...new Set(bundles.flatMap((b) => FINANCE_BUNDLE_PERMISSIONS[b]))];
 }
+
+// ───────────────────────────────────────────────────────────── Timetable job bundles (Module 6)
+
+const TIMETABLE_ALL = PERMISSIONS.filter((p) => p.startsWith('timetable:'));
+
+/** The same idea as the finance bundles: given to a Staff or Faculty login, read from the database on every request, never a new role. */
+export const TIMETABLE_BUNDLE_PERMISSIONS: Record<TimetableBundle, readonly Permission[]> = {
+  SCHEDULING_COORDINATOR: TIMETABLE_ALL.filter((p) => !['timetable:publish', 'timetable:conflict:override', 'timetable:audit:view'].includes(p)),
+  SUBSTITUTION_MANAGER: ['timetable:view', 'timetable:substitution:manage', 'timetable:override:manage'],
+  FRONT_OFFICE: ['timetable:view', 'timetable:report:view'],
+};
+
+export function timetableBundlePermissions(bundles: readonly TimetableBundle[]): Permission[] {
+  return [...new Set(bundles.flatMap((b) => TIMETABLE_BUNDLE_PERMISSIONS[b]))];
+}
+export { TIMETABLE_BUNDLES };

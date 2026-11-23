@@ -54,6 +54,13 @@ export const AUDIT_ENTITY_TYPES = [
   'availability_block',
   'space_import',
   'section_space_assignment',
+  // Timetable (Module 6)
+  'timetable_plan',
+  'bell_schedule',
+  'schedule_requirement',
+  'faculty_availability',
+  'teaching_group',
+  'timetable_access',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

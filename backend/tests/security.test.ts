@@ -103,7 +103,14 @@ interface SpaceIds {
   otherSessionId: string;
 }
 
-type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds; spaces: SpaceIds };
+interface TimetableIds {
+  planId: string;
+  bellId: string;
+  periodId: string;
+  groupId: string;
+}
+
+type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds; spaces: SpaceIds; timetable: TimetableIds };
 
 /** Every School, Location, Setup, Master, Academic and Staff route that takes an id, pointed at the given ids. */
 function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
@@ -120,6 +127,10 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
   const student = `${API}/students/${kid.studentId}`;
   const sp = ids.spaces;
   const room = `${API}/physical-spaces/${sp.spaceId}`;
+  const tt = ids.timetable;
+  const plan = `${API}/timetable-plans/${tt.planId}`;
+  const generate = { name: 'Matrix', kind: 'REGULAR', start: '08:00', end: '12:00', periodMinutes: 45 };
+  const needs = { subjectOfferingId: x.subjectOfferingId, periodsPerWeek: 4 };
   return {
     reads: [
       { name: 'GET school', send: (a) => a.get(s) },
@@ -191,6 +202,20 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET readiness', send: (c) => c.get(`${API}/spaces/readiness?locationId=${ids.locationId}`) },
       { name: 'GET room attention', send: (c) => c.get(`${API}/spaces/attention?locationId=${ids.locationId}`) },
       { name: 'GET room report', send: (c) => c.get(`${API}/spaces/reports/space-inventory?locationId=${ids.locationId}`) },
+      { name: 'GET timetable plan', send: (c) => c.get(plan) },
+      { name: 'GET timetable readiness', send: (c) => c.get(`${plan}/readiness`) },
+      { name: 'GET timetable teachers', send: (c) => c.get(`${plan}/teachers`) },
+      { name: 'GET daily periods', send: (c) => c.get(`${plan}/bell-schedules`) },
+      { name: 'GET daily period', send: (c) => c.get(`${API}/bell-schedules/${tt.bellId}`) },
+      { name: 'GET bell resolution', send: (c) => c.get(`${plan}/bell-resolution`) },
+      { name: 'GET bell assignments', send: (c) => c.get(`${plan}/bell-assignments`) },
+      { name: 'GET subject needs', send: (c) => c.get(`${API}/subject-schedule-requirements?planId=${tt.planId}&classOfferingId=${x.classOfferingId}`) },
+      { name: 'GET teacher availability', send: (c) => c.get(`${API}/faculty-availability/${st.employeeId}?planId=${tt.planId}`) },
+      { name: 'GET workload rules', send: (c) => c.get(`${API}/faculty-workload-rules?planId=${tt.planId}`) },
+      { name: 'GET teaching groups', send: (c) => c.get(`${API}/teaching-groups?planId=${tt.planId}`) },
+      { name: 'GET teaching group', send: (c) => c.get(`${API}/teaching-groups/${tt.groupId}`) },
+      { name: 'GET group members', send: (c) => c.get(`${API}/teaching-groups/${tt.groupId}/members`) },
+      { name: 'GET group health', send: (c) => c.get(`${API}/teaching-groups/${tt.groupId}/health`) },
     ],
     mutations: [
       { name: 'PATCH school', send: (a) => a.patch(s).send({ displayName: 'Hijacked' }) },
@@ -360,6 +385,31 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'rollover preview', send: (c) => c.post(`${API}/section-space-assignments/rollover/preview`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
       { name: 'rollover commit', send: (c) => c.post(`${API}/section-space-assignments/rollover/commit`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
       { name: 'replace room', send: (c) => c.post(`${room}/replace`).send({ mode: 'AFTER_SESSION' }) },
+      { name: 'POST timetable plan', send: (c) => c.post(`${API}/timetable-plans`).send({ locationId: ids.locationId, academicSessionId: x.sessionId }) },
+      { name: 'PATCH timetable plan', send: (c) => c.patch(plan).send({ version: 1, planName: 'Hijacked' }) },
+      { name: 'timetable plan status', send: (c) => c.post(`${plan}/status`).send({ to: 'ARCHIVED' }) },
+      { name: 'POST daily periods', send: (c) => c.post(`${plan}/bell-schedules`).send({ name: 'Matrix' }) },
+      { name: 'preview generate periods', send: (c) => c.post(`${plan}/bell-schedules/generate/preview`).send(generate) },
+      { name: 'generate periods', send: (c) => c.post(`${plan}/bell-schedules/generate`).send(generate) },
+      { name: 'PATCH daily periods', send: (c) => c.patch(`${API}/bell-schedules/${tt.bellId}`).send({ name: 'Hijacked' }) },
+      { name: 'DELETE daily periods', send: (c) => c.delete(`${API}/bell-schedules/${tt.bellId}`) },
+      { name: 'duplicate daily periods', send: (c) => c.post(`${API}/bell-schedules/${tt.bellId}/duplicate`).send({ name: 'Copy' }) },
+      { name: 'POST period', send: (c) => c.post(`${API}/bell-schedules/${tt.bellId}/periods`).send({ periodName: 'Matrix', start: '20:00', end: '20:30' }) },
+      { name: 'PATCH period', send: (c) => c.patch(`${API}/bell-schedule-periods/${tt.periodId}`).send({ periodName: 'Hijacked' }) },
+      { name: 'DELETE period', send: (c) => c.delete(`${API}/bell-schedule-periods/${tt.periodId}`) },
+      { name: 'bulk assign daily periods', send: (c) => c.post(`${plan}/bell-assignments/bulk`).send({ bellScheduleId: tt.bellId, scope: 'DEFAULT' }) },
+      { name: 'clear bell assignments', send: (c) => c.post(`${plan}/bell-assignments/clear`).send({ assignmentIds: [tt.bellId] }) },
+      { name: 'PUT subject needs', send: (c) => c.put(`${API}/subject-schedule-requirements`).send({ planId: tt.planId, items: [{ scope: 'CLASS', classOfferingId: x.classOfferingId, ...needs }] }) },
+      { name: 'apply needs to class', send: (c) => c.post(`${API}/subject-schedule-requirements/apply-grade`).send({ planId: tt.planId, classOfferingId: x.classOfferingId, items: [needs] }) },
+      { name: 'copy needs to sections', send: (c) => c.post(`${API}/subject-schedule-requirements/copy-section`).send({ planId: tt.planId, fromSectionId: x.sectionId, toSectionIds: [x.sectionId] }) },
+      { name: 'reset section needs', send: (c) => c.post(`${API}/subject-schedule-requirements/reset-section`).send({ planId: tt.planId, sectionOfferingId: x.sectionId }) },
+      { name: 'PUT teacher availability', send: (c) => c.put(`${API}/faculty-availability/${st.employeeId}`).send({ planId: tt.planId, rows: [] }) },
+      { name: 'bulk teacher availability', send: (c) => c.post(`${API}/faculty-availability/bulk`).send({ planId: tt.planId, employeeIds: [st.employeeId], rows: [] }) },
+      { name: 'copy teacher availability', send: (c) => c.post(`${API}/faculty-availability/copy`).send({ planId: tt.planId, fromEmployeeId: st.employeeId, toEmployeeIds: [st.employeeId] }) },
+      { name: 'PUT workload rules', send: (c) => c.put(`${API}/faculty-workload-rules`).send({ planId: tt.planId, employeeId: null, maxPerDay: 6 }) },
+      { name: 'POST teaching group', send: (c) => c.post(`${API}/teaching-groups`).send({ planId: tt.planId, name: 'Matrix', kind: 'ACTIVITY' }) },
+      { name: 'PATCH teaching group', send: (c) => c.patch(`${API}/teaching-groups/${tt.groupId}`).send({ version: 1, name: 'Hijacked' }) },
+      { name: 'POST group members', send: (c) => c.post(`${API}/teaching-groups/${tt.groupId}/members`).send({ add: [], remove: [] }) },
     ],
   };
 }
@@ -497,7 +547,12 @@ async function victim() {
   spaces.assignmentId = home.assignmentId;
   spaces.sectionId = academic.sectionId;
   spaces.sessionId = academic.sessionId;
-  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students, spaces };
+  // Timetable: a plan with Daily Periods and a Teaching Group.
+  const plan = (await b.agent.post(`${API}/timetable-plans`).send({ locationId: b.moh.locationId, academicSessionId: session.academicSessionId }).expect(201)).body.data as { planId: string };
+  const bell = (await b.agent.post(`${API}/timetable-plans/${plan.planId}/bell-schedules/generate`).send({ name: 'Victim Regular', start: '08:00', end: '12:00', periodMinutes: 45 }).expect(201)).body.data.schedule as { bellScheduleId: string; periods: { periodId: string }[] };
+  const teachingGroup = (await b.agent.post(`${API}/teaching-groups`).send({ planId: plan.planId, name: 'Victim Group', kind: 'SUBJECT', classOfferingId: academic.classOfferingId, subjectOfferingId: academic.subjectOfferingId, sectionPool: [academic.sectionId] }).expect(201)).body.data as { groupId: string };
+  const timetable: TimetableIds = { planId: plan.planId, bellId: bell.bellScheduleId, periodId: bell.periods[0]!.periodId, groupId: teachingGroup.groupId };
+  return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students, spaces, timetable };
 }
 
 /** Everything the academic and staff routes own for a tenant, so tests can prove a refused call changed nothing. */
@@ -516,7 +571,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
     const schoolBefore = await School.findOne({ tenantId: b.tenantId }).lean();
     const academicBefore = await academicSnapshot(b.tenantId);
 
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces, timetable: b.timetable });
     for (const call of [...reads, ...mutations]) {
       const res = await call.send(attacker.agent);
       expect(res.status, `${call.name} → ${res.status} ${JSON.stringify(res.body)}`).toBe(404);
@@ -564,7 +619,7 @@ describe('tenant isolation (SCH-LOC-15, QA 26)', () => {
 describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('every protected route rejects an anonymous caller with 401', async () => {
     const b = await victim();
-    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
+    const { reads, mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces, timetable: b.timetable });
     const anon = request.agent(app);
     for (const call of [...reads, ...mutations]) expectError(await call.send(anon), 401, 'UNAUTHENTICATED');
     for (const url of ['/schools/current', '/audit', '/master/school-context', '/master/locations', '/employees', '/employees/code-availability', '/departments', '/designations']) {
@@ -585,7 +640,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
 
   it('Faculty, Staff and Parents are refused every mutation, even calling the API directly', async () => {
     const b = await victim();
-    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
+    const { mutations } = routes({ schoolId: b.school.schoolId, locationId: b.chd.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces, timetable: b.timetable });
     for (const role of ['FACULTY', 'STAFF', 'PARENT'] as const) {
       const user = await createUserAndLogin(b.tenantId, role);
       for (const call of mutations) {
@@ -617,7 +672,7 @@ describe('server-side permissions (SCH-LOC-09, QA 27/29)', () => {
   it('Parents cannot read any school or location data', async () => {
     const b = await victim();
     const parent = await createUserAndLogin(b.tenantId, 'PARENT');
-    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces });
+    const { reads } = routes({ schoolId: b.school.schoolId, locationId: b.moh.locationId, identifierId: b.identifierId, academic: b.academic, staff: b.staff, students: b.students, spaces: b.spaces, timetable: b.timetable });
     for (const call of reads) expect((await call.send(parent.agent)).status, call.name).toBe(403);
   });
 

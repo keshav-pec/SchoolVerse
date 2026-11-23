@@ -499,3 +499,22 @@ export const FINANCE_DTO_ALLOWED_CLASSES = {
   staffBill: ['INTERNAL', 'PERSONAL'],
   parentBill: ['INTERNAL', 'PERSONAL'],
 } as const satisfies Record<string, readonly DataClass[]>;
+
+/**
+ * Timetable field classes (Module 6). The timetable stores ids and numbers only, so almost everything is INTERNAL working data. The one
+ * free-text field about a person, the reason for a teacher's absence, is PERSONAL. A test fails when a stored field has no class here.
+ */
+const TT_IDS = mark('INTERNAL', 'schoolId');
+export const TIMETABLE_DATA_CLASSIFICATION = {
+  timetable_plan: { ...TT_IDS, ...mark('INTERNAL', 'locationId', 'academicSessionId', 'planName', 'effectiveFrom', 'effectiveTo', 'operatingDays', 'defaultBellScheduleId', 'capacityPolicy', 'transitionMinutes', 'defaultMaxPerDay', 'defaultMaxConsecutive', 'defaultMaxPerWeek', 'status', 'version') },
+  bell_schedule_template: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'name', 'kind', 'status') },
+  bell_schedule_period: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'templateId', 'periodCode', 'periodName', 'startMin', 'endMin', 'periodType', 'schedulable', 'displayOrder') },
+  bell_schedule_assignment: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'scope', 'classOfferingId', 'sectionOfferingId', 'templateId', 'weekdays') },
+  subject_schedule_requirement: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'scope', 'classOfferingId', 'sectionOfferingId', 'teachingGroupId', 'subjectOfferingId', 'periodsPerWeek', 'minPerWeek', 'maxPerWeek', 'maxPerDay', 'doubleMode', 'doublesPerWeek', 'preferredBand', 'neededSuitability', 'priority', 'version') },
+  faculty_schedule_availability: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'employeeId', 'weekday', 'startMin', 'endMin', 'kind') },
+  faculty_schedule_availability_exception: { ...TT_IDS, ...mark('INTERNAL', 'employeeId', 'dateFrom', 'dateTo', 'startMin', 'endMin', 'kind', 'status'), ...mark('PERSONAL', 'reason') },
+  faculty_workload_rule: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'employeeId', 'maxPerDay', 'maxConsecutive', 'maxPerWeek', 'preferredFreePerDay') },
+  teaching_group: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'academicSessionId', 'locationId', 'name', 'nameKey', 'kind', 'classOfferingId', 'subjectOfferingId', 'sectionPool', 'teacherIds', 'status', 'version') },
+  teaching_group_membership: { ...TT_IDS, ...mark('INTERNAL', 'groupId', 'studentId', 'source', 'addedBy') },
+  timetable_access_grant: { ...TT_IDS, ...mark('INTERNAL', 'userId', 'bundles', 'locationIds', 'grantedBy') },
+} as const;
