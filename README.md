@@ -86,6 +86,8 @@ npm run dev       # http://localhost:5180 (proxies /api to the backend)
 
 Demo password for every seeded account: `Welcome@123`.
 
+**Two flavours of demo data.** `npm run seed` loads a **clean** Greenfield: a school that is running smoothly, so the admin sees almost no alerts. Panchkula is archived, every section at Mohali and Chandigarh has a Home Classroom (carried forward to 2027-28), every student is placed with subjects chosen and documents on file, every class has a fee plan, October and November are billed, payments are checked and matched, everyone has a salary, and the finished months are closed. The backend tests and the Playwright e2e server load the same data **with deliberate exceptions** (drafts, a pending invitation, a leaver, plan clashes, unmatched bank lines and so on), which the tables below describe. Those exceptions are not in the clean seed.
+
 | Email | Role |
 |---|---|
 | admin@greenfield.demo | School Admin |
@@ -389,11 +391,11 @@ Tests that cover a PRD §19 QA scenario say so in their title (`grep -rn "QA 2" 
 | # | Criterion | Verified by |
 |---|---|---|
 | 1 | School created and maintained within a tenant | `school` · `school-profile.test.tsx` |
-| 2 | Primary location through guided onboarding | `setup` · `locations` (QA 14) · e2e signup-wizard-overview |
-| 3–6 | Multiple locations · unique codes · one Primary · Draft/Active/Inactive/Archived | `locations` (QA 15–23) · `unit` · `location-ui.test.tsx` · e2e locations-lifecycle |
+| 2 | Primary location through guided onboarding | `setup` · `locations` (QA 14) · e2e school (signup and setup wizard) |
+| 3–6 | Multiple locations · unique codes · one Primary · Draft/Active/Inactive/Archived | `locations` (QA 15–23) · `unit` · `locations.test.tsx` · e2e school (locations) |
 | 7, 12 | Historical locations kept, excluded from selectors | `master` (QA 24/25) |
 | 8 | Tenant isolation on every query and mutation | `security` (QA 26) · `platform` (tenant-scope plugin) |
-| 9 | Role permissions enforced server-side | `security` (QA 27/29) · `platform` · e2e faculty-read-only |
+| 9 | Role permissions enforced server-side | `security` (QA 27/29) · `platform` · e2e school (faculty read-only) |
 | 10 | Configuration changes audit-logged, in the same transaction | `security` (QA 28) · `locations` · `setup` |
 | 11 | Stable `school_id` / `location_id` for downstream modules | `master` · `CONTRACTS.md` |
 | 13 | APIs and contracts documented | `/api/docs` · `openapi.ts` (generated) · `CONTRACTS.md` · `platform` |

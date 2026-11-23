@@ -40,8 +40,11 @@ import { createResponsibility } from './responsibility.service';
  *  - restricted details (IDs and bank accounts, all made up: `TEST` IDs and zero-pattern account numbers), a pending change
  *    request from Priya, and one PDF document for each faculty member.
  * Everything goes through the real services, so the data follows every rule and has an audit trail.
+ *
+ * `clean` (what `npm run seed` uses) leaves out the loose ends: no one has left, no login is waiting to be activated, and no change
+ * request is waiting for the admin.
  */
-export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string; userIdsByEmail: Record<string, string> }) {
+export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string; userIdsByEmail: Record<string, string> }, opts: { clean?: boolean } = {}) {
   await departmentService.addSuggested(ctx);
   await designationService.addSuggested(ctx);
   const [departments, designations, class8, active] = await Promise.all([
@@ -157,7 +160,7 @@ export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: stri
   );
   await responsibility(gurpreet.employeeId, moh, 'Accounts');
 
-  await hire(
+  const sukhdev = await hire(
     { first: 'Sukhdev', last: 'Singh' },
     { code: 'STF-004', category: 'NON_TEACHING_STAFF', joined: '2019-04-01', locationId: chd, department: 'TRANSPORT', designation: 'DRIVER', type: 'Contract' },
   );
@@ -168,20 +171,30 @@ export async function seedStaffDemo(ctx: ServiceContext, input: { mohaliId: stri
   await responsibility(manpreet.employeeId, chd, 'Library');
 
   // ── an employee who has already left: their classes are closed on the exit date and the record is read-only
-  const manoj = await hire(
-    { first: 'Manoj', last: 'Verma' },
-    { code: 'FAC-005', category: 'FACULTY', joined: '2018-04-01', locationId: moh, department: 'ACADEMICS', designation: 'TGT', manager: principal },
-  );
-  await classes(manoj.employeeId, [{ assignmentType: 'SUBJECT_FACULTY', sectionId: c, subjectOfferingId: await subject(moh, 'HIN') }]);
-  await exitEmployee(ctx, manoj.employeeId, exitEmployeeSchema.parse({ exitDate: '2026-06-30', exitReasonCategory: 'RESIGNATION', note: 'Relocated to another city.' }));
+  const manoj = opts.clean
+    ? null
+    : await hire(
+        { first: 'Manoj', last: 'Verma' },
+        { code: 'FAC-005', category: 'FACULTY', joined: '2018-04-01', locationId: moh, department: 'ACADEMICS', designation: 'TGT', manager: principal },
+      );
+  if (manoj) {
+    await classes(manoj.employeeId, [{ assignmentType: 'SUBJECT_FACULTY', sectionId: c, subjectOfferingId: await subject(moh, 'HIN') }]);
+    await exitEmployee(ctx, manoj.employeeId, exitEmployeeSchema.parse({ exitDate: '2026-06-30', exitReasonCategory: 'RESIGNATION', note: 'Relocated to another city.' }));
+  }
 
   // ── the two demo logins belong to people; the admin login does not
   for (const [email, employee] of [['faculty@greenfield.demo', priya], ['staff@greenfield.demo', rohan], ['accounts@greenfield.demo', gurpreet]] as const) {
     await User.updateOne({ _id: input.userIdsByEmail[email], tenantId: ctx.tenantId }, { $set: { personId: employee.personId } });
   }
-  await seedIdentityDemo(ctx, { faculty: [priya, harpreet, neha, rajiv], staff: [rohan, gurpreet], pendingLogin: neha, requester: { employee: priya, userId: input.userIdsByEmail['faculty@greenfield.demo']! } });
+  await seedIdentityDemo(ctx, {
+    faculty: [priya, harpreet, neha, rajiv],
+    // Clean: every employee has bank details, so payroll has nobody to chase.
+    staff: opts.clean ? [rohan, gurpreet, kavita, sukhdev, manpreet] : [rohan, gurpreet],
+    pendingLogin: opts.clean ? null : neha,
+    requester: opts.clean ? null : { employee: priya, userId: input.userIdsByEmail['faculty@greenfield.demo']! },
+  });
 
-  return { employees: 11, principalId: principal.employeeId, facultyId: priya.employeeId, staffId: rohan.employeeId, transferredId: harpreet.employeeId, noLoginId: kavita.employeeId, exitedId: manoj.employeeId, rajivId: rajiv.employeeId, nehaId: neha.employeeId };
+  return { employees: manoj ? 11 : 10, principalId: principal.employeeId, facultyId: priya.employeeId, staffId: rohan.employeeId, transferredId: harpreet.employeeId, noLoginId: kavita.employeeId, exitedId: manoj?.employeeId ?? null, rajivId: rajiv.employeeId, nehaId: neha.employeeId };
 }
 
 
@@ -202,8 +215,8 @@ async function seedIdentityDemo(
   input: {
     faculty: EmployeeProfileDTO[];
     staff: EmployeeProfileDTO[];
-    pendingLogin: EmployeeProfileDTO;
-    requester: { employee: EmployeeProfileDTO; userId: string };
+    pendingLogin: EmployeeProfileDTO | null;
+    requester: { employee: EmployeeProfileDTO; userId: string } | null;
   },
 ) {
   const holder = (employee: EmployeeProfileDTO) => `${employee.legalFirstName} ${employee.legalLastName}`;
@@ -228,9 +241,10 @@ async function seedIdentityDemo(
   }
 
   // A login that is waiting for its owner to activate it.
-  await createEmployeeAccount(ctx, input.pendingLogin.employeeId, createUserAccountSchema.parse({ email: input.pendingLogin.officialEmail, role: 'FACULTY' }));
+  if (input.pendingLogin) await createEmployeeAccount(ctx, input.pendingLogin.employeeId, createUserAccountSchema.parse({ email: input.pendingLogin.officialEmail, role: 'FACULTY' }));
 
   // A pending request from Priya, for the approvals inbox.
+  if (!input.requester) return;
   const priyaCtx: ServiceContext = { tenantId: ctx.tenantId, userId: input.requester.userId, role: 'FACULTY', permissions: permissionsFor('FACULTY'), requestId: null };
   await createChangeRequest(
     priyaCtx,

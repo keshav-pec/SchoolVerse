@@ -1,8 +1,8 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AcademicSessionDTO, ClassOfferingDTO, ValidationResultDTO } from '@shared';
-import { mockApi, renderWithApp } from '@/test/utils';
+import { API, mockApi, renderWithApp } from '@/test/utils';
 import { AcademicStructurePage } from '../academic-structure-page';
 import { LifecycleButtons } from '../lifecycle-buttons';
 import { SubjectsPage } from '../subjects-page';
@@ -10,9 +10,6 @@ import { ClassesTab } from '../tabs/classes-tab';
 import { OverviewTab } from '../tabs/overview-tab';
 import { RulesTab } from '../tabs/rules-tab';
 
-afterEach(() => vi.unstubAllGlobals());
-
-const API = '/api/v1';
 const SID = '55555555-5555-4555-8555-555555555555';
 const LOC = '22222222-2222-4222-8222-222222222222';
 const GO = '66666666-6666-4666-8666-666666666666';

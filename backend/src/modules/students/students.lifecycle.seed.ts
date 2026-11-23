@@ -20,8 +20,11 @@ import { StudentGuardianLink } from './student.models';
  *  - **a student mid-withdrawal**: one Chandigarh student is leaving at the end of the year, and needs a Transfer Certificate;
  *  - **a Transfer Certificate waiting for dues**: another Chandigarh student's TC is in "Pending clearance";
  *  - **2027-28 published**, so promotion can be tried (classes, sections and subjects were cloned from 2026-27).
+ *
+ * `clean` (what `npm run seed` uses) keeps only Simran's access and the published 2027-28: no invitation waiting, no removed access,
+ * nobody leaving.
  */
-export async function seedStudentLifecycleDemo(ctx: ServiceContext, input: { students: CreateStudentResultDTO[]; nextSessionId: string }) {
+export async function seedStudentLifecycleDemo(ctx: ServiceContext, input: { students: CreateStudentResultDTO[]; nextSessionId: string }, opts: { clean?: boolean } = {}) {
   const tenantId = ctx.tenantId;
 
   // A guardian link of a parent, found by the parent's email.
@@ -33,6 +36,7 @@ export async function seedStudentLifecycleDemo(ctx: ServiceContext, input: { stu
 
   // Simran already has a login (the demo Parent account): enabling access links it to her person and reuses it.
   for (const link of await linksOf('parent@greenfield.demo')) await enablePortal(ctx, link._id);
+  if (opts.clean) return publishNextYear(ctx, input.nextSessionId);
   // Farah is invited and has not opened the link yet.
   for (const link of await linksOf('farah.khan@greenfield.demo')) await enablePortal(ctx, link._id);
   // Meena was invited, then her access to Aarav was removed.
@@ -53,8 +57,12 @@ export async function seedStudentLifecycleDemo(ctx: ServiceContext, input: { stu
     await approveCertificate(ctx, tc.certificateId); // dues are pending, so it waits in "Pending clearance"
   }
 
-  // 2027-28 was cloned from 2026-27 (classes, sections, subjects and terms): check it and publish it.
-  const result = await validateSession(ctx, input.nextSessionId);
+  await publishNextYear(ctx, input.nextSessionId);
+}
+
+/** 2027-28 was cloned from 2026-27 (classes, sections, subjects and terms): check it and publish it. */
+async function publishNextYear(ctx: ServiceContext, nextSessionId: string) {
+  const result = await validateSession(ctx, nextSessionId);
   if (!result.canPublish) throw new Error(`Seed session 2027-28 failed validation: ${result.issues.filter((i) => i.level === 'ERROR').map((i) => i.message).join(' | ')}`);
-  await changeSessionStatus(ctx, input.nextSessionId, 'publish');
+  await changeSessionStatus(ctx, nextSessionId, 'publish');
 }

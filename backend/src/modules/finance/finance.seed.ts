@@ -34,8 +34,11 @@ export async function wipeFinanceTenant(tenantId: string) {
  * Class VIII plan (Tuition ₹4,000 a month, Annual ₹8,000 a year, Computer ₹1,500 a quarter, Exam ₹2,000 a term), a sibling concession,
  * a late-fee rule, an Accountant and an Approver. Deliberate exceptions for the demo: students in other classes have no plan, one
  * student matches two plans, and one student's plan uses a fee head that has no tax code. Tax values are EXAMPLES.
+ *
+ * `clean` (what `npm run seed` uses) has no deliberate exceptions: every class at both campuses has a plan, November is issued, the
+ * payments are checked and matched, and the finished months are closed. The default keeps the exceptions for the tests and the e2e.
  */
-export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: string; userIdsByEmail: Record<string, string> }) {
+export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId?: string; userIdsByEmail: Record<string, string> }, opts: { clean?: boolean } = {}) {
   await useStandardSetup(ctx);
   await updateTaxProfile(ctx, { gstRegistered: true, gstin: '03AAAAA0000A1Z5' });
   await createFinancialYear(ctx, { code: '2026-27' });
@@ -80,9 +83,9 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   const riyaGuardians = (await StudentGuardianLink.find({ tenantId: ctx.tenantId, cancelledAt: null, studentId: riya ?? '' }).lean<{ guardianPersonId: string }[]>()).map((l) => l.guardianPersonId);
   const family = new Set((await StudentGuardianLink.find({ tenantId: ctx.tenantId, cancelledAt: null, guardianPersonId: { $in: riyaGuardians } }).lean<{ studentId: string }[]>()).map((l) => l.studentId));
   const pool = open.filter((o) => !family.has(o.studentId));
-  const clashing = pool[2];
-  const noTax = pool[3];
-  const noPlan = pool[4];
+  const clashing = opts.clean ? undefined : pool[2];
+  const noTax = opts.clean ? undefined : pool[3];
+  const noPlan = opts.clean ? undefined : pool[4];
   const ids = { schoolId: f.schoolId, legalEntityId: f.legalEntityId, tenantId: ctx.tenantId };
   const forcePlan = async (name: string, studentId: string, feeHeadId: string) => {
     const planId = randomUUID();
@@ -103,6 +106,8 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
     await FeeHead.updateOne({ _id: heads.sports!.feeHeadId, tenantId: ctx.tenantId }, { $set: { taxCodeId: null } });
   }
 
+  if (opts.clean) await plansForEveryClass(ctx, { sessionId: session._id, mohaliId: input.mohaliId, chandigarhId: input.chandigarhId, item, heads });
+
   // ── concessions and late fees
   const sibling = await createPolicy(ctx, { name: 'Sibling concession', type: 'SIBLING', valueType: 'PERCENT', value: 1000, feeHeadIds: [heads.tuition!.feeHeadId], stackMode: 'HIGHEST_WINS', capPercentBps: 5000, needsEvidence: false, needsApproval: false });
   await createPolicy(ctx, { name: 'Staff child concession', type: 'STAFF_CHILD', valueType: 'PERCENT', value: 5000, feeHeadIds: [heads.tuition!.feeHeadId], stackMode: 'HIGHEST_WINS', needsEvidence: false, needsApproval: true });
@@ -112,10 +117,13 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
 
   // ── Riya Kaur (Class VI, Arjun's sister) has a plan of her own, so the family has two children with bills
   const class6 = await ClassMaster.findOne({ canonicalCode: 'G06' }).lean<{ _id: string }>();
+  // (In the clean demo she is already on the Nursery to Class VII plan, with the rest of Class VI.)
   if (riya && class6) {
-    const own = await createPlan(ctx, { name: 'Riya Kaur 2026-27', sessionId: session._id, appliesTo: { locationIds: [input.mohaliId], classIds: [], studentType: 'ALL', studentId: riya }, autoAssign: true, items: [item(heads.tuition!, 3000, 'MONTHLY')] });
-    await publishVersion(ctx, own.latestVersion!.versionId);
-    await bulkAssign(ctx, { sessionId: session._id, locationId: input.mohaliId, items: [{ studentId: riya, planVersionId: own.latestVersion!.versionId }] });
+    if (!opts.clean) {
+      const own = await createPlan(ctx, { name: 'Riya Kaur 2026-27', sessionId: session._id, appliesTo: { locationIds: [input.mohaliId], classIds: [], studentType: 'ALL', studentId: riya }, autoAssign: true, items: [item(heads.tuition!, 3000, 'MONTHLY')] });
+      await publishVersion(ctx, own.latestVersion!.versionId);
+      await bulkAssign(ctx, { sessionId: session._id, locationId: input.mohaliId, items: [{ studentId: riya, planVersionId: own.latestVersion!.versionId }] });
+    }
     const run6 = await createRun(ctx, { sessionId: session._id, locationId: input.mohaliId, classIds: [class6._id], periodKey: '2026-10', issueDate: '2026-10-05' });
     const checked6 = await validateRun(ctx, run6.runId);
     await commitRun(ctx, run6.runId, { confirmedReadyCount: checked6.run.counts.ready, confirmedTotalPaise: checked6.run.totalPaise }, 'seed-2026-10-class6');
@@ -126,7 +134,8 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   const checked = await validateRun(ctx, october.runId);
   await commitRun(ctx, october.runId, { confirmedReadyCount: checked.run.counts.ready, confirmedTotalPaise: checked.run.totalPaise }, 'seed-2026-10');
   const november = await createRun(ctx, { sessionId: session._id, locationId: input.mohaliId, classIds: [class8._id], periodKey: '2026-11', issueDate: '2026-11-05' });
-  await validateRun(ctx, november.runId);
+  const checkedNov = await validateRun(ctx, november.runId);
+  if (opts.clean) await commitRun(ctx, november.runId, { confirmedReadyCount: checkedNov.run.counts.ready, confirmedTotalPaise: checkedNov.run.totalPaise }, 'seed-2026-11');
 
   // ── an Accountant and an Approver (Staff logins with job bundles, not new roles)
   await setAccess(ctx, input.userIdsByEmail['accounts@greenfield.demo']!, { bundles: ['ACCOUNTANT', 'FEE_MANAGER', 'COLLECTOR', 'PAYROLL_OFFICER'] });
@@ -137,6 +146,32 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   const others = open.map((o) => o.studentId).filter((id) => !family.has(id) && !exceptions.has(id)).slice(0, 2);
   const bank = (await BankAccount.findOne({ tenantId: ctx.tenantId }).lean<{ _id: string }>())!;
   const billFor = async (studentId: string) => (await FeeDocument.findOne({ tenantId: ctx.tenantId, studentId, kind: 'BILL', balancePaise: { $gt: 0 } }).sort({ dueDate: 1 }).lean<{ _id: string }>())?._id ?? null;
-  await seedFinanceOpsDemo(ctx, { mohaliId: input.mohaliId, bankAccountId: bank._id, userIdsByEmail: input.userIdsByEmail, studentIds: others, billFor });
+  await seedFinanceOpsDemo(ctx, { mohaliId: input.mohaliId, bankAccountId: bank._id, userIdsByEmail: input.userIdsByEmail, studentIds: others, billFor }, opts);
   return { students: open.length };
+}
+
+/**
+ * Clean demo only: a published plan for every other class, so no enrolled student is left without one. Mohali has a junior plan
+ * (Nursery to VII) and a senior plan (IX to XII) next to the Class VIII plan; Chandigarh has one plan for all its classes.
+ */
+async function plansForEveryClass(
+  ctx: ServiceContext,
+  input: { sessionId: string; mohaliId: string; chandigarhId?: string | undefined; heads: Record<string, FeeHeadDTO>; item: (h: FeeHeadDTO, rupees: number, frequency: 'ONE_TIME' | 'MONTHLY' | 'QUARTERLY' | 'TERM' | 'YEARLY', extra?: Record<string, unknown>) => Record<string, unknown> },
+) {
+  const { heads, item } = input;
+  const classIdsOf = async (codes: string[]) => (await ClassMaster.find({ canonicalCode: { $in: codes } }).select('_id').lean<{ _id: string }[]>()).map((c) => c._id);
+  const junior = await classIdsOf(['NURSERY', 'KG', 'G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07']);
+  const senior = await classIdsOf(['G09', 'G10', 'G11', 'G12']);
+  const plans: { name: string; locationId: string; classIds: string[]; items: Record<string, unknown>[] }[] = [
+    { name: 'Nursery to Class VII 2026-27', locationId: input.mohaliId, classIds: junior, items: [item(heads.tuition!, 3000, 'MONTHLY', { prorationMethod: 'CALENDAR_DAYS' }), item(heads.annual!, 6000, 'YEARLY'), item(heads.exam!, 1500, 'TERM')] },
+    { name: 'Classes IX to XII 2026-27', locationId: input.mohaliId, classIds: senior, items: [item(heads.tuition!, 4500, 'MONTHLY', { prorationMethod: 'CALENDAR_DAYS' }), item(heads.annual!, 9000, 'YEARLY'), item(heads.computer!, 1500, 'QUARTERLY'), item(heads.exam!, 2500, 'TERM')] },
+    ...(input.chandigarhId
+      ? [{ name: 'Chandigarh 2026-27', locationId: input.chandigarhId, classIds: [], items: [item(heads.tuition!, 3500, 'MONTHLY', { prorationMethod: 'CALENDAR_DAYS' }), item(heads.annual!, 7000, 'YEARLY'), item(heads.exam!, 1500, 'TERM')] }]
+      : []),
+  ];
+  for (const p of plans) {
+    const created = await createPlan(ctx, { name: p.name, sessionId: input.sessionId, appliesTo: { locationIds: [p.locationId], classIds: p.classIds, studentType: 'ALL', studentId: null }, autoAssign: true, items: p.items } as Parameters<typeof createPlan>[1]);
+    await publishVersion(ctx, created.latestVersion!.versionId);
+  }
+  for (const locationId of [input.mohaliId, ...(input.chandigarhId ? [input.chandigarhId] : [])]) await bulkAssign(ctx, { sessionId: input.sessionId, locationId });
 }

@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
@@ -6,9 +6,17 @@ import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import type { Role } from '@shared';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AuthProvider } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { StepUpProvider } from '@/lib/step-up';
 import { sessionFor } from './fixtures';
+
+export const API = '/api/v1';
+
+/** Components that call `useSession` need the session to have loaded first (the app's route guard does this). */
+export function Ready({ children }: { children: ReactNode }) {
+  const { session } = useAuth();
+  return session ? <>{children}</> : null;
+}
 
 export interface MockResponse {
   status?: number;

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import mongoose from 'mongoose';
-import { FINANCE_BUNDLE_PERMISSIONS, FINANCE_DATA_CLASSIFICATION, FINANCE_DTO_ALLOWED_CLASSES, SYSTEM_FIELDS, type AccountDTO, type AdjustmentResultDTO, type ApprovalRequestDTO, type AssignmentRecommendationDTO, type BalanceExplanationDTO, type ConcessionAwardDTO, type ConcessionPolicyDTO, type ConcessionSuggestionDTO, type FamilyDTO, type FinanceReadinessDTO, type LateFeePolicyDTO, type LateFeePreviewDTO, type OutstandingDTO, type ParentFeeSummaryDTO, type ParentStudentFeesDTO, type UpcomingDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRowDTO, type BillingRunDTO, type BillingValidationDTO, type BulkAssignResultDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type JournalDetailDTO, type PlanValidationDTO, type StudentAccountDTO, type StudentAccountListDTO, type FinancePulseDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
+import { FINANCE_BUNDLE_PERMISSIONS, FINANCE_DATA_CLASSIFICATION, FINANCE_DTO_ALLOWED_CLASSES, SYSTEM_FIELDS, type AccountDTO, type AdjustmentResultDTO, type ApprovalRequestDTO, type AssignmentRecommendationDTO, type BalanceExplanationDTO, type ConcessionAwardDTO, type ConcessionPolicyDTO, type ConcessionSuggestionDTO, type FamilyDTO, type FinanceReadinessDTO, type LateFeePolicyDTO, type LateFeePreviewDTO, type OutstandingDTO, type ParentFeeSummaryDTO, type ParentStudentFeesDTO, type UpcomingDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRowDTO, type BillingRunDTO, type BillingValidationDTO, type BulkAssignResultDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type JournalDetailDTO, type PlanValidationDTO, type StudentAccountDTO, type StudentAccountListDTO, type FinancePulseDTO, type TrialBalanceDTO } from '@shared';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import { AccessGrant, AccountingPeriod, ApprovalPolicy, ApprovalRequest, BankAccount, CashAccount, ChartAccount, FinanceAudit, FinanceCounter, FinancialYear, JournalEntry, JournalLine, LegalEntity, TaxCode } from '../src/modules/finance/core/models';
 import { calculateTax } from '../src/modules/finance/tax/tax';
@@ -18,43 +18,9 @@ import { SecurityEvent } from '../src/platform/identity/security-event.model';
 import { postJournal, reverseJournal } from '../src/modules/finance/core/posting';
 import { financeCtx } from '../src/modules/finance/core/context';
 import { withTransaction } from '../src/db/transaction';
-import { activatedParent, addActiveEmployee, addStudent, API, createUserAndLogin, data, expectError, loginAs, nextPhone, seededSchool, staffSchool, useTestDatabase, type Agent } from './helpers';
+import { activatedParent, addActiveEmployee, addStudent, API, created, createUserAndLogin, data, expectError, financeBase, getOk, loginAs, nextPhone, patch, post, put, seededSchool, staffSchool, staffWith, useTestDatabase } from './helpers';
 
 useTestDatabase();
-
-// ───────────────────────────────────────────────────────────── helpers
-
-const post = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.post(`${API}/finance${path}`).send(body as object);
-const patch = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.patch(`${API}/finance${path}`).send(body as object);
-const put = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.put(`${API}/finance${path}`).send(body as object);
-const getOk = async <T>(t: { agent: Agent }, path: string) => {
-  const res = await t.agent.get(`${API}/finance${path}`);
-  expect(res.status, JSON.stringify(res.body)).toBe(200);
-  return res.body.data as T;
-};
-const getOkAs = async <T>(t: { agent: Agent }, path: string) => getOk<T>(t, path);
-const created = async <T>(res: { status: number; body: { data: T } }) => {
-  expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body.data;
-};
-
-/** A seeded school with finance set up: standard chart and tax codes, FY 2026-27, a bank account. */
-async function financeBase() {
-  const t = await staffSchool();
-  await post(t, '/setup/standard').expect(200);
-  const fy = await created<FinancialYearDTO>(await post(t, '/financial-years', { code: '2026-27' }));
-  const accounts = Object.fromEntries((await getOk<AccountDTO[]>(t, '/chart-of-accounts')).map((a) => [a.code, a]));
-  const taxCodes = Object.fromEntries((await getOk<TaxCodeDTO[]>(t, '/tax-codes')).map((c) => [c.code, c]));
-  return { ...t, fy, accounts, taxCodes };
-}
-
-/** A Staff login with the given finance bundles (signed in). */
-async function staffWith(t: Awaited<ReturnType<typeof staffSchool>>, bundles: string[]) {
-  // A real employee at Mohali, so the login has a campus scope to work in (a Staff login with no employee record reaches no campus).
-  const login = await loginAs(t, 'STAFF', await addActiveEmployee(t));
-  if (bundles.length) await put(t, `/access/users/${login.userId}`, { bundles }).expect(200);
-  return login;
-}
 
 // ───────────────────────────────────────────────────────────── foundation
 
@@ -1024,14 +990,14 @@ describe('who can see money (FIN-08, FEE-15)', () => {
     await put(a, `/access/users/${login.userId}`, { bundles: ['ACCOUNTANT', 'FEE_MANAGER'] }).expect(200);
     expect((await login.agent.get(`${API}/finance/students/${kid.studentId}/account`)).status).toBe(403);
     expect((await login.agent.get(`${API}/finance/fee-documents/${bill.documentId}`)).status).toBe(403);
-    expect((await getOkAs<FeeDocumentListDTO>(login, '/fee-documents')).total).toBe(0);
+    expect((await getOk<FeeDocumentListDTO>(login, '/fee-documents')).total).toBe(0);
     expect((await login.agent.post(`${API}/finance/fee-plan-assignments/recommend`).send({ sessionId: a.sessionId, locationId: a.moh.locationId })).status).toBe(403);
     expect(await SecurityEvent.countDocuments({ tenantId: a.tenantId, type: 'CROSS_SCOPE_DENIED' })).toBeGreaterThanOrEqual(3);
     // a bundle never widens the scope: an accountant's campus list can only narrow it
     const wide = await put(a, `/access/users/${login.userId}`, { bundles: ['ACCOUNTANT'], locationIds: [a.moh.locationId] });
     expect(wide.status).toBe(200);
     expect((await login.agent.get(`${API}/finance/students/${kid.studentId}/account`)).status).toBe(403);
-    const journals = await getOkAs<{ items: unknown[] }>(login, '/journals');
+    const journals = await getOk<{ items: unknown[] }>(login, '/journals');
     expect(journals.items).toHaveLength(0);
   });
 

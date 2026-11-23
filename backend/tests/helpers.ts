@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AuditEventDTO, type CreateStudentResultDTO, type EmployeeProfileDTO, type LocationDetailDTO, type Role, type SchoolDTO, type SessionStatus, type SubjectOfferingDTO } from '@shared';
+import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AccountDTO, type AuditEventDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRunDTO, type BillingValidationDTO, type CollectionResultDTO, type CreateStudentResultDTO, type EmployeeProfileDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type LocationDetailDTO, type PayrollRunDTO, type Role, type RunEmployeeDTO, type RunLineDTO, type SalaryComponentDTO, type SalaryStructureDTO, type SchoolDTO, type SessionStatus, type StatutoryRuleDTO, type SubjectOfferingDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
 import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
@@ -13,6 +13,11 @@ import { hashPassword } from '../src/platform/auth/password';
 import { User } from '../src/platform/users/user.model';
 import { School } from '../src/modules/school/school.model';
 import { SKIP_TENANT_SCOPE } from '../src/db/plugins/tenant-scope';
+import { StudentEnrollment } from '../src/modules/students/student.models';
+import { StudentFeeAssignment } from '../src/modules/finance/fees/models';
+import { fyCodeFor } from '../src/modules/finance/core/context';
+import { RestrictedPersonData } from '../src/platform/identity/restricted-data.model';
+import { sealBank } from '../src/platform/identity/restricted-data';
 
 export const app = createApp();
 export const API = '/api/v1';
@@ -555,3 +560,166 @@ export async function promotionSchool() {
   return { ...t, nextSessionId: next.academicSessionId, nine, ten };
 }
 export type PromotionSchool = Awaited<ReturnType<typeof promotionSchool>>;
+
+// ───────────────────────────────────────────────────────────── finance (Module 7): calls under /finance, and a school ready for money
+
+export const post = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.post(`${API}/finance${path}`).send(body as object);
+export const patch = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.patch(`${API}/finance${path}`).send(body as object);
+export const put = (t: { agent: Agent }, path: string, body: unknown = {}) => t.agent.put(`${API}/finance${path}`).send(body as object);
+export const getOk = async <T>(t: { agent: Agent }, path: string) => {
+  const res = await t.agent.get(`${API}/finance${path}`);
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return res.body.data as T;
+};
+export const created = async <T>(res: { status: number; body: { data: T } }) => {
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+  return res.body.data;
+};
+export const ok = async <T>(res: { status: number; body: { data: T } }) => {
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return res.body.data;
+};
+export const money = (rupees: number) => rupees * 100;
+export const withKey = (agent: Agent, path: string, key: string, body: unknown) => agent.post(`${API}/finance${path}`).set('Idempotency-Key', key).send(body as object);
+
+/** A seeded school with finance set up: standard chart and tax codes, FY 2026-27 (and the year of today), a fees bank account and a cash account. */
+export async function financeBase() {
+  const t = await staffSchool();
+  await post(t, '/setup/standard').expect(200);
+  const fy = await created<FinancialYearDTO>(await post(t, '/financial-years', { code: '2026-27' }));
+  const nowCode = fyCodeFor(today(), 4);
+  if (nowCode !== '2026-27') await post(t, '/financial-years', { code: nowCode }).expect(201);
+  const accounts = Object.fromEntries((await getOk<AccountDTO[]>(t, '/chart-of-accounts')).map((a) => [a.code, a]));
+  const taxCodes = Object.fromEntries((await getOk<TaxCodeDTO[]>(t, '/tax-codes')).map((c) => [c.code, c]));
+  return { ...t, fy, accounts, taxCodes };
+}
+
+/** A Staff login (a real employee at Mohali) holding the given finance bundles. */
+export async function staffWith(t: Awaited<ReturnType<typeof staffSchool>>, bundles: string[], employeeOver: Record<string, unknown> = {}) {
+  const login = await loginAs(t, 'STAFF', await addActiveEmployee(t, employeeOver));
+  if (bundles.length) await put(t, `/access/users/${login.userId}`, { bundles }).expect(200);
+  return login;
+}
+
+const heads = async (t: Awaited<ReturnType<typeof financeBase>>) => {
+  const { accounts: a, taxCodes: x } = t;
+  const head = async (body: Record<string, unknown>) => created<FeeHeadDTO>(await post(t, '/fee-heads', body));
+  return {
+    tuition: await head({ code: 'TUITION', name: 'Tuition Fee', category: 'TUITION', incomeAccountId: a['4100']!.accountId, taxCodeId: x.EXEMPT_EDU!.taxCodeId, isRecurring: true }),
+    annual: await head({ code: 'ANNUAL', name: 'Annual Charges', category: 'ANNUAL', incomeAccountId: a['4300']!.accountId, taxCodeId: x.EXEMPT_EDU!.taxCodeId }),
+    deposit: await head({ code: 'DEPOSIT', name: 'Security Deposit', category: 'DEPOSIT', incomeAccountId: a['2200']!.accountId, isRefundableDeposit: true }),
+    uniform: await head({ code: 'UNIFORM', name: 'Uniform', incomeAccountId: a['4600']!.accountId, taxCodeId: x.GST_12!.taxCodeId, isOptional: true }),
+    lateFee: await head({ code: 'LATEFEE', name: 'Late Fee', category: 'LATE_FEE', incomeAccountId: a['4700']!.accountId, taxCodeId: x.EXEMPT_EDU!.taxCodeId }),
+  };
+};
+
+/**
+ * Finance ready for money to move: a published Class VIII plan (Tuition ₹4,000 monthly, Annual ₹8,000 yearly, a ₹5,000 refundable deposit),
+ * a fees bank account, a cash account, and staff logins: a cashier, a second cashier, an accountant and an approver.
+ */
+export async function moneySchool() {
+  const t = await financeBase();
+  const h = await heads(t);
+  const item = (head: FeeHeadDTO, rupees: number, frequency: string, extra: Record<string, unknown> = {}) => ({ feeHeadId: head.feeHeadId, amountPaise: money(rupees), frequency, dueDay: 10, ...extra });
+  const planBody = {
+    name: 'Class VIII 2026-27', sessionId: t.sessionId, appliesTo: { locationIds: [t.moh.locationId], classIds: [t.ref.classId.G08!], studentType: 'ALL' }, autoAssign: true,
+    items: [item(h.tuition, 4000, 'MONTHLY', { prorationMethod: 'CALENDAR_DAYS' }), item(h.annual, 8000, 'YEARLY'), item(h.deposit, 5000, 'ONE_TIME')],
+  };
+  const plan = await created<FeePlanDTO>(await post(t, '/fee-plans', planBody));
+  const published = (await ok(await post(t, `/fee-plan-versions/${plan.latestVersion!.versionId}/publish`))) as FeePlanDTO;
+  const bank = await created<BankAccountDTO>(await post(t, '/bank-accounts', { label: 'Fees account', bankName: 'State Bank', holderName: 'Greenfield Trust', accountNumber: '123456781234', ifsc: 'SBIN0001234', purpose: 'FEES' }));
+  const cash = await created<{ cashAccountId: string }>(await post(t, '/cash-accounts', { label: 'Front office cash' }));
+  const cashier = await staffWith(t, ['COLLECTOR']);
+  const cashier2 = await staffWith(t, ['COLLECTOR']);
+  const accountant = await staffWith(t, ['ACCOUNTANT']);
+  const approver = await staffWith(t, ['APPROVER']);
+  return { ...t, heads: h, plan: published, planVersionId: published.publishedVersion!.versionId, bank, cash, cashier, cashier2, accountant, approver };
+}
+export type MoneySchool = Awaited<ReturnType<typeof moneySchool>>;
+
+/** A new Class VIII student whose enrollment and fee plan start on `from`. */
+export async function enrolled(t: MoneySchool, from = '2026-04-01', over: Record<string, unknown> = {}) {
+  const made = await addStudent(t, over);
+  const studentId = made.student.studentId;
+  await StudentEnrollment.updateOne({ tenantId: t.tenantId, studentId }, { $set: { effectiveFrom: from } });
+  await StudentFeeAssignment.updateOne({ tenantId: t.tenantId, studentId }, { $set: { effectiveFrom: from } });
+  return { ...made, studentId };
+}
+
+/** Check then issue a billing run, the way the screen does. */
+export async function issueMonth(t: MoneySchool, periodKey = '2026-11', issueDate = '2026-11-05') {
+  const run = await created<BillingRunDTO>(await post(t, '/billing-runs', { sessionId: t.sessionId, locationId: t.moh.locationId, periodKey, issueDate }));
+  const checked = (await ok(await post(t, `/billing-runs/${run.runId}/validate`))) as BillingValidationDTO;
+  const res = await t.agent.post(`${API}/finance/billing-runs/${run.runId}/commit`).set('Idempotency-Key', `key-${periodKey}`).send({ confirmedReadyCount: checked.run.counts.ready, confirmedTotalPaise: checked.run.totalPaise });
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return res.body.data as BillingCommitDTO;
+}
+
+export const billsOf = async (t: MoneySchool, studentId: string) => (await getOk<FeeDocumentListDTO>(t, `/fee-documents?studentId=${studentId}&kind=BILL&pageSize=50`)).items;
+export const billOf = async (t: MoneySchool, studentId: string, periodKey = '2026-11') => (await billsOf(t, studentId)).find((b) => b.periodKey === periodKey)!;
+
+let keyCounter = 0;
+/** A fresh idempotency key. */
+export const key = (prefix = 'k') => `${prefix}-${Date.now()}-${(keyCounter += 1)}`;
+
+/** Take a payment at the counter (by `agent`, the first cashier by default) with a fresh idempotency key. */
+export const collect = async (t: MoneySchool, body: Record<string, unknown>, agent = t.cashier) => ok<CollectionResultDTO>(await withKey(agent.agent, '/collections', key(), body).then((r) => ({ status: r.status === 201 ? 200 : r.status, body: r.body })));
+
+export const openShift = async (login: { agent: Agent }, openingFloatPaise = 0) => created<{ shiftId: string }>(await login.agent.post(`${API}/finance/cashier-shifts/open`).send({ openingFloatPaise }));
+
+// ───────────────────────────────────────────────────────────── payroll (Module 7): calls under /payroll, and a school ready to pay salaries
+
+export const pay = (t: { agent: { post: (u: string) => { send: (b: object) => Promise<{ status: number; body: { data: never; error?: { code: string; details?: Record<string, unknown> } } }> } } }, path: string, body: unknown = {}) => t.agent.post(`${API}/payroll${path}`).send(body as object);
+export const payGet = async <T>(t: { agent: { get: (u: string) => Promise<{ status: number; body: { data: T } }> } }, path: string) => {
+  const res = await t.agent.get(`${API}/payroll${path}`);
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return res.body.data;
+};
+export const payPut = (t: { agent: { put: (u: string) => { send: (b: object) => Promise<{ status: number; body: { data: never } }> } } }, path: string, body: unknown = {}) => t.agent.put(`${API}/payroll${path}`).send(body as object);
+export const payOk = async <T>(res: { status: number; body: { data: T } }, status = 200) => {
+  expect(res.status, JSON.stringify(res.body)).toBe(status);
+  return res.body.data;
+};
+/** The trial balance, optionally as of a date. */
+export const trial = (t: MoneySchool, asOf?: string) => getOk<TrialBalanceDTO>(t, `/trial-balance${asOf ? `?asOf=${asOf}` : ''}`);
+
+export const MONTH = '2026-11';
+
+/** Payroll ready: three approved statutory rules, a structure (Basic + 40% HRA), a payroll officer, a second officer, two approvers. */
+export async function payrollSchool(options: { approveRules?: boolean } = {}) {
+  const t = await moneySchool();
+  const officer = await staffWith(t, ['PAYROLL_OFFICER']);
+  const officer2 = await staffWith(t, ['PAYROLL_OFFICER']);
+  const approver2 = await staffWith(t, ['APPROVER']);
+  const components = await payGet<SalaryComponentDTO[]>(t, '/components');
+  const basic = components.find((c) => c.code === 'BASIC')!;
+  const hra = components.find((c) => c.code === 'HRA')!;
+  const structure = await payOk<SalaryStructureDTO>(await pay(officer, '/salary-structures', { name: 'Senior Faculty A', effectiveFrom: '2026-04-01', items: [{ componentId: basic.componentId }, { componentId: hra.componentId, rateBps: 4000 }] }), 201);
+  await payOk(await pay(t.approver, `/salary-structure-versions/${structure.latestVersion!.versionId}/approve`));
+  if (options.approveRules !== false) for (const r of await payGet<StatutoryRuleDTO[]>(t, '/statutory-rules')) await payOk(await pay(t.approver, `/statutory-rules/${r.ruleId}/approve`));
+  return { ...t, officer, officer2, approver2, basic, hra, structureVersionId: structure.latestVersion!.versionId };
+}
+export type PaySchool = Awaited<ReturnType<typeof payrollSchool>>;
+
+/** An active employee with a salary (basic in rupees), bank details and, optionally, a tax declaration and November days. */
+export async function worker(t: PaySchool, basicRupees: number, over: { days?: { lop?: number; working?: number | null }; tdsYearlyRupees?: number; noBank?: boolean; joining?: string; mode?: string } = {}) {
+  const employee = await addActiveEmployee(t, { joiningDate: over.joining ?? '2020-04-01' });
+  if (!over.noBank) await RestrictedPersonData.create({ tenantId: t.tenantId, personId: employee.personId, governmentIds: [], bank: sealBank(employee.personId, { accountHolderName: employee.fullName, accountNumber: `9900${employee.employeeCode.replace(/\D/g, '').padStart(8, '0')}`, ifsc: 'SBIN0001234', bankName: 'State Bank' }) });
+  await payOk(await pay(t.officer, '/employee-assignments', { employeeId: employee.employeeId, structureVersionId: t.structureVersionId, mode: over.mode ?? 'MONTHLY', basicPaise: money(basicRupees), effectiveFrom: '2026-04-01' }), 201);
+  if (over.tdsYearlyRupees) await payOk(await payPut(t.officer, `/employees/${employee.employeeId}/tax-declaration`, { regime: 'NEW', estimatedYearlyTaxPaise: money(over.tdsYearlyRupees), alreadyDeductedPaise: 0 }));
+  if (over.days) await payOk(await payPut(t.officer, '/inputs', { employeeId: employee.employeeId, month: MONTH, workingDays: over.days.working ?? null, paidLeaveDays: 0, lopDays: over.days.lop ?? 0, unitsWorked: null, extras: [] }));
+  return employee;
+}
+
+export const newRun = async (t: PaySchool, employeeIds: string[], month = MONTH) => payOk<PayrollRunDTO>(await pay(t.officer, '/runs', { month, employeeIds }), 201);
+export const calc = async (t: PaySchool, runId: string) => payOk<PayrollRunDTO>(await pay(t.officer, `/runs/${runId}/calculate`));
+export const rows = async (t: PaySchool, runId: string) => (await payGet<{ items: RunEmployeeDTO[] }>(t, `/runs/${runId}/employees?pageSize=100`)).items;
+export const linesOf = (t: PaySchool, runId: string, employeeId: string) => payGet<RunLineDTO[]>(t, `/runs/${runId}/employees/${employeeId}/lines`);
+/** Calculate, approve (a different person) and finalise. */
+export async function finalise(t: PaySchool, runId: string) {
+  await calc(t, runId);
+  const a = await payOk<PayrollRunDTO>(await pay(t.approver, `/runs/${runId}/approve`));
+  expect(a.state).toBe('APPROVED');
+  return payOk<PayrollRunDTO>(await pay(t.approver2, `/runs/${runId}/finalize`, { version: a.version }));
+}
+export const lineAmount = (lines: RunLineDTO[], key: string) => lines.find((l) => l.componentKey === key)?.amountPaise;

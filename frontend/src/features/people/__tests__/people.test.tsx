@@ -1,14 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
-import type { ReactNode } from 'react';
 import { EMPLOYEE_CATEGORY_LABELS, ROLE_LABELS, type ProfileChangeRequestDTO } from '@shared';
 import { MyProfilePage } from '@/features/me/my-profile-page';
-import { useAuth } from '@/lib/auth';
 import { RequireAuth, RequirePeopleAdmin } from '@/routes/guards';
 import { EMPLOYEE_ID, employeeProfile, restrictedProfile, selfProfile } from '@/test/fixtures';
-import { mockApi, pickOption, renderWithApp } from '@/test/utils';
+import { API, Ready, mockApi, pickOption, renderWithApp } from '@/test/utils';
 import { AddEmployeeDrawer } from '../add-employee-drawer';
 import { ColleaguesPage } from '../colleagues-page';
 import { EmployeePage } from '../employee-page';
@@ -16,19 +14,10 @@ import { AcademicTab } from '../tabs/academic-tab';
 import { AccountTab } from '../tabs/account-tab';
 import { PersonalTab } from '../tabs/personal-tab';
 
-afterEach(() => vi.unstubAllGlobals());
-
-const API = '/api/v1';
 const forbidden = {
   status: 403,
   error: { code: 'STEP_UP_REQUIRED', message: 'Confirm your password to continue.' },
 };
-
-/** Components that call `useSession` need the session to have loaded first (the app's route guard does this). */
-function Ready({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
-  return session ? <>{children}</> : null;
-}
 
 describe('IDs & Bank tab (SEC-02)', () => {
   it('shows masked values, Show asks for the password, shows the value, and masks it again after the timer', async () => {
@@ -249,7 +238,6 @@ describe('Add employee drawer (FSM-01)', () => {
     await waitFor(() => expect(api.callsTo('/departments/suggested', 'POST')).toHaveLength(1));
     await waitFor(() => expect(within(drawer).queryByText(/your school has no departments yet/i)).not.toBeInTheDocument());
   });
-
 
   it('shows field errors on the first step and does not move on until they are fixed', async () => {
     mockApi('SCHOOL_ADMIN', {

@@ -1,6 +1,8 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type Page } from '@playwright/test';
 
 export const DEMO_PASSWORD = 'Welcome@123';
+/** The web app's address, for pages opened in a new browser context. */
+export const WEB = 'http://localhost:5190';
 
 export async function login(page: Page, email: string, password = DEMO_PASSWORD) {
   await page.goto('/login');
@@ -9,6 +11,13 @@ export async function login(page: Page, email: string, password = DEMO_PASSWORD)
   await page.getByRole('button', { name: /sign in/i }).click();
   // Wait for the session to be established before the test navigates elsewhere.
   await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+}
+
+/** A new browser context signed in as `email` (a second person in the same test). */
+export async function pageAs(browser: Browser, email: string): Promise<Page> {
+  const page = await (await browser.newContext({ baseURL: WEB })).newPage();
+  await login(page, email);
+  return page;
 }
 
 export async function expectToast(page: Page, text: string | RegExp) {

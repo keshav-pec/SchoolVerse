@@ -4,6 +4,13 @@
  * Panchkula PKL draft) for Greenfield. Greenfield's setup is completed; Riverside's is left mid-wizard.
  * Idempotent: re-running removes the previous demo data for these tenants first.
  *
+ * Two flavours:
+ *  - `npm run seed` loads the **clean** demo: a school that is running smoothly, so the admin sees almost no alerts. Panchkula is
+ *    archived, every section has a Home Classroom, every student has a fee plan and their documents, payments are checked, and the
+ *    finished months are closed.
+ *  - `seedDemo()` with no options (the backend tests and the Playwright e2e server) keeps the deliberate exceptions they check:
+ *    drafts, a pending change request, a leaver, plan clashes, unmatched bank lines and so on.
+ *
  *   npm run seed
  */
 import { randomUUID } from 'node:crypto';
@@ -49,7 +56,7 @@ import { BoardRuleVersion, EducationBoard } from '../modules/academic/reference.
 import { AcademicSession, AcademicTerm } from '../modules/academic/session.model';
 import { BoardSubjectDefinition, Subject } from '../modules/academic/subject.model';
 import { Location } from '../modules/locations/location.model';
-import { createLocation } from '../modules/locations/location.service';
+import { changeLocationStatus, createLocation } from '../modules/locations/location.service';
 import { SchoolIdentifier } from '../modules/school/school-identifier.model';
 import { School } from '../modules/school/school.model';
 import { createIdentifier, createSchool } from '../modules/school/school.service';
@@ -242,8 +249,11 @@ async function wipeTenant(tenantId: string) {
   await Tenant.deleteOne({ _id: tenantId });
 }
 
-/** Loads the demo tenants into whatever database is currently connected. */
-export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
+/**
+ * Loads the demo tenants into whatever database is currently connected. `clean: true` leaves out the deliberate exceptions (see the
+ * header), so the demo looks like a school with nothing left to fix.
+ */
+export async function seedDemo({ quiet = false, clean = false }: { quiet?: boolean; clean?: boolean } = {}) {
   const log = quiet ? () => undefined : console.log;
   const passwordHash = await hashPassword(DEMO_PASSWORD);
   await seedReferenceData(); // system boards, rule versions and the class master
@@ -274,6 +284,10 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
     for (const identifier of def.identifiers ?? []) await createIdentifier(ctx, school._id, createIdentifierSchema.parse(identifier));
     const created: Awaited<ReturnType<typeof createLocation>>[] = [];
     for (const loc of def.locations) created.push(await createLocation(ctx, school._id, createLocationSchema.parse(loc)));
+    // Clean: Panchkula never opened, so it is archived (an unfinished draft address would hold the setup checklist back).
+    if (clean) {
+      for (const [i, l] of created.entries()) if (l.status === 'DRAFT') created[i] = await changeLocationStatus(ctx, l._id, 'archive');
+    }
     if (def.setupComplete) {
       await completeSetup(ctx, school._id);
       await seedStarterSubjects(ctx);
@@ -281,16 +295,24 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
       if (def.slug === 'greenfield-public-school') {
         const academic = await seedAcademicDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
         log('    📚 Academic session 2026-27 (active) and 2027-28 (cloned, then published for promotion)');
-        const staff = await seedStaffDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail });
+        const staff = await seedStaffDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail }, { clean });
         log(`    🧑‍🏫 ${staff.employees} employees across Mohali and Chandigarh (faculty and staff demo logins are linked to people)`);
-        const students = await seedStudentsDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') });
-        log(`    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
-        await seedStudentLifecycleDemo(ctx, { students: students.created, nextSessionId: academic.nextSessionId });
-        const campus = await seedSpacesDemo(ctx, { mohaliId: byCode('MOH') });
-        const finance = await seedFinanceDemo(ctx, { mohaliId: byCode('MOH'), userIdsByEmail });
-        log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, Class VIII plan for ${finance.students} students, a sibling concession, a late-fee rule; accounts@ is the Accountant, approver@ the Approver`);
-        log(`    🏫 Mohali campus: Main Academic Block with ${campus.rooms} rooms and spaces (a small room, a large room, one with no seat count)`);
-        log('    👪 Parent portal: parent@greenfield.demo has two children; one pending invitation; one removed access; one student leaving; one Transfer Certificate waiting for dues');
+        const students = await seedStudentsDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') }, { clean });
+        log(clean
+          ? `    🎒 ${students.students} students in 2026-27, all placed, with subjects chosen and documents on file (siblings, a student with three guardians, a mid-year section change)`
+          : `    🎒 ${students.students} students in 2026-27 (siblings, a student with three guardians, a mid-year section change, drafts, a pending subject choice)`);
+        await seedStudentLifecycleDemo(ctx, { students: students.created, nextSessionId: academic.nextSessionId }, { clean });
+        const campus = await seedSpacesDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD') }, { clean });
+        const finance = await seedFinanceDemo(ctx, { mohaliId: byCode('MOH'), chandigarhId: byCode('CHD'), userIdsByEmail }, { clean });
+        if (clean) {
+          log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, a fee plan for every class, October and November billed, payments checked and matched, salaries for everyone, finished months closed; accounts@ is the Accountant, approver@ the Approver`);
+          log(`    🏫 Campus: ${campus.rooms} rooms and spaces at Mohali and Chandigarh, and every section has a Home Classroom (carried forward to 2027-28)`);
+          log('    👪 Parent portal: parent@greenfield.demo has two children');
+        } else {
+          log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, Class VIII plan for ${finance.students} students, a sibling concession, a late-fee rule; accounts@ is the Accountant, approver@ the Approver`);
+          log(`    🏫 Mohali campus: Main Academic Block with ${campus.rooms} rooms and spaces (a small room, a large room, one with no seat count)`);
+          log('    👪 Parent portal: parent@greenfield.demo has two children; one pending invitation; one removed access; one student leaving; one Transfer Certificate waiting for dues');
+        }
       }
     }
     else if (def.resumeStep) await saveSetupProgress(ctx, school._id, def.resumeStep);
@@ -307,7 +329,7 @@ export async function seedDemo({ quiet = false }: { quiet?: boolean } = {}) {
 
 async function main() {
   await connectDatabase(env.MONGODB_URI);
-  await seedDemo();
+  await seedDemo({ clean: true });
   await disconnectDatabase();
 }
 

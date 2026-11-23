@@ -4,13 +4,16 @@ import { AuditEvent } from '../src/modules/audit/audit.model';
 import {
   API, app, createSchool, createUserAndLogin, signupAdmin, useTestDatabase, validSchool,
   activeLocationBody, createLocation, draftLocationBody, getLocation, nextPhone, pklAddress,
-  seededSchool, setupSchool, auditFor, expectError, type Agent,
+  seededSchool, setupSchool, auditFor, expectError, today, type Agent,
 } from './helpers';
 import { Location } from '../src/modules/locations/location.model';
-import type { SetupStatusDTO, MasterLocationDTO } from '@shared';
+import type { FinanceAttentionDTO, FinanceReadinessDTO, MasterLocationDTO, SetupStatusDTO, SpaceAttentionDTO, StudentAttentionDTO, TrialBalanceDTO } from '@shared';
 import { School } from '../src/modules/school/school.model';
 import { masterService } from '../src/modules/master/master.service';
 import { listLocationDependencies, unregisterLocationDependency } from '../src/modules/dependencies/registry';
+import { AccountingPeriod } from '../src/modules/finance/core/models';
+import { SKIP_TENANT_SCOPE } from '../src/db/plugins/tenant-scope';
+import { DEMO_PASSWORD, seedDemo } from '../src/scripts/seed';
 
 useTestDatabase();
 
@@ -998,4 +1001,33 @@ describe('in-process contract', () => {
     const other = await setupSchool({ workspace: 'Empty' });
     expect(await masterService.getPrimaryLocation({ ...ctx, tenantId: other.tenantId })).toBeNull();
   });
+});
+
+describe('the clean demo (npm run seed)', () => {
+  it('loads a school with nothing left to fix: no alerts for students, rooms or finance, books balanced, months closed', async () => {
+    await seedDemo({ clean: true, quiet: true });
+    const admin = request.agent(app);
+    await admin.post(`${API}/auth/login`).send({ email: 'admin@greenfield.demo', password: DEMO_PASSWORD }).expect(200);
+    const read = async <T>(path: string) => (await admin.get(`${API}${path}`).expect(200)).body.data as T;
+    const ids = Object.fromEntries((await read<MasterLocationDTO[]>('/master/locations')).map((l) => [l.locationCode, l.locationId]));
+
+    // Panchkula never opened, so it is archived rather than left as a draft.
+    expect(await Location.countDocuments({ status: 'DRAFT' }).setOptions(SKIP_TENANT_SCOPE)).toBe(0);
+    expect(await read<unknown[]>('/profile-change-requests?status=PENDING')).toHaveLength(0);
+
+    const students = await read<StudentAttentionDTO>('/students/attention');
+    expect(students.groups.filter((g) => g.items.length).map((g) => `${g.key}: ${g.items[0]!.message}`)).toEqual([]);
+    for (const code of ['MOH', 'CHD']) {
+      const rooms = await read<SpaceAttentionDTO>(`/spaces/attention?locationId=${ids[code]}`);
+      expect(rooms.groups.filter((g) => g.count).map((g) => `${code} ${g.group}: ${g.rows[0]?.title}`)).toEqual([]);
+    }
+
+    const finance = await read<FinanceAttentionDTO>('/finance/attention');
+    expect(finance.groups.filter((g) => g.count).map((g) => `${g.key}: ${g.items[0]?.label}`)).toEqual([]);
+    const readiness = await read<FinanceReadinessDTO>('/finance/readiness');
+    expect(readiness.ready, readiness.headline).toBe(readiness.total);
+    expect((await read<TrialBalanceDTO>('/finance/trial-balance')).balanced).toBe(true);
+    const open = await AccountingPeriod.find({ state: 'OPEN', endDate: { $lt: today() } }).setOptions(SKIP_TENANT_SCOPE).lean();
+    expect(open.map((p) => p.code)).toEqual([]);
+  }, 180_000);
 });

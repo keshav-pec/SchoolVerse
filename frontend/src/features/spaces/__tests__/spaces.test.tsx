@@ -1,13 +1,11 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Route, Routes } from 'react-router';
-import type { ReactNode } from 'react';
 import { Toaster } from 'sonner';
 import type { AcademicSessionDTO, HomeClassroomDTO, RecommendationSetDTO, RolloverSummaryDTO, RoomRefDTO, SectionRefDTO, SpaceAttentionDTO, SpaceAttentionGroupDTO, SpaceAttentionRowDTO, SpaceContextDTO, SpaceDTO, SpaceReportDTO, SpaceTreeDTO, SpaceTypeDTO } from '@shared';
-import { useAuth } from '@/lib/auth';
 import { academicSession, CLASS_OFFERING_ID, LOCATION_ID, masterLocation, SECTION_A_ID, SECTION_B_ID, SESSION_ID } from '@/test/fixtures';
-import { mockApi, pickOption, renderWithApp, type MockResponse } from '@/test/utils';
+import { API, Ready, mockApi, pickOption, renderWithApp, type MockResponse } from '@/test/utils';
 import { StudentContextProvider } from '../../students/context';
 import { RequireSpacePermission } from '@/routes/guards';
 import { AllocationPage } from '../allocation-page';
@@ -22,8 +20,6 @@ import { Inspector } from '../inspector';
 import { SpaceTypesPage } from '../types-page';
 import { WorkspacePage } from '../workspace-page';
 
-afterEach(() => vi.unstubAllGlobals());
-
 /** A wide screen shows the room panel beside the table. A narrow one (the default in tests) opens it in a side drawer. */
 function wideScreen() {
   const original = window.matchMedia;
@@ -33,16 +29,10 @@ function wideScreen() {
   };
 }
 
-const API = '/api/v1';
 const BUILDING_ID = 'b1b1b1b1-0000-4000-8000-000000000001';
 const FLOOR_ID = 'f1f1f1f1-0000-4000-8000-000000000001';
 const TYPE_STD = 't1t1t1t1-0000-4000-8000-000000000001';
 const TYPE_LAB = 't2t2t2t2-0000-4000-8000-000000000002';
-
-function Ready({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
-  return session ? <>{children}</> : null;
-}
 
 const stdType = { spaceTypeId: TYPE_STD, code: 'STANDARD_CLASSROOM', name: 'Standard Classroom', isOutdoor: false };
 

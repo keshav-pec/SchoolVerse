@@ -1,9 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { list, location, school, SCHOOL_ID, setupStatus, unfinishedSchool } from '@/test/fixtures';
-import { mockApi, renderWithApp } from '@/test/utils';
+import { API, mockApi, renderWithApp } from '@/test/utils';
 import { celebrate } from '@/lib/confetti';
 import { RequireAuth, RequireSetupComplete } from '@/routes/guards';
 import { OverviewPage } from '../overview-page';
@@ -11,12 +11,10 @@ import { SetupWizardPage } from '../wizard/setup-wizard-page';
 
 vi.mock('@/lib/confetti', () => ({ celebrate: vi.fn() }));
 
-const API = '/api/v1';
 const MOH = location();
 const CHD = location({ locationId: '33333333-3333-4333-8333-333333333333', locationCode: 'CHD', displayName: 'Chandigarh Campus', isPrimary: false });
 
 beforeEach(() => localStorage.clear());
-afterEach(() => vi.unstubAllGlobals());
 
 function Guarded() {
   return (

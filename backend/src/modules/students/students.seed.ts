@@ -4,6 +4,8 @@ import {
   createStudentSchema,
   sectionTransferSchema,
   updateSectionSchema,
+  REQUIRED_STUDENT_DOCUMENT_TYPES,
+  STUDENT_DOCUMENT_TYPE_LABELS,
   type CreateStudentData,
 } from '@shared';
 import type { ServiceContext } from '../../platform/rbac/tenant-context';
@@ -13,6 +15,7 @@ import { ClassMaster } from '../academic/reference.model';
 import { AcademicSession } from '../academic/session.model';
 import { Subject } from '../academic/subject.model';
 import { StudentEnrollment, StudentGuardianLink, type StudentEnrollmentDoc } from './student.models';
+import { uploadDocument } from './document.service';
 import { transferSection } from './enrollment.service';
 import { addGuardian } from './guardian.service';
 import { updateAdmissionNumberSettings } from './settings.service';
@@ -32,6 +35,9 @@ import { saveSelection } from './subject.service';
  *  - most students are existing students added with their original admission date and number (migration); a few new admissions
  *    this year get automatic numbers.
  * Everything goes through the real services, so the data follows every rule and has an audit trail.
+ *
+ * `clean` (what `npm run seed` uses) leaves nothing to chase: no drafts, Zoya has picked her language, and every student has their
+ * documents on file (tiny synthetic files).
  */
 
 const FIRST = [
@@ -69,7 +75,7 @@ const ROSTER: Row[] = [
 /** Roughly the age of a child in each class, for a believable date of birth. */
 const BIRTH_YEAR: Record<string, number> = { G05: 2015, G06: 2014, G08: 2012, G10: 2010 };
 
-export async function seedStudentsDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string }) {
+export async function seedStudentsDemo(ctx: ServiceContext, input: { mohaliId: string; chandigarhId: string }, opts: { clean?: boolean } = {}) {
   const tenantId = ctx.tenantId;
   const session = await AcademicSession.findOne({ tenantId, status: 'ACTIVE' }).lean<{ _id: string }>();
   if (!session) throw new Error('Seed the academic session before the students.');
@@ -199,9 +205,14 @@ export async function seedStudentsDemo(ctx: ServiceContext, input: { mohaliId: s
     const hin = await subjectOffering(location, 'G06', 'HIN');
     const enrollments = await StudentEnrollment.find({ tenantId, academicSessionId: session._id, classOfferingId: classId, state: 'OPEN' }).sort({ _id: 1 }).lean<StudentEnrollmentDoc[]>();
     for (const [i, e] of enrollments.entries()) {
-      if (e.studentId === zoya.student.studentId) continue;
+      if (e.studentId === zoya.student.studentId && !opts.clean) continue;
       await saveSelection(ctx, e._id, [i % 4 === 3 ? hin : pun]);
     }
+  }
+
+  if (opts.clean) {
+    for (const c of created) await uploadStudentPapers(ctx, c.student.studentId);
+    return { students: created.length, created };
   }
 
   // ── drafts: a name only, and an admission waiting for a parent and a section
@@ -212,6 +223,20 @@ export async function seedStudentsDemo(ctx: ServiceContext, input: { mohaliId: s
   );
 
   return { students: created.length + 2, created };
+}
+
+/** A 1×1 PNG and a tiny PDF (the upload check reads the magic bytes). Synthetic, no real data. */
+const DEMO_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+const demoPdf = (title: string) =>
+  Buffer.from(`%PDF-1.4\n% Synthetic demo document: ${title}\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`);
+
+/** Every document the school asks for, so the student shows "All documents are in". */
+async function uploadStudentPapers(ctx: ServiceContext, studentId: string) {
+  for (const documentType of REQUIRED_STUDENT_DOCUMENT_TYPES) {
+    const photo = documentType === 'PHOTO';
+    const name = `${documentType.toLowerCase().replace(/_/g, '-')}.${photo ? 'png' : 'pdf'}`;
+    await uploadDocument(ctx, studentId, { buffer: photo ? DEMO_PNG : demoPdf(documentType), originalname: name }, { documentType, displayName: `${STUDENT_DOCUMENT_TYPE_LABELS[documentType]} (demo)` });
+  }
 }
 
 /** The parent person of a student's primary guardian link (for linking a sibling to the same person). */

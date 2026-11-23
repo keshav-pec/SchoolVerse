@@ -10,10 +10,14 @@ import * as bankingModels from './banking/models';
 import { autoMatch } from './banking/reconcile.service';
 import { importStatement } from './banking/statement.service';
 import * as collectionModels from './collections/models';
-import { createClaim, createCollection } from './collections/collection.service';
+import { createClaim, createCollection, verifyClaim, verifyCollection } from './collections/collection.service';
+import { closePeriod } from './accounting/close.service';
+import { decide } from './core/approvals.service';
 import { createCashAccount } from './core/bank.service';
+import { AccountingPeriod } from './core/models';
 import * as payrollModels from './payroll/models';
-import { approveStructureVersion, assignCompensation, createStructure, listComponents, putInput } from './payroll/setup.service';
+import { StatutoryRule } from './payroll/models';
+import { approveRule, approveStructureVersion, assignCompensation, createStructure, listComponents, putInput } from './payroll/setup.service';
 
 /** Every Part 3 collection, so the demo reset clears them too (immutable ones through the raw collection). */
 export const FINANCE_OPS_MODELS = [collectionModels, bankingModels, payrollModels, accountingModels].flatMap((mod) =>
@@ -32,8 +36,15 @@ const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice
  * - money waiting: a payment reported at the office (staff claim) and a UPI payment entered at the counter, both not verified yet;
  * - a State Bank statement with five lines: the two payments, an SMS charge, interest, and an unknown credit nobody can explain;
  * - a vendor, a posted electricity expense and a supplies purchase whose GST waits for a "claim or not" decision.
+ *
+ * `clean` (what `npm run seed` uses) finishes all of that instead: everyone has a salary and this month's days, the PF/ESI/PT rules
+ * are approved, both payments are verified and matched to the bank statement, the GST is claimed, and every finished month is closed.
  */
-export async function seedFinanceOpsDemo(ctx: ServiceContext, input: { mohaliId: string; bankAccountId: string; userIdsByEmail: Record<string, string>; studentIds: string[]; billFor: (studentId: string) => Promise<string | null> }) {
+export async function seedFinanceOpsDemo(
+  ctx: ServiceContext,
+  input: { mohaliId: string; bankAccountId: string; userIdsByEmail: Record<string, string>; studentIds: string[]; billFor: (studentId: string) => Promise<string | null> },
+  opts: { clean?: boolean } = {},
+) {
   const today = await todayFor(ctx);
   const month = today.slice(0, 7);
   await createCashAccount(ctx, { label: 'Front office cash', locationIds: [input.mohaliId] });
@@ -53,29 +64,38 @@ export async function seedFinanceOpsDemo(ctx: ServiceContext, input: { mohaliId:
   const structure = await createStructure(ctx, { name: 'Teaching and office staff', effectiveFrom: '2026-04-01', items: [{ componentId: basic.componentId }, { componentId: hra.componentId, rateBps: 4000 }] });
   await approveStructureVersion(approver, structure.latestVersion!.versionId);
   const salaries: [string, number][] = [['ADM-001', 90_000], ['FAC-001', 52_000], ['FAC-002', 42_000], ['FAC-004', 50_000], ['STF-001', 24_000], ['STF-002', 22_000], ['STF-003', 35_000]];
+  // Clean: the Chandigarh staff are paid too, so nobody is left without a salary.
+  if (opts.clean) salaries.push(['FAC-003', 40_000], ['STF-004', 20_000], ['STF-005', 26_000]);
   for (const [code, rupees] of salaries) {
     const e = await byCode(code);
     await assignCompensation(ctx, { employeeId: e._id, structureVersionId: structure.latestVersion!.versionId, mode: 'MONTHLY', basicPaise: rupees * 100, overrides: [], effectiveFrom: '2026-04-01' });
-    if (code !== 'STF-001') await putInput(ctx, { employeeId: e._id, month, workingDays: null, paidLeaveDays: code === 'FAC-001' ? 1 : 0, lopDays: 0, unitsWorked: null, extras: [] });
+    if (code !== 'STF-001' || opts.clean) await putInput(ctx, { employeeId: e._id, month, workingDays: null, paidLeaveDays: code === 'FAC-001' ? 1 : 0, lopDays: 0, unitsWorked: null, extras: [] });
   }
+
+  // Clean: the demo values are approved, so payroll can run.
+  if (opts.clean) for (const rule of await StatutoryRule.find({ tenantId: ctx.tenantId, state: 'DRAFT' }).lean<{ _id: string }[]>()) await approveRule(approver, rule._id);
 
   // ── money waiting for a check: a payment reported at the office, and a UPI payment entered at the counter
   const [first, second] = input.studentIds;
   const yesterday = shift(today, -1);
-  if (first) await createClaim(accounts, { students: [{ studentId: first, amountPaise: 400_000 }], method: 'UPI', amountPaise: 400_000, paidOn: yesterday, reference: 'UTR 4821 0000 1111' }, 'STAFF');
+  const seen = { evidence: { seenOn: today, note: 'Seen in the State Bank statement.' }, bankAccountId: input.bankAccountId };
+  if (first) {
+    const claim = await createClaim(accounts, { students: [{ studentId: first, amountPaise: 400_000 }], method: 'UPI', amountPaise: 400_000, paidOn: yesterday, reference: 'UTR 4821 0000 1111' }, 'STAFF');
+    if (opts.clean) await verifyClaim(ctx, claim.claimId, { amountSeenPaise: 400_000, ...seen });
+  }
   if (second) {
     const bill = await input.billFor(second);
-    await createCollection(accounts, { method: 'NEFT', amountPaise: 350_000, reference: 'NEFT 5566 7788', receivedOn: yesterday, bankAccountId: input.bankAccountId, payerName: 'Harjit Singh', allocations: [{ studentId: second, ...(bill ? { documentId: bill } : {}), amountPaise: 350_000 }] }, 'seed-neft-1');
+    const neft = await createCollection(accounts, { method: 'NEFT', amountPaise: 350_000, reference: 'NEFT 5566 7788', receivedOn: yesterday, bankAccountId: input.bankAccountId, payerName: 'Harjit Singh', allocations: [{ studentId: second, ...(bill ? { documentId: bill } : {}), amountPaise: 350_000 }] }, 'seed-neft-1');
+    if (opts.clean) await verifyCollection(ctx, neft.collection.collectionId, { amountSeenPaise: 350_000, ...seen });
   }
 
   // ── the bank statement the accountant imported this morning
+  // Clean: only the two fee payments, which match the payments above.
   const csv = [
     'Date,Narration,Chq/Ref No,Withdrawal Amt,Deposit Amt',
     `${dmy(yesterday)},UPI CR FROM PARENT,UTR482100001111,,4000.00`,
     `${dmy(yesterday)},NEFT CR HARJIT SINGH,NEFT55667788,,3500.00`,
-    `${dmy(today)},SMS ALERT CHARGES,,11.80,`,
-    `${dmy(today)},INTEREST CREDIT,,,125.00`,
-    `${dmy(today)},NEFT CR UNKNOWN SENDER,NEFT998877,,2500.00`,
+    ...(opts.clean ? [] : [`${dmy(today)},SMS ALERT CHARGES,,11.80,`, `${dmy(today)},INTEREST CREDIT,,,125.00`, `${dmy(today)},NEFT CR UNKNOWN SENDER,NEFT998877,,2500.00`]),
   ].join('\r\n');
   await importStatement(accounts, input.bankAccountId, { buffer: Buffer.from(csv), originalname: 'state-bank-statement.csv' }, {});
   await autoMatch(accounts, { bankAccountId: input.bankAccountId });
@@ -85,7 +105,25 @@ export async function seedFinanceOpsDemo(ctx: ServiceContext, input: { mohaliId:
   const cat = (code: string) => categories.find((c) => c.code === code)!.categoryId;
   const vendor = await createVendor(ctx, { name: 'Sharma Electricals', gstin: '03ABCDE1234F1Z5', stateCode: '03', contactName: 'Rakesh Sharma', phone: '+91 98140 00000' });
   await createExpense(ctx, { categoryId: cat('UTILITIES'), taxableValuePaise: 320_000, date: shift(today, -3), description: 'Electricity bill', locationId: input.mohaliId, paymentMode: 'BANK', bankAccountId: input.bankAccountId, gstRateBps: 0 });
-  await createExpense(ctx, { categoryId: cat('SUPPLIES'), taxableValuePaise: 500_000, date: shift(today, -2), description: 'Lab bulbs and wiring', vendorId: vendor.vendorId, locationId: input.mohaliId, paymentMode: 'UNPAID', gstRateBps: 1800, itcStatus: 'NEEDS_REVIEW' });
+  await createExpense(ctx, { categoryId: cat('SUPPLIES'), taxableValuePaise: 500_000, date: shift(today, -2), description: 'Lab bulbs and wiring', vendorId: vendor.vendorId, locationId: input.mohaliId, paymentMode: 'UNPAID', gstRateBps: 1800, itcStatus: opts.clean ? 'ELIGIBLE' : 'NEEDS_REVIEW' });
   await createVendorBill(ctx, { vendorId: vendor.vendorId, vendorBillNumber: 'SE/2026/118', date: shift(today, -5), dueDate: shift(today, 25), locationId: input.mohaliId, lines: [{ description: 'Annual electrical maintenance', categoryId: cat('MAINTENANCE'), taxableValuePaise: 3_000_000, gstRateBps: 0 }] });
+  if (opts.clean) await closeFinishedMonths(ctx, approver, today);
   return { employees: salaries.length };
+}
+
+/** Clean demo only: closes every month that has ended (April to last month), each approved by the Approver. */
+async function closeFinishedMonths(ctx: ServiceContext, approver: ServiceContext, today: string) {
+  const done = await AccountingPeriod.find({ tenantId: ctx.tenantId, state: 'OPEN', endDate: { $lt: today } }).sort({ startDate: 1 }).lean<{ _id: string }[]>();
+  for (const period of done) {
+    const approvalId = await closePeriod(ctx, period._id, {}).then(
+      () => null,
+      (err: { code?: string; details?: { approvalId?: string } }) => {
+        if (err.code !== 'APPROVAL_REQUIRED' || !err.details?.approvalId) throw err;
+        return err.details.approvalId;
+      },
+    );
+    if (!approvalId) continue;
+    await decide(approver, approvalId, { decision: 'APPROVE' });
+    await closePeriod(ctx, period._id, { approvalId });
+  }
 }

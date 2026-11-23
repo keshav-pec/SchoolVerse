@@ -1,16 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { school, SCHOOL_ID } from '@/test/fixtures';
-import { mockApi, renderWithApp } from '@/test/utils';
+import { API, mockApi, renderWithApp } from '@/test/utils';
 import { AppShell } from '@/layouts/app-shell';
 import { RequireAuth } from '@/routes/guards';
 import { SchoolProfilePage } from '../school-profile-page';
 
-afterEach(() => vi.unstubAllGlobals());
-
-const API = '/api/v1';
 const base = {
   [`GET ${API}/schools/current`]: { data: school },
   [`GET ${API}/schools/${SCHOOL_ID}/identifiers`]: { data: [] },

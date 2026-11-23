@@ -1,29 +1,20 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
-import type { ReactNode } from 'react';
 import type { ParentChildDTO, ParentStudentSummaryDTO } from '@shared';
-import { useAuth } from '@/lib/auth';
 import { RequireParent } from '@/routes/guards';
 import { classSection } from '@/test/fixtures';
-import { mockApi, renderWithApp, type MockResponse } from '@/test/utils';
+import { API, Ready, mockApi, renderWithApp, type MockResponse } from '@/test/utils';
 import { ParentLayout } from '../parent-layout';
 import { ParentChildPage, ParentDocumentsPage, ParentHomePage } from '../parent-pages';
 import { ParentRequestsPage } from '../parent-requests-page';
 
-afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => sessionStorage.clear());
 
-const API = '/api/v1';
 const RIYA = 'aaaaaaaa-0000-4000-8000-000000000001';
 const ARJUN = 'aaaaaaaa-0000-4000-8000-000000000002';
 const STRANGER = 'aaaaaaaa-0000-4000-8000-000000000099';
-
-function Ready({ children }: { children: ReactNode }) {
-  const { session } = useAuth();
-  return session ? <>{children}</> : null;
-}
 
 const kid = (studentId: string, name: string, code: string): ParentChildDTO => ({ studentId, fullName: name, displayName: name, admissionNumber: `GPS/2026/${code}`, classSection: classSection(code === '00001' ? 'A' : 'B'), status: 'ACTIVE', relationshipType: 'Mother', canSeeAcademics: true, canSeeFees: false });
 const summary = (studentId: string, name: string): ParentStudentSummaryDTO => ({ studentId, fullName: name, displayName: name, admissionNumber: 'GPS/2026/00001', classSection: classSection('A'), rollNumber: '17', hasPhoto: false, subjects: [{ subjectOfferingId: 'm', subjectName: 'Maths', isMandatory: true }], primaryGuardianName: 'Simran Kaur', campusName: 'Mohali Campus' });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { login } from './helpers';
+import { login, WEB } from './helpers';
 
 /** The seeded Greenfield already has an ACTIVE 2026-27 and a PUBLISHED 2027-28 (Module 4 publishes it so promotion can be tried). These flows build and run a new session on top of it. */
 test.describe.configure({ mode: 'serial' });
@@ -167,7 +167,7 @@ test('faculty gets a read-only Academic Structure and the API refuses their writ
 
 test('visual pass: dashboard, session tabs and subject master at 1280px and 390px, with no sideways scrolling on a phone', async ({ browser }) => {
   for (const [label, width, height] of [['desktop', 1280, 860], ['phone', 390, 844]] as const) {
-    const context = await browser.newContext({ viewport: { width, height }, baseURL: 'http://localhost:5190' });
+    const context = await browser.newContext({ viewport: { width, height }, baseURL: WEB });
     const page = await context.newPage();
     await login(page, 'admin@greenfield.demo');
     const shot = (name: string) => page.screenshot({ path: `e2e/screenshots/${label}-${name}.png`, fullPage: true });
