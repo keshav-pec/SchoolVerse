@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   GraduationCap,
+  IndianRupee,
   Inbox,
   LayoutDashboard,
   Library,
@@ -24,7 +25,9 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  ReceiptText,
   School,
+  Settings2,
   UserRound,
   UsersRound,
   Users,
@@ -149,6 +152,14 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    label: 'Finance',
+    items: [
+      { to: '/finance', label: 'Overview', Icon: IndianRupee, permission: 'finance:view', end: true },
+      { to: '/finance/fees', label: 'Student Fees', Icon: ReceiptText, permission: 'finance:view' },
+      { to: '/finance/settings', label: 'Settings', Icon: Settings2, permission: 'finance:view' },
+    ],
+  },
+  {
     label: 'People',
     items: [
       {
@@ -196,6 +207,10 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/finance/fees/students/', ['Finance', 'Student Fees', 'Student Account']],
+  ['/finance/fees', ['Finance', 'Student Fees']],
+  ['/finance/settings', ['Finance', 'Settings']],
+  ['/finance', ['Finance', 'Overview']],
   ['/spaces/allocation', ['Campus', 'Classroom Allocation']],
   ['/spaces/rollover', ['Campus', 'Rollover']],
   ['/spaces/reports', ['Campus', 'Reports']],

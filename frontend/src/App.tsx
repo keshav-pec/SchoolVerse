@@ -4,6 +4,12 @@ import { DevOutboxPage } from '@/features/auth/dev-outbox-page';
 import { ForgotPasswordPage } from '@/features/auth/forgot-password-page';
 import { LoginPage } from '@/features/auth/login-page';
 import { ResetPasswordPage } from '@/features/auth/reset-password-page';
+import { FinanceLayout } from '@/features/finance/context';
+import { FeesPage } from '@/features/finance/fees-page';
+import { FinanceOverviewPage } from '@/features/finance/overview-page';
+import { FinanceSettingsPage } from '@/features/finance/settings-page';
+import { StudentAccountPage } from '@/features/finance/student-account-page';
+import { ParentFeesPage } from '@/features/parent/parent-fees-page';
 import { MyProfilePage } from '@/features/me/my-profile-page';
 import { ColleaguesPage } from '@/features/people/colleagues-page';
 import { EmployeePage } from '@/features/people/employee-page';
@@ -58,6 +64,7 @@ import {
   RequireAcademicConfig,
   RequireAuth,
   RequireDirectoryAccess,
+  RequireFinanceAccess,
   RequireFaculty,
   RequireParent,
   RequireStudentAccess,
@@ -130,6 +137,7 @@ const router = createBrowserRouter([
                   { path: 'children/:studentId', element: <ParentChildPage /> },
                   { path: 'documents', element: <ParentDocumentsPage /> },
                   { path: 'requests', element: <ParentRequestsPage /> },
+                  { path: 'fees', element: <ParentFeesPage /> },
                 ],
               },
             ],
@@ -261,6 +269,21 @@ const router = createBrowserRouter([
                               { path: 'imports/:importId', element: <SpaceImportPage /> },
                             ],
                           },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    path: '/finance',
+                    element: <RequireFinanceAccess />,
+                    children: [
+                      {
+                        element: <FinanceLayout />,
+                        children: [
+                          { index: true, element: <FinanceOverviewPage /> },
+                          { path: 'fees', element: <FeesPage /> },
+                          { path: 'fees/students/:studentId', element: <StudentAccountPage /> },
+                          { path: 'settings', element: <FinanceSettingsPage /> },
                         ],
                       },
                     ],

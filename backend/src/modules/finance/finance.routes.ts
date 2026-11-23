@@ -4,7 +4,7 @@ import {
   awardConcessionSchema, awardManySchema, bulkAssignSchema, commitBillingRunSchema, createAccountSchema, createAdjustmentSchema, createApprovalSchema, createBankAccountSchema, createBillingRunSchema,
   createCashAccountSchema, createConcessionPolicySchema, createFeeHeadSchema, createFeePlanSchema, createFinancialYearSchema, createLateFeePolicySchema, createPlanVersionSchema, createTaxCodeSchema, decideApprovalSchema, decideAwardSchema,
   generalLedgerQuerySchema, guardianParamsSchema, idParamsSchema, lateFeeRunSchema, listApprovalsQuerySchema, listAuditQuerySchema, listAwardsQuerySchema, listDocumentsQuerySchema, listJournalsQuerySchema, listPlansQuerySchema,
-  listRunRowsQuerySchema, listRunsQuerySchema, outstandingQuerySchema, patchRunRowSchema, planVersionActionSchema, recommendAssignmentsSchema, recommendConcessionsSchema, reverseJournalSchema, revealBankSchema, runParamsSchema,
+  listAccountsQuerySchema, pulseQuerySchema, listRunRowsQuerySchema, listRunsQuerySchema, outstandingQuerySchema, patchRunRowSchema, planVersionActionSchema, recommendAssignmentsSchema, recommendConcessionsSchema, reverseJournalSchema, revealBankSchema, runParamsSchema,
   runRowParamsSchema, setFinanceAccessSchema, studentRangeQuerySchema, trialBalanceQuerySchema, updateAccountSchema, updateApprovalPolicySchema, updateBankAccountSchema, updateCashAccountSchema, updateConcessionPolicySchema, updateFeeHeadSchema,
   updateFeePlanSchema, updateLateFeePolicySchema, updateLegalEntitySchema, updateStudentAssignmentSchema, updateTaxCodeSchema, updateTaxProfileSchema, updatePlanVersionSchema, userIdParamsSchema, uuidSchema,
 } from '@shared';
@@ -151,6 +151,8 @@ financeRouter.get('/fee-documents/:id/pdf', VIEW, limiter(60), idParams, async (
 financeRouter.post('/fee-documents/:id/adjustments', requirePermission('finance:adjustment:create'), idParams, validate({ body: createAdjustmentSchema }), async (req, res) => created(res, await adjustments.createAdjustment(contextOf(req), req.params.id as string, req.body)));
 
 // ───────────────────────────────────────────────────────────── a student's money
+financeRouter.get('/pulse', VIEW, validate({ query: pulseQuerySchema }), async (req, res) => ok(res, await accounts.financePulse(contextOf(req), res.locals.query)));
+financeRouter.get('/accounts', VIEW, validate({ query: listAccountsQuerySchema }), async (req, res) => ok(res, await accounts.listAccounts(contextOf(req), res.locals.query)));
 financeRouter.get('/students/:id/account', VIEW, idParams, async (req, res) => ok(res, await accounts.getStudentAccount(contextOf(req), req.params.id as string)));
 financeRouter.get('/students/:id/ledger', VIEW, idParams, async (req, res) => ok(res, await accounts.getLedger(contextOf(req), req.params.id as string)));
 financeRouter.get('/students/:id/upcoming', VIEW, idParams, async (req, res) => ok(res, await accounts.getUpcoming(contextOf(req), req.params.id as string)));

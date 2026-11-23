@@ -157,3 +157,10 @@ export function RequireSpacePermission({ permission }: { permission: Permission 
   if (!can(permission)) return <NotFoundPage />;
   return <Outlet />;
 }
+
+/** Finance: anyone holding `finance:view` (School Admin, or Staff with a finance job). Teachers and Parents get the restricted page. */
+export function RequireFinanceAccess() {
+  const { can } = useAuth();
+  if (!can('finance:view')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}

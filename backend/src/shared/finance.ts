@@ -614,6 +614,35 @@ export interface StudentAccountDTO {
   assignment: StudentAssignmentDTO | null;
 }
 
+/** One line of the Accounts list: a student with the money amounts worked out from their bills. */
+export interface StudentAccountRowDTO {
+  studentId: string;
+  studentName: string;
+  admissionNumber: string | null;
+  className: string | null;
+  guardianName: string | null;
+  guardianPersonId: string | null;
+  billedPaise: number;
+  paidPaise: number;
+  outstandingPaise: number;
+  overduePaise: number;
+  advancePaise: number;
+}
+
+export interface StudentAccountListDTO {
+  items: StudentAccountRowDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** The Overview tiles: what was billed so far this month. Outstanding and overdue come from the aging report. */
+export interface FinancePulseDTO {
+  month: string;
+  billedPaise: number;
+  billCount: number;
+}
+
 export interface LedgerEntryDTO {
   entryId: string;
   date: string;

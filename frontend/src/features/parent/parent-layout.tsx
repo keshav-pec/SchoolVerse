@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ROLE_LABELS, type ParentChildDTO } from '@shared';
-import { FileText, House, Inbox, PanelLeftClose, PanelLeftOpen, UserRound } from 'lucide-react';
+import { FileText, House, Inbox, PanelLeftClose, PanelLeftOpen, ReceiptText, UserRound } from 'lucide-react';
 import { CollapsedTip, UserMenu } from '@/layouts/app-shell';
 import { SchoolLogo } from '@/components/sv/school-logo';
 import { useSession } from '@/lib/auth';
@@ -69,6 +69,7 @@ const TABS: Tab[] = [
   { label: 'Home', Icon: House, to: (c) => (c ? `/parent?child=${c}` : '/parent'), match: (p) => p === '/parent' },
   { label: 'My Child', Icon: UserRound, to: (c) => (c ? `/parent/children/${c}` : '/parent'), match: (p) => p.startsWith('/parent/children') },
   { label: 'Documents', Icon: FileText, to: (c) => (c ? `/parent/documents?child=${c}` : '/parent/documents'), match: (p) => p.startsWith('/parent/documents') },
+  { label: 'Fees', Icon: ReceiptText, to: () => '/parent/fees', match: (p) => p.startsWith('/parent/fees') },
   { label: 'Requests', Icon: Inbox, to: () => '/parent/requests', match: (p) => p.startsWith('/parent/requests') },
 ];
 
@@ -83,7 +84,9 @@ function crumbFor(pathname: string) {
 export function ParentLayout() {
   const session = useSession();
   const location = useLocation();
-  const { selectedId } = useChildSelection();
+  const { selectedId, children: kids } = useChildSelection();
+  // Fees only show up for a parent who may see fees for at least one child; the API decides the rest.
+  const tabs = TABS.filter((t) => t.label !== 'Fees' || kids.some((c) => c.canSeeFees));
   // Same remembered choice as the staff sidebar.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sv.sidebar.collapsed') === '1');
   const toggleCollapsed = () =>
@@ -125,8 +128,8 @@ export function ParentLayout() {
         </NavLink>
         </CollapsedTip>
         <nav aria-label="Parent portal" className="md:mt-3 md:flex-1">
-          <ul className="mx-auto grid max-w-3xl grid-cols-4 md:block md:max-w-none md:space-y-0.5">
-            {TABS.map((t) => {
+          <ul className={cn('mx-auto grid max-w-3xl md:block md:max-w-none md:space-y-0.5', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
+            {tabs.map((t) => {
               const active = t.match(location.pathname);
               return (
                 <li key={t.label}>

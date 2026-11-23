@@ -1,6 +1,6 @@
 import {
   ADVANCE_LEDGER_KINDS, DUES_LEDGER_KINDS, EXITED_STUDENT_STATUSES,
-  type AgingBucket, type BalanceExplanationDTO, type FamilyDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type LedgerEntryDTO, type ListDocumentsQuery, type OutstandingDTO, type StatementDTO, type StudentAccountDTO, type UpcomingDTO,
+  type AgingBucket, type BalanceExplanationDTO, type FamilyDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type FinancePulseDTO, type LedgerEntryDTO, type ListAccountsQuery, type ListDocumentsQuery, type OutstandingDTO, type StatementDTO, type StudentAccountDTO, type StudentAccountListDTO, type UpcomingDTO,
 } from '@shared';
 import { AppError } from '../../../core/errors';
 import { daysBetween } from '../../../core/dates';
@@ -9,6 +9,7 @@ import { ClassOffering } from '../../academic/offering.model';
 import { AcademicSession } from '../../academic/session.model';
 import { todayFor } from '../../staff/status';
 import { Person } from '../../staff/person.model';
+import { listStudentsAdmin } from '../../students/student.service';
 import { Student, StudentEnrollment, StudentGuardianLink, type StudentEnrollmentDoc } from '../../students/student.models';
 import { simplePdf } from '../../students/tc.service';
 import { assertInScope, financeCtx, financeScope, monthKeyOf, scopeFilter, type FinanceCtx, type FinanceScope } from '../core/context';
@@ -311,4 +312,45 @@ export async function familyView(ctx: ServiceContext, guardianPersonId: string):
   if (children.length === 0) throw AppError.notFound('No children to show for this guardian.');
   const sum = (k: 'billedPaise' | 'paidPaise' | 'outstandingPaise' | 'overduePaise' | 'advancePaise') => children.reduce((s, c) => s + c[k], 0);
   return { guardianPersonId, guardianName: person.preferredName || `${person.legalFirstName} ${person.legalLastName}`.trim(), children, totals: { billedPaise: sum('billedPaise'), paidPaise: sum('paidPaise'), outstandingPaise: sum('outstandingPaise'), overduePaise: sum('overduePaise'), advancePaise: sum('advancePaise') } };
+}
+
+// ───────────────────────────────────────────────────────────── the Accounts list (FUX-07)
+
+/**
+ * Students of one campus with their money, found by name, admission number or parent. A finance user needs no Students permission:
+ * the campus is checked against their finance scope instead. Every amount comes from `balancesOf`, the same worker as the account page.
+ */
+export async function listAccounts(ctx: ServiceContext, query: ListAccountsQuery): Promise<StudentAccountListDTO> {
+  const f = await financeCtx(ctx);
+  await assertInScope(ctx, await financeScope(ctx), query.locationId, 'location', query.locationId);
+  const today = await todayFor(ctx);
+  const page = await listStudentsAdmin(ctx, {
+    page: query.page, pageSize: query.pageSize, locationId: query.locationId, ...(query.academicSessionId ? { academicSessionId: query.academicSessionId } : {}),
+    ...(query.classOfferingId ? { classOfferingId: query.classOfferingId } : {}), ...(query.q ? { q: query.q } : {}), status: ['ACTIVE'],
+  });
+  const ids = page.items.map((s) => s.studentId);
+  const links = await StudentGuardianLink.find({ tenantId: f.tenantId, studentId: { $in: ids }, isPrimary: true, cancelledAt: null, effectiveFrom: { $lte: today }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: today } }] }).select('studentId guardianPersonId').lean<{ studentId: string; guardianPersonId: string }[]>();
+  const guardianOf = new Map(links.map((l) => [l.studentId, l.guardianPersonId]));
+  const items = await Promise.all(page.items.map(async (s) => {
+    const b = await balancesOf(f, s.studentId, today);
+    return {
+      studentId: s.studentId, studentName: s.displayName || s.fullName, admissionNumber: s.admissionNumber, className: s.classSection?.label ?? null, guardianName: s.primaryGuardianName,
+      guardianPersonId: guardianOf.get(s.studentId) ?? null, billedPaise: b.billedPaise, paidPaise: b.paidPaise, outstandingPaise: b.outstandingPaise, overduePaise: b.overduePaise, advancePaise: b.advancePaise,
+    };
+  }));
+  return { items, total: page.total, page: page.page, pageSize: page.pageSize };
+}
+
+/** "Billed this month" for the Overview: every bill, late fee and debit note issued in the school's current month, less nothing (credit notes are not subtracted). */
+export async function financePulse(ctx: ServiceContext, query: { locationId?: string | undefined }): Promise<FinancePulseDTO> {
+  const f = await financeCtx(ctx);
+  const scope = await financeScope(ctx);
+  if (query.locationId) await assertInScope(ctx, scope, query.locationId, 'location', query.locationId);
+  const month = monthKeyOf(await todayFor(ctx));
+  const filter: Record<string, unknown> = {
+    tenantId: f.tenantId, legalEntityId: f.legalEntityId, kind: { $in: ['BILL', 'LATE_FEE', 'DEBIT_NOTE'] }, status: { $ne: 'CANCELLED' }, issueDate: { $gte: `${month}-01`, $lte: `${month}-31` }, ...scopeFilter(scope),
+    ...(query.locationId ? { locationId: query.locationId } : {}),
+  };
+  const [row] = await FeeDocument.aggregate<{ total: number; n: number }>([{ $match: filter }, { $group: { _id: null, total: { $sum: '$totalPaise' }, n: { $sum: 1 } } }]);
+  return { month, billedPaise: row?.total ?? 0, billCount: row?.n ?? 0 };
 }

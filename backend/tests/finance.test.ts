@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import mongoose from 'mongoose';
-import { FINANCE_BUNDLE_PERMISSIONS, FINANCE_DATA_CLASSIFICATION, FINANCE_DTO_ALLOWED_CLASSES, SYSTEM_FIELDS, type AccountDTO, type AdjustmentResultDTO, type ApprovalRequestDTO, type AssignmentRecommendationDTO, type BalanceExplanationDTO, type ConcessionAwardDTO, type ConcessionPolicyDTO, type ConcessionSuggestionDTO, type FamilyDTO, type FinanceReadinessDTO, type LateFeePolicyDTO, type LateFeePreviewDTO, type OutstandingDTO, type ParentFeeSummaryDTO, type ParentStudentFeesDTO, type UpcomingDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRowDTO, type BillingRunDTO, type BillingValidationDTO, type BulkAssignResultDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type JournalDetailDTO, type PlanValidationDTO, type StudentAccountDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
+import { FINANCE_BUNDLE_PERMISSIONS, FINANCE_DATA_CLASSIFICATION, FINANCE_DTO_ALLOWED_CLASSES, SYSTEM_FIELDS, type AccountDTO, type AdjustmentResultDTO, type ApprovalRequestDTO, type AssignmentRecommendationDTO, type BalanceExplanationDTO, type ConcessionAwardDTO, type ConcessionPolicyDTO, type ConcessionSuggestionDTO, type FamilyDTO, type FinanceReadinessDTO, type LateFeePolicyDTO, type LateFeePreviewDTO, type OutstandingDTO, type ParentFeeSummaryDTO, type ParentStudentFeesDTO, type UpcomingDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRowDTO, type BillingRunDTO, type BillingValidationDTO, type BulkAssignResultDTO, type FeeDocumentDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type JournalDetailDTO, type PlanValidationDTO, type StudentAccountDTO, type StudentAccountListDTO, type FinancePulseDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
 import { AuditEvent } from '../src/modules/audit/audit.model';
 import { AccessGrant, AccountingPeriod, ApprovalPolicy, ApprovalRequest, BankAccount, CashAccount, ChartAccount, FinanceAudit, FinanceCounter, FinancialYear, JournalEntry, JournalLine, LegalEntity, TaxCode } from '../src/modules/finance/core/models';
 import { calculateTax } from '../src/modules/finance/tax/tax';
@@ -938,6 +938,45 @@ describe('student account, explanation and aging (FEE-12 to 14)', () => {
     expect(family.totals).toMatchObject({ billedPaise: money(8000), outstandingPaise: money(8000) });
     expect(family.children.every((c) => c.outstandingPaise === money(4000))).toBe(true);
     expect((await t.agent.get(`${API}/finance/families/${randomUUID()}`)).status).toBe(404);
+  });
+
+  it('QA FUX-07: the Accounts list finds a student by name or parent, shows the same amounts as the account page, and stays inside the caller\'s campus', async () => {
+    const t = await feeSchool();
+    const phone = nextPhone();
+    const first = await enrolled(t, '2026-04-01', { guardian: { legalFirstName: 'Priya', legalLastName: 'Sharma', phone, relationshipType: 'Mother' } });
+    await enrolled(t);
+    await issueMonth(t);
+    const list = await getOk<StudentAccountListDTO>(t, `/accounts?locationId=${t.moh.locationId}`);
+    expect(list.total).toBe(2);
+    const row = list.items.find((r) => r.studentId === first.studentId)!;
+    const account = await getOk<StudentAccountDTO>(t, `/students/${first.studentId}/account`);
+    expect(row).toMatchObject({ billedPaise: account.billedPaise, paidPaise: account.paidPaise, outstandingPaise: account.outstandingPaise, overduePaise: account.overduePaise, guardianName: 'Priya Sharma' });
+    expect(row.guardianPersonId).toBeTruthy();
+    // a parent's name finds the child; a stranger's name finds nobody
+    expect((await getOk<StudentAccountListDTO>(t, `/accounts?locationId=${t.moh.locationId}&q=Priya`)).items.map((r) => r.studentId)).toEqual([first.studentId]);
+    expect((await getOk<StudentAccountListDTO>(t, `/accounts?locationId=${t.moh.locationId}&q=Zzzzqq`)).total).toBe(0);
+    // a campus must be named, and an accountant who works at Chandigarh only cannot list Mohali
+    expect((await t.agent.get(`${API}/finance/accounts`)).status).toBe(400);
+    const login = await loginAs(t, 'STAFF', await addActiveEmployee(t, { primaryLocationId: t.chd.locationId }));
+    await put(t, `/access/users/${login.userId}`, { bundles: ['ACCOUNTANT'] }).expect(200);
+    expect((await login.agent.get(`${API}/finance/accounts?locationId=${t.moh.locationId}`)).status).toBe(403);
+  });
+
+  it('QA FUX-02: the Overview pulse adds up what was billed this month and answers 403 for a campus outside the caller\'s scope', async () => {
+    const t = await feeSchool();
+    const empty = await getOk<FinancePulseDTO>(t, `/pulse?locationId=${t.moh.locationId}`);
+    expect(empty).toMatchObject({ billedPaise: 0, billCount: 0 });
+    await enrolled(t);
+    const today = new Date().toISOString().slice(0, 10);
+    await issueMonth(t);
+    await FeeDocument.updateMany({ tenantId: t.tenantId }, { $set: { issueDate: today } }); // the bill was issued "this month", whenever the test runs
+    const pulse = await getOk<FinancePulseDTO>(t, `/pulse?locationId=${t.moh.locationId}`);
+    expect(pulse.month).toBe(today.slice(0, 7));
+    expect(pulse.billCount).toBe(1);
+    expect(pulse.billedPaise).toBeGreaterThan(0);
+    const login = await loginAs(t, 'STAFF', await addActiveEmployee(t, { primaryLocationId: t.chd.locationId }));
+    await put(t, `/access/users/${login.userId}`, { bundles: ['ACCOUNTANT'] }).expect(200);
+    expect((await login.agent.get(`${API}/finance/pulse?locationId=${t.moh.locationId}`)).status).toBe(403);
   });
 });
 

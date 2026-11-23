@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) and **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -42,6 +42,15 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 | 2 | Space Setup workspace: campus tree, quick building and floor setup, room generator, inline inspector with autosave and undo, bulk edit, room types, import and export, availability, assisted archive, first Needs Attention | ✅ Done |
 | 3 | Home Classroom assignments with shift-aware overlap and concurrency protection, best-fit recommendations, bulk accept, rollover, availability and readiness APIs, Needs Attention, reports, domain events (API) | ✅ Done |
 | 4 | Classroom Allocation, exception-first Rollover, full Needs Attention, assisted archive with replacement, Reports, My Classroom, e2e, campus-data security gate | ✅ Done |
+
+**Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md))
+
+| Part | Scope | Status |
+|---|---|---|
+| 1 | Finance foundation: legal entity, years and periods, chart of accounts, bank accounts, immutable journal engine, approvals and audit, GST classification and calculation, fee heads, versioned plans, auto-assignment, concessions, late fees, proration, idempotent billing runs, bills, adjustments, student ledger with balance explanation, parent fee reads (API) | ✅ Done |
+| 2 | Finance workspace: Setup Checklist and guided setup, School & Tax, Chart, Years, Bank & Cash, Approvals, Access, fee plan builder, smart assignment, concessions, exception-first billing, adjustments, student accounts with Explain This Balance, family view, parent fee view | ✅ Done |
+| 3 | Collections, banking, payroll, expenses, GST, close and reports (API) | ⏳ Next |
+| 4 | Collections, banking, payroll, tax, close and reports screens, e2e, security gate | ⏳ Planned |
 
 ## Layout
 
@@ -232,6 +241,31 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 **The room picker** (one component everywhere) lists rooms that can be picked first, best fit on top, with seats; the others are greyed out with the reason ("Taken by 8-B", "Under maintenance", "Not a classroom", "Floor or building closed"). When a room is too small the same **This room is too small** dialog opens everywhere, with **Choose Larger Room** (the free room we found) and **Keep Room Anyway** (asks for a reason). The Space Setup room panel links its **Home section** to Classroom Allocation, the room search also finds a room by the section that sits in it today ("8-A"), and the KPI strip adds **Recommended automatically** and **Setup completeness**. **Archive** of a used room now offers **Choose Replacement** (the suggested room is picked already; the sections move today, then the room is archived) and **Archive After Current Session**, and shows what moved.
 
 **Things that differ from the plan.** Shifts have no field yet (an "i" card on Current Rooms explains why two sections cannot share a room). Part 4 added two read-only API pieces: `GET /spaces/my-classrooms` (Faculty "My Classroom") and room search by section in `GET /physical-spaces?q=`. History is per section; a carried-forward row says where it came from ("Carried forward from VIII-A").
+
+## Finance screens (Module 7, Part 2)
+
+| Route | Who | What |
+|---|---|---|
+| `/finance` | `finance:view` | **Finance Overview:** three tiles (Billed this month, Outstanding, Overdue), the Setup Checklist card with a fix link for what is missing, and how late the unpaid bills are. |
+| `/finance/fees` | `finance:view` | Tab in the address (`?tab=`): **Accounts** (default), **Billing**, **Fee Plans**, **Concessions**, **Adjustments**. |
+| `/finance/fees?tab=accounts&family=:personId` | `finance:view` | The family view: each linked child on their own line, with an added-up total. "Each child has a separate account." |
+| `/finance/fees/students/:studentId` | `finance:view` | One student's account: Billed, Concession, Tax, Paid, Outstanding, Overdue, plus Advance and **Expected later** kept apart. Bills, timeline, **Explain This Balance**, Download Statement, Fee Options. Collect, Report Claim, Refund and Send Reminder are shown greyed out with "coming soon". |
+| `/finance/settings` | `finance:view` | Tab in the address: **Setup Checklist** (default, with **Guide Me** and **Use The Standard Setup**), **School & Tax**, **Chart of Accounts**, **Years & Periods**, **Bank & Cash**, **Approvals**, **Access** (only for `finance:access:manage`). |
+| `/parent/fees` | Parent | "Total due ₹8,500: Aarav ₹5,000 · Riya ₹3,500", each child's bills with the maths, and **How to pay**. Only children whose parent link allows fees are shown. |
+
+The **year and campus bar** is the Module 4 bar with one more box, the **financial year** ("FY 2026-27"), remembered on the device. Nobody picks a campus or year again inside a form.
+
+**Reusable pieces** (`frontend/src/components/finance/`, Part 4 reuses them): `Money` and `MoneyField` (rupees in, whole paise out; `lib/money.ts` is the only place money is turned into text and back), `FinanceStatusPill` (one word and colour per state), `ExceptionHeader` ("2,796 ready · 54 need attention"), `ImpactPreview` ("what will change" in rupees), `ExplainDrawer`, `ApprovalBanner`. Wording for these screens is in `frontend/src/features/finance/help-copy.tsx`; `ErrorBanner` turns `PERIOD_CLOSED`, `TAX_CODE_MISSING`, `PLAN_CONFLICT`, `APPROVAL_REQUIRED` and `SELF_APPROVAL_BLOCKED` into plain words with a link to the fix.
+
+**Billing** is exception-first: pick the month and classes, **Check**, look only at "Needs a look" (grouped by reason, each with Choose Plan, Add Tax Code or Skip), then **Issue N Bills**. The confirm shows the money first and sends the checked count and total with an `Idempotency-Key`, so pressing twice or reloading never bills anyone twice. A second Check for the same month reads "0 ready".
+
+**Things that differ from the plan.**
+- The Accounts list and the Overview tiles need two small API reads that Part 1 did not have: `GET /finance/accounts` (students of one campus with Billed, Paid, Outstanding, Overdue, found by name, admission number or parent, no Students permission needed) and `GET /finance/pulse` (billed this month).
+- Concession proof: when a rule needs a document, the award form picks one from the student's own Documents (so it needs `student:view`). Others are told to ask the office to upload it first. There is no upload endpoint in finance yet.
+- The payment buttons on a student account (Collect, Report Claim, Refund, Send Reminder) are disabled with "coming soon". They are switched on in Part 4.
+- The guided first-time flow reuses the real tabs inside a dialog, so what is saved in it is saved for good. Back and Skip are always there.
+
+**Seed data (demo).** Greenfield has the standard chart, FY 2026-27, a State Bank account (••••1234), fee types, the **Class VIII plan** (published, assigned to the Class 8 students), a sibling concession, October billed and November checked but not issued. Deliberate exceptions: one Class 8 student with no plan, one with two matching plans, and a Sports Fee with no tax code. `accounts@greenfield.demo` (Accountant + Fee Manager + Cashier) and `approver@greenfield.demo` (Approver) sign in with the demo password. `parent@greenfield.demo` (Simran) sees Riya and Arjun under Fees.
 
 ## Room context for other modules
 

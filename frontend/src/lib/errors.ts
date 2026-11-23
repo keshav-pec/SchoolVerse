@@ -41,6 +41,14 @@ const UI_MESSAGES: Record<string, string> = {
   GUARDED_MOVE_REQUIRED: 'This room has history, so it cannot be moved. Archive this room and add a new one, so old records stay correct.',
   SPACE_TYPE_IN_USE: 'Active rooms still use this type. Change their type first, then try again.',
   CONFIRMATION_REQUIRED: 'Please confirm this change first. It changes how the room is used.',
+  PERIOD_CLOSED: 'This month is closed, so nothing new can be recorded in it. Ask an approver, or choose a month that is open.',
+  TAX_CODE_MISSING: 'A fee type has no tax setting yet. Add a tax code to that fee type, then try again.',
+  PLAN_CONFLICT: 'Two fee plans match the same students. Narrow one of the plans, then try again.',
+  APPROVAL_REQUIRED: 'This needs a second person to approve it first. The request has been sent.',
+  SELF_APPROVAL_BLOCKED: 'You asked for this, so a different person has to approve it.',
+  PREVIEW_CHANGED: 'The numbers changed since you checked them. Press Check Again, then issue the bills.',
+  IDEMPOTENCY_KEY_REQUIRED: 'Something went wrong while sending this. Please try again.',
+  PLAN_VERSION_FROZEN: 'A published fee plan cannot be changed. Make a new version instead.',
   ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
 

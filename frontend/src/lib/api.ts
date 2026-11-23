@@ -40,7 +40,7 @@ function refreshSession(): Promise<boolean> {
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
-async function request<T>(method: Method, path: string, body?: unknown, allowRefresh = true): Promise<T> {
+async function request<T>(method: Method, path: string, body?: unknown, allowRefresh = true, extraHeaders?: Record<string, string>): Promise<T> {
   let res: Response;
   try {
     const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
@@ -48,7 +48,7 @@ async function request<T>(method: Method, path: string, body?: unknown, allowRef
       method,
       credentials: 'include',
       // The browser sets the multipart boundary itself for FormData.
-      headers: body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : undefined,
+      headers: body !== undefined && !isForm ? { 'Content-Type': 'application/json', ...extraHeaders } : extraHeaders,
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     });
   } catch {
@@ -59,7 +59,7 @@ async function request<T>(method: Method, path: string, body?: unknown, allowRef
     // Retry even when this refresh lost: another tab may have just renewed the shared cookies. A 401 means the
     // request never ran, so repeating it once is safe.
     await refreshSession();
-    return request<T>(method, path, body, false);
+    return request<T>(method, path, body, false, extraHeaders);
   }
 
   if (res.status === 204) return undefined as T;
@@ -75,10 +75,27 @@ async function request<T>(method: Method, path: string, body?: unknown, allowRef
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  /** `headers` is for the few calls that need one (the `Idempotency-Key` of a billing run). */
+  post: <T>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>('POST', path, body ?? {}, true, headers),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
   /** multipart/form-data upload (logo). */
   upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
 };
+
+/** A file the API streams (a bill or statement PDF). Signed-in cookies go with it. */
+export async function fetchBlob(path: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError(0, 'NETWORK_ERROR', "We can't reach SchoolVerse right now. Check your connection and try again.");
+  }
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+    const code = json?.error?.code ?? 'INTERNAL_ERROR';
+    throw new ApiError(res.status, code, json?.error?.message ?? defaultMessageFor(code), json?.error?.details, json?.error?.requestId);
+  }
+  return res.blob();
+}

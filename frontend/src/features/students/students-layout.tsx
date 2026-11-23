@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Outlet } from 'react-router';
 import { CalendarDays, MapPin } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
@@ -7,7 +8,7 @@ import { InfoTip } from '@/components/ui/tooltip';
 import { StudentContextProvider, useStudentContext } from './context';
 
 /** "2026-27 · Mohali Campus": pick the year and campus once. Every Students screen follows it. */
-export function ContextBar() {
+export function ContextBar({ extra }: { extra?: ReactNode }) {
   const ctx = useStudentContext();
   if (ctx.loading) return <Skeleton className="mb-4 h-11 rounded-xl" />;
   return (
@@ -38,6 +39,7 @@ export function ContextBar() {
           placeholder="Choose campus"
         />
       </span>
+      {extra}
       <InfoTip label="About the year and campus">
         <p>Pick the school year and campus once. Lists and forms on these pages use them, so you don’t choose them again.</p>
       </InfoTip>

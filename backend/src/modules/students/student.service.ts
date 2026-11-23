@@ -207,6 +207,11 @@ async function studentIdsByGuardian(ctx: ServiceContext, tokens: string[]): Prom
  */
 export async function listStudents(ctx: ServiceContext, query: ListStudentsQuery): Promise<StudentListDTO | FacultyStudentListDTO> {
   if (!can(ctx, 'student:view')) return listForFaculty(ctx, query);
+  return listStudentsAdmin(ctx, query);
+}
+
+/** The full directory search (name, admission number, parent). The caller has already checked who may ask: Finance does so by campus. */
+export async function listStudentsAdmin(ctx: ServiceContext, query: ListStudentsQuery): Promise<StudentListDTO> {
   const tenantId = ctx.tenantId;
   const today = await todayFor(ctx);
   const sessionId = query.academicSessionId ?? (await activeSessionId(ctx));

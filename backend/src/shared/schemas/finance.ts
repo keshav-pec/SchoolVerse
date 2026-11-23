@@ -397,3 +397,14 @@ export const studentRangeQuerySchema = z.object({ from: optionalDateSchema, to: 
 export const outstandingQuerySchema = paginationQuerySchema.extend({ locationId: uuidSchema.optional(), classOfferingId: uuidSchema.optional(), bucket: z.enum(AGING_BUCKETS).optional(), asOf: optionalDateSchema });
 export const guardianParamsSchema = z.object({ guardianId: uuidSchema });
 export const parentStudentParamsSchema = z.object({ id: uuidSchema });
+
+/** The Accounts list. A campus is always named, so the finance scope check is simple. */
+export const listAccountsQuerySchema = paginationQuerySchema.extend({
+  locationId: uuidSchema,
+  academicSessionId: uuidSchema.optional(),
+  classOfferingId: uuidSchema.optional(),
+  q: z.string().trim().max(100).optional(),
+});
+export type ListAccountsQuery = z.output<typeof listAccountsQuerySchema>;
+
+export const pulseQuerySchema = z.object({ locationId: uuidSchema.optional() });
