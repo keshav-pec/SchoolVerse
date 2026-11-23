@@ -7,6 +7,12 @@ import {
   ChevronRight,
   GraduationCap,
   IndianRupee,
+  Banknote,
+  BookOpenCheck,
+  Landmark,
+  Percent,
+  ShoppingCart,
+  Wallet,
   Inbox,
   LayoutDashboard,
   Library,
@@ -45,6 +51,8 @@ import {
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Tooltip } from '@/components/ui/tooltip';
 import { usePendingRequestCount } from '@/features/people/api';
+import { useFinanceAttentionCount } from '@/features/finance/attention-page';
+import { FinanceSearch } from '@/features/finance/finance-search';
 import { useSpaceAttentionCount } from '@/features/spaces/attention';
 import { useAttentionCount } from '@/features/students/api';
 import { usePendingStudentRequests } from '@/features/students/lifecycle-api';
@@ -60,15 +68,17 @@ interface NavItem {
   hideWith?: Permission;
   end?: boolean;
   /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
-  when?: (user: { role: string; personId: string | null }) => boolean;
+  when?: (user: { role: string; personId: string | null }, can: (p: Permission) => boolean) => boolean;
   /** Shows the pending change-request count beside the label. */
-  badge?: 'requests' | 'attention' | 'student-requests' | 'space-attention';
+  badge?: 'requests' | 'attention' | 'student-requests' | 'space-attention' | 'finance-attention';
 }
 
 interface NavSection {
   label?: string;
   items: NavItem[];
 }
+
+const PAYROLL_READ: Permission[] = ['payroll:setup:manage', 'payroll:structure:manage', 'payroll:input:manage', 'payroll:run:prepare', 'payroll:run:approve', 'payroll:disbursement:manage', 'payroll:disbursement:verify', 'payroll:report:view'];
 
 /**
  * Navigation registry. Sections that are not built yet are simply not listed
@@ -155,7 +165,14 @@ const NAV: NavSection[] = [
     label: 'Finance',
     items: [
       { to: '/finance', label: 'Overview', Icon: IndianRupee, permission: 'finance:view', end: true },
+      { to: '/finance/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'finance:view', badge: 'finance-attention' },
       { to: '/finance/fees', label: 'Student Fees', Icon: ReceiptText, permission: 'finance:view' },
+      { to: '/finance/collect', label: 'Collect Payments', Icon: Banknote, permission: 'finance:view' },
+      { to: '/finance/payroll', label: 'Payroll', Icon: Wallet, permission: 'finance:view', when: (_u, can) => PAYROLL_READ.some(can) },
+      { to: '/finance/expenses', label: 'Expenses', Icon: ShoppingCart, permission: 'finance:expense:record' },
+      { to: '/finance/banking', label: 'Banking', Icon: Landmark, permission: 'finance:reconciliation:manage' },
+      { to: '/finance/tax', label: 'Tax & GST', Icon: Percent, permission: 'finance:view', when: (_u, can) => can('finance:tax:review') || can('finance:tax:manage') || can('finance:report:view') },
+      { to: '/finance/accounting', label: 'Accounting & Reports', Icon: BookOpenCheck, permission: 'finance:view', when: (_u, can) => can('finance:accounting:view') || can('finance:report:view') || can('finance:period:close') },
       { to: '/finance/settings', label: 'Settings', Icon: Settings2, permission: 'finance:view' },
     ],
   },
@@ -190,6 +207,12 @@ const NAV: NavSection[] = [
         when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
       },
       {
+        to: '/me/salary',
+        label: 'My Salary',
+        Icon: Wallet,
+        when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
+      },
+      {
         to: '/colleagues',
         label: 'Colleagues',
         Icon: UsersRound,
@@ -207,6 +230,15 @@ const CRUMBS: [string, string[]][] = [
   ['/school-setup/locations/', ['School Setup', 'Locations', 'Details']],
   ['/school-setup/locations', ['School Setup', 'Locations']],
   ['/school-setup/profile', ['School Setup', 'School Profile']],
+  ['/finance/attention', ['Finance', 'Needs Attention']],
+  ['/finance/collect', ['Finance', 'Collect Payments']],
+  ['/finance/payroll', ['Finance', 'Payroll']],
+  ['/finance/expenses', ['Finance', 'Expenses']],
+  ['/finance/banking/imports/', ['Finance', 'Banking', 'Statement']],
+  ['/finance/banking', ['Finance', 'Banking']],
+  ['/finance/tax', ['Finance', 'Tax & GST']],
+  ['/finance/accounting', ['Finance', 'Accounting & Reports']],
+  ['/me/salary', ['People', 'My Salary']],
   ['/finance/fees/students/', ['Finance', 'Student Fees', 'Student Account']],
   ['/finance/fees', ['Finance', 'Student Fees']],
   ['/finance/settings', ['Finance', 'Settings']],
@@ -300,6 +332,7 @@ function SidebarContent({
   const pending = usePendingRequestCount(can('employee:approve_changes'));
   const attention = useAttentionCount(can('student:view'), {});
   const spaceAttention = useSpaceAttentionCount(can('space:edit'));
+  const financeAttention = useFinanceAttentionCount();
   const studentRequests = usePendingStudentRequests(can('student:approve_changes'));
   return (
     <div
@@ -342,7 +375,7 @@ function SidebarContent({
             (item) =>
               (!item.permission || can(item.permission)) &&
               !(item.hideWith && can(item.hideWith)) &&
-              (!item.when || item.when(session.user)),
+              (!item.when || item.when(session.user, can)),
           );
           if (items.length === 0) return null;
           const label = section.label;
@@ -355,6 +388,8 @@ function SidebarContent({
                   sum +
                   (item.badge === 'attention'
                     ? (attention.data ?? 0)
+                    : item.badge === 'finance-attention'
+                      ? financeAttention
                     : item.badge === 'space-attention'
                       ? spaceAttention
                     : item.badge === 'student-requests'
@@ -428,6 +463,14 @@ function SidebarContent({
                           aria-label={`${attention.data} need attention`}
                         >
                           {attention.data}
+                        </span>
+                      )}
+                      {!collapsed && badge === 'finance-attention' && financeAttention > 0 && (
+                        <span
+                          className="ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy"
+                          aria-label={`${financeAttention} things need attention`}
+                        >
+                          {financeAttention}
                         </span>
                       )}
                       {!collapsed && badge === 'space-attention' && spaceAttention > 0 && (
@@ -594,7 +637,8 @@ export function AppShell() {
             </span>
           ))}
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <FinanceSearch />
           <UserMenu />
         </div>
       </header>

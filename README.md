@@ -49,8 +49,8 @@ The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1
 |---|---|---|
 | 1 | Finance foundation: legal entity, years and periods, chart of accounts, bank accounts, immutable journal engine, approvals and audit, GST classification and calculation, fee heads, versioned plans, auto-assignment, concessions, late fees, proration, idempotent billing runs, bills, adjustments, student ledger with balance explanation, parent fee reads (API) | ✅ Done |
 | 2 | Finance workspace: Setup Checklist and guided setup, School & Tax, Chart, Years, Bank & Cash, Approvals, Access, fee plan builder, smart assignment, concessions, exception-first billing, adjustments, student accounts with Explain This Balance, family view, parent fee view | ✅ Done |
-| 3 | Collections, banking, payroll, expenses, GST, close and reports (API) | ⏳ Next |
-| 4 | Collections, banking, payroll, tax, close and reports screens, e2e, security gate | ⏳ Planned |
+| 3 | Collections, banking, payroll, expenses, GST, close and reports (API) | ✅ Done |
+| 4 | Collections, banking, payroll, tax, close and reports screens, My Salary, parent payment reports, e2e (the whole chain), finance-data security gate | ✅ Done |
 
 ## Layout
 
@@ -92,6 +92,8 @@ Demo password for every seeded account: `Welcome@123`.
 | faculty@greenfield.demo | Faculty (read-only) |
 | staff@greenfield.demo | Staff (read-only) |
 | parent@greenfield.demo | Parent: the parent portal at `/parent`, with two children (Riya and Arjun Kaur) |
+| accounts@greenfield.demo | Staff with finance jobs: Accountant, Fee Manager, Collector (cashier) and Payroll Officer. Linked to Gurpreet Kaur. |
+| approver@greenfield.demo | Staff with the Approver job. Linked to the Principal's employee record, so the Approver reaches the Mohali payroll. |
 | admin@riverside.demo | School Admin of a second, isolated tenant. Its setup is **left mid-wizard** (step 5), so this login shows the wizard resuming. |
 
 Greenfield's people (Module 3, all synthetic): about ten employees across Mohali and Chandigarh. `faculty@` and `staff@` are linked to employees; `admin@` is deliberately not. **neha.bansal@greenfield.demo** is a login that is still **waiting to be activated**: open the web app's **/dev/outbox** page (on the sign-in page: forgot password → "Open the dev outbox"), follow her link, choose a password and sign in. The lab assistant (Kavita Rani) is an employee with **no login at all**. Four faculty members have a PDF each, several staff have restricted details (IDs start with `TEST`, bank accounts look like `00000000nnnn`), and Priya has a pending legal-name request waiting in the approvals inbox.
@@ -249,7 +251,7 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 | `/finance` | `finance:view` | **Finance Overview:** three tiles (Billed this month, Outstanding, Overdue), the Setup Checklist card with a fix link for what is missing, and how late the unpaid bills are. |
 | `/finance/fees` | `finance:view` | Tab in the address (`?tab=`): **Accounts** (default), **Billing**, **Fee Plans**, **Concessions**, **Adjustments**. |
 | `/finance/fees?tab=accounts&family=:personId` | `finance:view` | The family view: each linked child on their own line, with an added-up total. "Each child has a separate account." |
-| `/finance/fees/students/:studentId` | `finance:view` | One student's account: Billed, Concession, Tax, Paid, Outstanding, Overdue, plus Advance and **Expected later** kept apart. Bills, timeline, **Explain This Balance**, Download Statement, Fee Options. Collect, Report Claim, Refund and Send Reminder are shown greyed out with "coming soon". |
+| `/finance/fees/students/:studentId` | `finance:view` | One student's account: Billed, Concession, Tax, Paid, Outstanding, Overdue, plus Advance and **Expected later** kept apart. Bills, timeline, **Explain This Balance**, Download Statement, Fee Options, and (Part 4) **Collect**, **Report Claim**, **Refund**, **Send Reminder**. |
 | `/finance/settings` | `finance:view` | Tab in the address: **Setup Checklist** (default, with **Guide Me** and **Use The Standard Setup**), **School & Tax**, **Chart of Accounts**, **Years & Periods**, **Bank & Cash**, **Approvals**, **Access** (only for `finance:access:manage`). |
 | `/parent/fees` | Parent | "Total due ₹8,500: Aarav ₹5,000 · Riya ₹3,500", each child's bills with the maths, and **How to pay**. Only children whose parent link allows fees are shown. |
 
@@ -262,10 +264,46 @@ The **year and campus bar** is the Module 4 bar with one more box, the **financi
 **Things that differ from the plan.**
 - The Accounts list and the Overview tiles need two small API reads that Part 1 did not have: `GET /finance/accounts` (students of one campus with Billed, Paid, Outstanding, Overdue, found by name, admission number or parent, no Students permission needed) and `GET /finance/pulse` (billed this month).
 - Concession proof: when a rule needs a document, the award form picks one from the student's own Documents (so it needs `student:view`). Others are told to ask the office to upload it first. There is no upload endpoint in finance yet.
-- The payment buttons on a student account (Collect, Report Claim, Refund, Send Reminder) are disabled with "coming soon". They are switched on in Part 4.
 - The guided first-time flow reuses the real tabs inside a dialog, so what is saved in it is saved for good. Back and Skip are always there.
 
 **Seed data (demo).** Greenfield has the standard chart, FY 2026-27, a State Bank account (••••1234), fee types, the **Class VIII plan** (published, assigned to the Class 8 students), a sibling concession, October billed and November checked but not issued. Deliberate exceptions: one Class 8 student with no plan, one with two matching plans, and a Sports Fee with no tax code. `accounts@greenfield.demo` (Accountant + Fee Manager + Cashier) and `approver@greenfield.demo` (Approver) sign in with the demo password. `parent@greenfield.demo` (Simran) sees Riya and Arjun under Fees.
+
+## Finance screens (Module 7, Part 4)
+
+| Route | Who | What |
+|---|---|---|
+| `/finance/attention` | `finance:view` | **Needs Attention**: every group from the API (fee setup, billing, collections, banking, payroll, payouts, approvals, tax, close), each row with a **Fix** that opens the exact screen. Sidebar badge. "Nothing needs attention." when empty. |
+| `/finance/collect` | `finance:view` (each tab its own permission) | Tab in the address: **Take Payment** (one screen: find a student or family, open bills oldest first, method, live breakdown, "₹1,500 will be kept as advance", Open Shift right there for cash, **Save Payment** / **Save And Verify**, a result card with Print, Share, Download, Next Payment; double-click safe), **Waiting for Verification** (claims and counter payments, oldest first, the suggested bank line, duplicate warning, Fast Verify, Verify, Mismatch, Reject), **Cheques**, **Receipts** (cancel with approval), **Refunds** (refundable amount and why, approve, Record Payment), **My Shift** (close with counted cash, the shortage in rupees, supervisor sign-off and bank deposit). **Send Reminders** previews who and how much. |
+| `/finance/banking` | `finance:reconciliation:manage` | Account picker, the headline ("432 imported · 407 matched · 18 waiting for verification · 4 amount mismatches · 3 possible duplicates"), **Resolve N Exceptions**, **Import Statement**, **Match Automatically**, the **Reconciliation Inspector** (bank line vs SchoolVerse record, confidence and reasons in words, Confirm, Pick Another, Verify And Match, Record Bank Charge, Record Interest, Ignore with approval), timing differences apart, system matches folded with **Undo**, and a printable **Reconciliation statement**. `/finance/banking/imports/:importId` shows one file. |
+| `/finance/payroll` | any payroll permission | Tabs: **Payroll Runs** (headline, Gross / Deductions / Employer Cost / Net, change vs last month, Needs action first with a fix per person, Ready folded, **Salary Explanation** drawer, Approve by a different person, **Finalize** with the journal effect in rupees), **Salary Setup** (statutory rules with a red "Demo values" banner, structures, **Assign Suggested Salaries**, pay changes with approval), **Inputs** (month grid, **Mark Everyone Present**, CSV import), **Advances**, **Payments** (**Create Payment Batch**, **Download Bank File** "does not pay anyone", **Record Payment**, a second person **Verifies**; **Full & final**), **Payslips** (**Publish Payslips**), **Reports**. The month and campus follow the address and the bar. |
+| `/finance/expenses` | `finance:expense:record` | **Add Expense** in one panel (amount, category, date, vendor, receipt photo; campus and account filled in; GST only when ticked, with Claim / Don't Claim / Decide Later), recent expenses with Approve/Reject; **Vendors & Bills** (vendors with what is owed, bank change needs approval, vendor bills, part payments, aging). |
+| `/finance/tax` | `finance:tax:*` or `finance:report:view` | Month picker, **Needs Review** first (ITC decisions in bulk), Outward Summary, Exempt Fees, ITC Register, Liability Summary, HSN, CSV labelled "Working copy — not a filed return", GST payments. |
+| `/finance/accounting` | `finance:accounting:view`, `finance:report:view` or `finance:period:close` | **Journals** (open one to see its lines and the source it came from; New Entry with approval), **Ledger**, **Trial Balance** (green "Balanced"), **Close** (readiness: Must fix / Can accept / Good to know with a Fix button; Close Period and Reopen need a second person; opening balances import with a balance check), **Reports** (each with its basis line and a CSV button for `finance:report:export`). |
+| `/me/salary` | any employee login | **My Salary**: each published payslip (Gross, Deductions, Net Pay, payment status, View Breakdown, Download Payslip), advance recovery, a simple tax declaration. Only the signed-in person; the API reads them from the session. |
+| `/parent/fees` | Parent | Adds **Report a Payment** (child, amount, date, UPI or bank reference, screenshot) that says **"Awaiting school verification"** until the school checks it, then "Payment verified · Receipt available" with the receipt, and a **Receipts** list. |
+
+The **finance search** box in the top bar (people with `finance:view`) finds a receipt, UTR, cheque, student, bill, vendor or payslip. Reusable pieces added: `ReportTable` (basis line, totals, CSV), `useApprovalFlow` (the "Waiting for an approver" banner and the "… Again" button), `ChoiceCards`, `PaymentResultCard`, `PayslipLines`.
+
+**Things that differ from the plan.**
+- Two small API reads were added: `GET /finance/verification-queue` (claims and counter payments, oldest first, each with the bank line that looks like it, `finance:collection:verify`) and a `paymentStatus` on the employee's own payslips (`GET /me/payslips`). Close readiness also says who closed the month.
+- An approved request is used by the same person asking again for exactly the same change, so closing a dialog never loses an approval (`checkApproval`).
+- Payroll has no separate "Send For Approval" step on the server: a calculated run with no blockers simply waits for a different person to press Approve, and the screen says so.
+- A monthly payroll run is for the campus in the bar at the top.
+- A vendor's new bank details apply by themselves once approved; nothing else is saved by that request.
+
+**Seed data (demo, Part 4).** At Mohali: a cash box; salaries for seven staff (Basic + 40% HRA, approved), this month's days for all but Rohan Gill, and Kavita has no bank account, so the payroll run opens with exactly two people who need action; the PF, ESI and PT rules stay **demo values**; Riya Kaur has a plan of her own, so the family has two children with bills; a payment reported at the office and a NEFT payment entered at the counter, both waiting for a check; a State Bank statement with five lines (those two payments, an SMS charge, interest, an unknown credit); a vendor, a posted electricity expense, a supplies purchase whose GST waits for a decision, and a vendor bill that needs approval.
+
+Runbook for the finance office and on-call: [`docs/FINANCE_RUNBOOK.md`](docs/FINANCE_RUNBOOK.md).
+
+## Finance for other modules
+
+Every other module reads money through `financeService` (`backend/src/modules/finance/financeService.ts`). **Do not keep your own fee totals**, balances or "paid" flags: store the `studentId` (or `employeeId`) and ask.
+
+- `financeService.getStudentBalance(ctx, studentId)` — billed, paid, outstanding, overdue and advance, worked out from the ledger.
+- `financeService.getStudentClearance(ctx, studentId)` — CLEAR, DUES or PENDING_CLAIMS with a sentence; the Transfer Certificate dues check uses it.
+- `financeService.getFeeSummaryForParent(ctx)` — what the signed-in parent may see for their children.
+
+A module that adds a charge (transport, a lost library book) adds a **fee head** and bills through Finance, never its own table. Money is whole paise everywhere, journals are written only by `postJournal`, and a posted journal, an issued bill, a receipt and a payslip never change: a correction is a new document.
 
 ## Room context for other modules
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { AutoMatchResultDTO, CollectionResultDTO, MatchDTO, ReconExceptionsDTO, ReconSummaryDTO, RefundDTO, StatementImportDTO, StatementLineDTO, TrialBalanceDTO } from '@shared';
+import type { AutoMatchResultDTO, CollectionResultDTO, VerificationQueueDTO, MatchDTO, ReconExceptionsDTO, ReconSummaryDTO, RefundDTO, StatementImportDTO, StatementLineDTO, TrialBalanceDTO } from '@shared';
 import { BankStatementLine, ReconciliationMatch } from '../src/modules/finance/banking/models';
 import { JournalEntry } from '../src/modules/finance/core/models';
-import { API, expectError, today, useTestDatabase } from './helpers';
+import { API, EICAR, PNG, expectError, today, useTestDatabase } from './helpers';
 import { billOf, created, enrolled, getOk, issueMonth, key, money, moneySchool, ok, openShift, post, withKey, type MoneySchool } from './finance-helpers';
 
 useTestDatabase();
@@ -260,5 +260,41 @@ describe('matching and exceptions (FIN-10, 11)', () => {
     expectError(await post(t.accountant, `/collections/${b.collection.collectionId}/verify`, seen(1000, { evidence: { seenOn: today(), statementLineId: line.lineId } })), 422, 'MATCH_INVALID');
     const waiting = await getOk<{ items: { status: string }[] }>(t.accountant, '/collections?status=PENDING_VERIFICATION');
     expect(waiting.items).toHaveLength(1);
+  });
+});
+
+describe('the verification queue (COL-04, FUX-06)', () => {
+  it('QA COL-04: claims and counter payments wait in one list, oldest first, each with the bank line that looks like it', async () => {
+    const { t, kid } = await billed();
+    const claim = await created<{ claimId: string }>(await post(t, '/payment-claims', { students: [{ studentId: kid.studentId, amountPaise: money(4000) }], method: 'UPI', amountPaise: money(4000), paidOn: today(), reference: 'UTR 4821' }));
+    const counter = await collect(t, upi(kid.studentId, 1500, 'NEFT77'));
+    await imported(t, statement([{ narration: 'UPI CR PRIYA', ref: 'UTR4821', credit: 4000 }, { narration: 'NEFT IN', ref: 'OTHER', credit: 1500 }]));
+    const q = await getOk<VerificationQueueDTO>(t.accountant, '/verification-queue');
+    expect(q.total).toBe(2);
+    expect(q.items.map((i) => i.kind)).toEqual(['CLAIM', 'COLLECTION']);
+    expect(q.items[0]).toMatchObject({ id: claim.claimId, suggestion: { exact: true, amountPaise: money(4000) } });
+    expect(q.items[0]!.suggestion!.sentence).toMatch(/^Matches ₹4,000 on .*, ref …4821$/);
+    // same amount, near the date, different reference: still suggested, but not an exact match
+    expect(q.items[1]).toMatchObject({ id: counter.collection.collectionId, suggestion: { exact: false, amountPaise: money(1500) } });
+    // a cashier (no verify permission) cannot read it
+    expectError(await t.cashier.agent.get(`${API}/finance/verification-queue`), 403, 'FORBIDDEN');
+  });
+});
+
+describe('malicious files (SEC-FIN-07)', () => {
+  it('SEC-FIN-07: a bank statement or payment proof with a virus test string is refused, a proof must be an image or PDF, and nothing is stored', async () => {
+    const { t, kid } = await billed();
+    const virus = `Date,Narration,Chq/Ref No,Withdrawal Amt,Deposit Amt\r\n01/11/2026,X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*,R1,,100\r\n`;
+    expectError(await upload(t, virus), 422, 'FILE_REJECTED');
+    expectError(await upload(t, 'Date,Narration\r\n\u0000\u0000binary'), 422, 'STATEMENT_INVALID');
+    expect(await lines(t)).toHaveLength(0);
+    const claim = await created<{ claimId: string }>(await post(t, '/payment-claims', { students: [{ studentId: kid.studentId, amountPaise: money(100) }], method: 'UPI', amountPaise: money(100), paidOn: today(), reference: 'UTR-PROOF-1' }));
+    const proof = (buffer: Buffer, name: string) => t.agent.post(`${API}/finance/payment-claims/${claim.claimId}/proof`).attach('file', buffer, name);
+    expectError(await proof(EICAR, 'proof.pdf'), 422, 'FILE_REJECTED');
+    const text = await proof(Buffer.from('just some text, not a picture'), 'proof.png');
+    expect([415, 422]).toContain(text.status);
+    const listed = await getOk<{ items: { claimId: string; hasProof: boolean }[] }>(t, '/payment-claims');
+    expect(listed.items.find((c) => c.claimId === claim.claimId)!.hasProof).toBe(false);
+    await ok(await proof(PNG, 'proof.png'));
   });
 });

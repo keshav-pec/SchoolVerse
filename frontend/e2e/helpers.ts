@@ -77,3 +77,14 @@ export async function chooseOption(
   await trigger.click();
   await trigger.page().getByRole('listbox').getByRole('option').filter({ hasText: text }).first().click();
 }
+
+/**
+ * Finance screens follow the year-and-campus bar. The academics spec (which runs earlier) activates a newer session, so the finance
+ * specs pick the seeded 2026-27 year and the Mohali campus once; the choice is remembered on this browser context.
+ */
+export async function financeBar(page: Page) {
+  const bar = page.getByRole('group', { name: 'School year and campus' });
+  await expect(bar).toBeVisible();
+  await chooseOption(bar.getByRole('combobox', { name: 'School year' }), /2026-27/);
+  await chooseOption(bar.getByRole('combobox', { name: 'Campus' }), /Mohali/);
+}

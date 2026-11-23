@@ -221,6 +221,40 @@ export interface ReportDTO {
   notes: string[];
 }
 
+/** A bank statement line that looks like the money a person reported. `exact` = same reference and same amount (safe to Fast Verify). */
+export interface BankLineSuggestionDTO {
+  lineId: string;
+  bankAccountId: string;
+  date: string;
+  amountPaise: number;
+  reference: string | null;
+  exact: boolean;
+  /** "Matches ₹4,000 on 12 Nov, ref …4821". */
+  sentence: string;
+}
+
+/** One row of the Waiting for Verification queue: a parent or staff claim, or a UPI/bank payment entered at the counter. Oldest first. */
+export interface VerificationItemDTO {
+  kind: 'CLAIM' | 'COLLECTION';
+  id: string;
+  method: PaymentMethod;
+  amountPaise: number;
+  date: string;
+  reference: string | null;
+  students: { studentId: string; studentName: string }[];
+  reportedByName: string | null;
+  reportedByParent: boolean;
+  hasProof: boolean;
+  flags: CollectionFlag[];
+  createdAt: string;
+  suggestion: BankLineSuggestionDTO | null;
+}
+
+export interface VerificationQueueDTO {
+  items: VerificationItemDTO[];
+  total: number;
+}
+
 export interface ClearanceSummaryDTO {
   studentId: string;
   status: 'CLEAR' | 'DUES' | 'PENDING_CLAIMS';
@@ -599,6 +633,8 @@ export interface PayslipDTO {
   school: string;
   department: string | null;
   designation: string | null;
+  /** Only on the employee's own payslips: PAID once a second person checked the payment, CHECKING while it waits for that check. */
+  paymentStatus?: 'PAID' | 'CHECKING' | 'NOT_PAID';
 }
 
 export interface DisbursementItemDTO {
@@ -807,6 +843,9 @@ export interface CloseReadinessDTO {
   /** "September close: 3 bank items + 2 salary payouts + 1 refund + 1 cash variance = 7 need attention." */
   headline: string;
   canClose: boolean;
+  /** Who closed (or last reopened) the month, when it is not open. */
+  closedByName: string | null;
+  closedAt: string | null;
 }
 
 export interface ClosedPeriodDTO {

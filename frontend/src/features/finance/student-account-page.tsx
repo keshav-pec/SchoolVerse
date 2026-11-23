@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, BookOpenCheck, Download, FilePlus2, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, BellRing, BookOpenCheck, Download, FilePlus2, IndianRupee, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import type { FeePlanItemDTO, StudentAccountDTO } from '@shared';
 import { Alert } from '@/components/ui/alert';
@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Drawer, DrawerBody, DrawerContent, DrawerFooter } from '@/components/ui/drawer';
 import { TextareaField } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
-import { InfoTip, Tooltip } from '@/components/ui/tooltip';
+import { InfoTip } from '@/components/ui/tooltip';
 import { Can } from '@/components/sv/can';
 import { EmptyState } from '@/components/sv/empty-state';
 import { ErrorState } from '@/components/sv/error-state';
@@ -22,6 +22,8 @@ import { messageFor } from '@/lib/errors';
 import { formatDateOnly } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { AdjustmentDrawer } from './adjustment-drawer';
+import { ClaimDrawer, RemindersDrawer } from './collect/drawers';
+import { RefundDrawer } from './collect/refunds-tab';
 import { BillDrawer, JournalModal } from './bill-drawer';
 import { financeApi, openPdf, useFeePlans, useFinanceMutation, useLedger, useStudentAccount, useStudentBills, useUpcoming } from './api';
 import { FREQUENCY_LABELS, LEDGER_KIND_LABELS, TIP_ADVANCE, TIP_EXPECTED_LATER, TIP_OUTSTANDING } from './help-copy';
@@ -39,22 +41,36 @@ function Amount({ label, paise, note, tip, tone }: { label: string; paise: numbe
   );
 }
 
-/** The four buttons that need the payment screens. They stay visible, greyed out, and say why. */
-function ComingSoonButtons() {
+/** Money actions for one student. Each button shows only for people allowed to use it; the server checks again. */
+function MoneyActions({ studentId, studentName }: { studentId: string; studentName: string }) {
+  const [claim, setClaim] = useState(false);
+  const [refund, setRefund] = useState(false);
+  const [remind, setRemind] = useState(false);
   return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap gap-2">
-        {['Collect', 'Report Claim', 'Refund', 'Send Reminder'].map((label) => (
-          <Tooltip key={label} content="Coming soon. Taking payments is added in the next release.">
-            <span tabIndex={0} className="inline-flex">
-              <Button variant="outline" size="sm" disabled aria-disabled="true">
-                {label}
-              </Button>
-            </span>
-          </Tooltip>
-        ))}
-      </div>
-      <p className="text-[13px] text-muted">Coming soon: taking payments, payment claims, refunds and reminders are added in the next release.</p>
+    <div className="flex flex-wrap gap-2">
+      <Can permission="finance:collection:record">
+        <Button asChild size="sm">
+          <Link to={`/finance/collect?tab=take&student=${studentId}`}>
+            <IndianRupee /> Collect
+          </Link>
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setClaim(true)}>
+          Report Claim
+        </Button>
+      </Can>
+      <Can permission="finance:refund:request">
+        <Button size="sm" variant="outline" onClick={() => setRefund(true)}>
+          Refund
+        </Button>
+      </Can>
+      <Can permission="finance:billing:create">
+        <Button size="sm" variant="outline" onClick={() => setRemind(true)}>
+          <BellRing /> Send Reminder
+        </Button>
+      </Can>
+      <ClaimDrawer student={{ studentId, studentName }} open={claim} onClose={() => setClaim(false)} />
+      <RefundDrawer studentId={studentId} open={refund} onClose={() => setRefund(false)} />
+      <RemindersDrawer open={remind} onClose={() => setRemind(false)} highlightStudentId={studentId} />
     </div>
   );
 }
@@ -188,9 +204,9 @@ export function StudentAccountPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Other actions</CardTitle>
+          <CardTitle>Money</CardTitle>
         </CardHeader>
-        <ComingSoonButtons />
+        <MoneyActions studentId={a.studentId} studentName={a.studentName} />
       </Card>
 
       <Card>

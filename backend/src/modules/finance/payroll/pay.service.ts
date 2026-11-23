@@ -281,7 +281,13 @@ async function myPayslipRows(f: FinanceCtx, employeeId: string): Promise<Payslip
 export async function myPayslips(ctx: ServiceContext): Promise<PayslipDTO[]> {
   const f = await financeCtx(ctx);
   const e = await me(ctx);
-  return payslipDTOs(f, await myPayslipRows(f, e._id));
+  const rows = await myPayslipRows(f, e._id);
+  const items = await DisbursementItem.find({ tenantId: f.tenantId, employeeId: e._id, runId: { $in: rows.map((r) => r.runId) }, status: 'PAID' }).select('runId verified').lean<{ runId: string; verified: boolean }[]>();
+  const status = (runId: string): 'PAID' | 'CHECKING' | 'NOT_PAID' => {
+    const mine = items.filter((i) => i.runId === runId);
+    return mine.some((i) => i.verified) ? 'PAID' : mine.length ? 'CHECKING' : 'NOT_PAID';
+  };
+  return (await payslipDTOs(f, rows)).map((p) => ({ ...p, paymentStatus: status(p.runId) }));
 }
 
 export async function myPayslipPdf(ctx: ServiceContext, payslipId: string): Promise<{ buffer: Buffer; fileName: string }> {

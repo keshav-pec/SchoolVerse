@@ -5,6 +5,15 @@ import { ForgotPasswordPage } from '@/features/auth/forgot-password-page';
 import { LoginPage } from '@/features/auth/login-page';
 import { ResetPasswordPage } from '@/features/auth/reset-password-page';
 import { FinanceLayout } from '@/features/finance/context';
+import { BankingPage } from '@/features/finance/banking/banking-page';
+import { StatementImportPage } from '@/features/finance/banking/import-page';
+import { CollectPage } from '@/features/finance/collect/collect-page';
+import { PayrollPage } from '@/features/finance/payroll/payroll-page';
+import { AccountingPage } from '@/features/finance/accounting/accounting-page';
+import { FinanceAttentionPage } from '@/features/finance/attention-page';
+import { ExpensesPage } from '@/features/finance/expenses/expenses-page';
+import { TaxPage } from '@/features/finance/tax-page';
+import { MySalaryPage } from '@/features/me/my-salary-page';
 import { FeesPage } from '@/features/finance/fees-page';
 import { FinanceOverviewPage } from '@/features/finance/overview-page';
 import { FinanceSettingsPage } from '@/features/finance/settings-page';
@@ -64,7 +73,9 @@ import {
   RequireAcademicConfig,
   RequireAuth,
   RequireDirectoryAccess,
+  RequireEmployeeLogin,
   RequireFinanceAccess,
+  RequireFinancePermission,
   RequireFaculty,
   RequireParent,
   RequireStudentAccess,
@@ -180,6 +191,11 @@ const router = createBrowserRouter([
                     ],
                   },
                   {
+                    path: '/me/salary',
+                    element: <RequireEmployeeLogin />,
+                    children: [{ index: true, element: <MySalaryPage /> }],
+                  },
+                  {
                     element: <RequireDirectoryAccess />,
                     children: [
                       { path: '/me', element: <MyProfilePage /> },
@@ -284,6 +300,31 @@ const router = createBrowserRouter([
                           { path: 'fees', element: <FeesPage /> },
                           { path: 'fees/students/:studentId', element: <StudentAccountPage /> },
                           { path: 'settings', element: <FinanceSettingsPage /> },
+                          { path: 'collect', element: <CollectPage /> },
+                          {
+                            element: <RequireFinancePermission any={['finance:reconciliation:manage']} />,
+                            children: [
+                              { path: 'banking', element: <BankingPage /> },
+                              { path: 'banking/imports/:importId', element: <StatementImportPage /> },
+                            ],
+                          },
+                          {
+                            element: <RequireFinancePermission any={['payroll:setup:manage', 'payroll:structure:manage', 'payroll:input:manage', 'payroll:run:prepare', 'payroll:run:approve', 'payroll:disbursement:manage', 'payroll:disbursement:verify', 'payroll:report:view']} />,
+                            children: [{ path: 'payroll', element: <PayrollPage /> }],
+                          },
+                          { path: 'attention', element: <FinanceAttentionPage /> },
+                          {
+                            element: <RequireFinancePermission any={['finance:expense:record']} />,
+                            children: [{ path: 'expenses', element: <ExpensesPage /> }],
+                          },
+                          {
+                            element: <RequireFinancePermission any={['finance:tax:review', 'finance:tax:manage', 'finance:report:view']} />,
+                            children: [{ path: 'tax', element: <TaxPage /> }],
+                          },
+                          {
+                            element: <RequireFinancePermission any={['finance:accounting:view', 'finance:report:view', 'finance:period:close']} />,
+                            children: [{ path: 'accounting', element: <AccountingPage /> }],
+                          },
                         ],
                       },
                     ],

@@ -90,7 +90,7 @@ export async function collectionDTOs(f: FinanceCtx, rows: CollectionDoc[]): Prom
   }));
 }
 
-async function claimDTOs(f: FinanceCtx, rows: PaymentClaimDoc[]): Promise<ClaimDTO[]> {
+export async function claimDTOs(f: FinanceCtx, rows: PaymentClaimDoc[]): Promise<ClaimDTO[]> {
   const [labels, names] = await Promise.all([studentLabels(f, rows.flatMap((r) => r.students.map((s) => s.studentId))), namesOf(f, rows.map((r) => r.reportedBy))]);
   return rows.map((c) => ({
     claimId: c._id, status: c.status, method: c.method, amountPaise: c.amountPaise, paidOn: c.paidOn, reference: c.reference, students: c.students.map((s) => ({ studentId: s.studentId, studentName: labels.get(s.studentId)?.name ?? 'Student', amountPaise: s.amountPaise })),

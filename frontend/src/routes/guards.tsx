@@ -164,3 +164,19 @@ export function RequireFinanceAccess() {
   if (!can('finance:view')) return <Navigate to="/restricted" replace />;
   return <Outlet />;
 }
+
+/** A finance page that needs more than `finance:view` (Banking, Payroll, Expenses…). Someone without it sees Not Found. */
+export function RequireFinancePermission({ any }: { any: Permission[] }) {
+  const { can } = useAuth();
+  if (!any.some(can)) return <NotFoundPage />;
+  return <Outlet />;
+}
+
+/** `/me/salary`: anyone whose login is an employee (teaching or non-teaching staff, or an admin linked to an employee record). */
+export function RequireEmployeeLogin() {
+  const session = useSession();
+  const u = session.user;
+  if (u.role === 'PARENT') return <Navigate to="/restricted" replace />;
+  if (u.role !== 'FACULTY' && u.role !== 'STAFF' && !u.personId) return <NotFoundPage />;
+  return <Outlet />;
+}

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { chooseOption, expectToast, login } from './helpers';
+import { chooseOption, expectToast, financeBar, login } from './helpers';
 
 /**
  * Finance flows (Module 7, Part 2). They share the seeded database, so they run in order. The seed already has: the standard setup,
@@ -49,35 +49,10 @@ test('admin sees the bank account masked and has to give a reason before the num
   await expect(page.getByText('300012341234')).toHaveCount(0);
 });
 
-test('admin settles the students that need a decision: only the exceptions are listed, each with a reason in words', async ({ page }) => {
-  await login(page, 'admin@greenfield.demo');
-  await page.goto('/finance/fees?tab=plans');
-  // the Class VIII plan belongs to the Mohali campus, so pick it in the context bar first
-  await chooseOption(page.getByRole('combobox', { name: 'Campus' }), /Mohali/);
-  const panel = page.getByRole('region', { name: 'Assign fee plans' });
-  await chooseOption(panel.getByLabel('Class'), /class 8/i);
-  await expect(panel.getByText(/eligible · .* ready · .* need review/)).toBeVisible();
-  // the seed left a student with two matching plans in Class 8 (the "no plan" exception is checked in the component tests: the e2e data has a plan for every Class 8 student)
-  const list = panel.getByRole('region', { name: 'Students that need a decision' });
-  await expect(list.getByText('Two fee plans match. Choose the right one.')).toBeVisible();
-  await expect(list.getByRole('button', { name: /^Choose plan for /i })).toHaveCount(1);
-  await list.getByRole('button', { name: /^Choose plan for /i }).click();
-  await expect(panel.getByText(/done 1/i)).toBeVisible();
-});
-
-test('admin sees the sibling concession and its awards, and the line "a discount is not a payment"', async ({ page }) => {
-  await login(page, 'admin@greenfield.demo');
-  await page.goto('/finance/fees?tab=concessions');
-  await expect(page.getByRole('heading', { name: 'Concession rules' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Concession rules' }).getByText('Sibling concession')).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Awards' }).getByText('Sibling concession').first()).toBeVisible();
-  await page.getByRole('button', { name: 'About concessions and payments' }).click();
-  await expect(page.getByText(/a concession lowers what the family has to pay/i)).toBeVisible();
-});
-
 test('admin runs November billing, skips one exception with a reason, issues, and a second run makes no duplicates', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await page.goto('/finance/fees?tab=billing');
+  await financeBar(page);
   await chooseOption(page.getByLabel('Month'), /november 2026/i);
   await page.getByRole('button', { name: 'Check', exact: true }).click();
 
@@ -106,9 +81,37 @@ test('admin runs November billing, skips one exception with a reason, issues, an
   await expect(page.getByRole('region', { name: 'Check result' }).locator('[aria-live="polite"]').last()).toContainText(/0 ready/);
 });
 
+test('admin settles the students that need a decision: only the exceptions are listed, each with a reason in words', async ({ page }) => {
+  await login(page, 'admin@greenfield.demo');
+  await page.goto('/finance/fees?tab=plans');
+  // the Class VIII plan belongs to the Mohali campus and the 2026-27 year, so pick them in the context bar first
+  await financeBar(page);
+  const panel = page.getByRole('region', { name: 'Assign fee plans' });
+  await chooseOption(panel.getByLabel('Class'), /class 8/i);
+  await expect(panel.getByText(/eligible · .* ready · .* need review/)).toBeVisible();
+  // the seed left a student with two matching plans in Class 8 (the "no plan" exception is checked in the component tests: the e2e data has a plan for every Class 8 student)
+  const list = panel.getByRole('region', { name: 'Students that need a decision' });
+  await expect(list.getByText('Two fee plans match. Choose the right one.')).toBeVisible();
+  await expect(list.getByRole('button', { name: /^Choose plan for /i })).toHaveCount(1);
+  await list.getByRole('button', { name: /^Choose plan for /i }).click();
+  await expect(panel.getByText(/done 1/i)).toBeVisible();
+});
+
+test('admin sees the sibling concession and its awards, and the line "a discount is not a payment"', async ({ page }) => {
+  await login(page, 'admin@greenfield.demo');
+  await page.goto('/finance/fees?tab=concessions');
+  await financeBar(page);
+  await expect(page.getByRole('heading', { name: 'Concession rules' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Concession rules' }).getByText('Sibling concession')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Awards' }).getByText('Sibling concession').first()).toBeVisible();
+  await page.getByRole('button', { name: 'About concessions and payments' }).click();
+  await expect(page.getByText(/a concession lowers what the family has to pay/i)).toBeVisible();
+});
+
 test('admin finds a student by name, opens the account, and explains the balance line by line', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await page.goto('/finance/fees?tab=accounts');
+  await financeBar(page);
   await page.getByRole('textbox', { name: 'Search students' }).fill('Arjun');
   const link = page.getByRole('link', { name: 'Arjun Kaur' });
   await expect(link).toBeVisible();

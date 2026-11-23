@@ -1,4 +1,4 @@
-# Security gate: employee data (Module 3), child data (Module 4) and campus data (Module 5)
+# Security gate: employee data (Module 3), child data (Module 4), campus data (Module 5) and finance data (Module 7)
 
 Run this before any release that holds employee or student personal data. A release with employee or child PII needs the
 matching checklist ticked (sign it off in the pull request, with the date and your name). The child-data section is
@@ -161,3 +161,55 @@ Manual review (a person, not a script):
 There is no separate facility-staff role yet (the School Admin does facility work). Shifts are free-text labels until Shift
 Management exists, so sharing a room needs two named shifts. Recurring closures are stored but not evaluated. Timetable owns
 period-level booking; this module only says which rooms are usable (see `Module5.md`, "Simplifications versus the PRD").
+
+## Finance data (Module 7)
+
+Run this as well before any release that holds money. It sits on top of the gates above: the same tenant scoping, strict bodies,
+audit rows and export rules apply. Here the threats are about money that is not real, money counted twice, books changed quietly,
+and salary or bank details reaching someone who should not see them.
+
+### Threat model on one page
+
+**Assets.** The ledger and journals (immutable, one `postJournal`), student dues and bills, receipts, bank accounts (number
+encrypted, shown masked), salary, payslips and tax declarations, bank statements and payment proofs (private files), refunds
+and vendor bank details.
+
+**Actors.** School Admin (trusted, audited) · Collector (takes cash and records payments) · Fee Manager · Accountant (verifies,
+reconciles, posts) · Payroll Officer · Approver (the "different person") · Auditor (read only) · Faculty and Staff (their own
+salary only, at `/me/salary`) · Parent (their linked children's fees, claims and receipts) · another school (a different tenant).
+Finance access is a **job bundle** on a Staff login, never a new role, and never reaches a campus the person does not work at.
+
+| Threat | Control | Test that proves it |
+|---|---|---|
+| Someone guesses another student's ledger id or another employee's payslip id | Every read is tenant-scoped and campus-scoped; another school's id is **404**, another campus **403** with `CROSS_SCOPE_DENIED`. `/me/payslips` reads the person from the session, never from the address | `finance-invariants` SEC-FIN-05 · INV-18 · `finance-payroll` QA PAY-14 · frontend "(PAY-13) My Salary … asks only the /me endpoints" |
+| A parent sees a sibling who is not linked to them | Parent reads go through the parent link with fee access (`canSeeFees`); a claim listing a child they cannot see shows only their own children | `finance` (parent fee reads) · `finance-collections` QA COL-01 (a child they cannot see is 404) · QA COL-09 (only their own children's receipts) |
+| An accountant approves their own refund, payroll or close | Every approval checks the requester; `SELF_APPROVAL_BLOCKED` for refunds, payroll runs, expenses, vendor bills and every `checkApproval` request. An approved request is used once, and only by the person who asked for it | `finance-collections` QA COL-10 · `finance-payroll` QA PAY-08 · `finance-close` QA FIN-06 · e2e finance-chain step 4 (the preparer is told a different person must approve) |
+| A fake UPI screenshot is treated as money | A claim makes no journal, no receipt and no change to the bill. Only a person who has seen the money (Verify, with the amount seen) posts it; a different amount needs "use what I saw"; a reference already on a confirmed payment is refused | `finance-invariants` INV-16 · `finance-collections` QA COL-03 · QA COL-05 · frontend "(COL-04) … a UTR is not proof" · e2e finance-money (parent) |
+| A double click, or two cashiers, make two receipts for one bill | `Idempotency-Key` on every collection; allocations use guarded updates on the bill balance, so the second payment is refused ("nothing left to pay") | `finance-invariants` INV-02 · INV-04 · `finance-collections` QA COL-06 · frontend "(COL-02) a double click saves once" · e2e finance-money (two cashiers) |
+| A posted journal or an issued bill is edited quietly | Journals, receipts and payslips are immutable at the model level; a correction is a new document (credit note, reversal, cancellation record) | `finance-invariants` INV-07 · INV-09 · `finance-collections` QA COL-09 · `finance-expenses` QA FIN-13 |
+| Someone back-dates an entry into a closed month | `postJournal` refuses a closed period; closing and reopening need a second person; a locked month never reopens | `finance-invariants` INV-14 · `finance-close` QA FIN-15 (three tests) · e2e finance-limits ("a closed month refuses a back-dated entry") |
+| A bank file is treated as salary paid | Building or downloading the file posts nothing; payout status moves only when a **different** person verifies the recorded payment | `finance-invariants` INV-17 · `finance-payroll` QA PAY-11 (two tests) · frontend "(PAY-11) … does not pay anyone" · e2e finance-chain step 5 |
+| Salary or bank numbers leak through search, logs, exports or the Faculty role | Salary routes need `payroll:salary:view_sensitive`; Faculty and Staff have no payroll route; search returns salary only with that permission; bank advice and the bank file never show a full number to the screen; the data classification marks salary RESTRICTED; the logger redacts bank numbers | `finance-invariants` SEC-FIN-04 · `finance-close` QA FUX-15 · `finance-payroll` QA PAY-15 · QA PAY-14 · `staff` QA S7 (logger) · e2e finance-limits (teacher and Collector refused) |
+| An export without permission, or a formula in a CSV cell | Every CSV needs `finance:report:export` (or the payroll report permission), is audited, and a cell starting with `= + - @` is escaped | `finance-close` QA FIN-17 · `finance-collections` QA COL-11 · `finance-payroll` QA PAY-15 |
+| A malicious bank statement or payment proof | Statements and proofs are scanned (EICAR-style test strings refused), a proof must really be an image or PDF, binary statements are refused, files go to private storage and are served only through a permission-checked route with `nosniff` | `finance-banking` SEC-FIN-07 · QA FIN-09 (nothing half imported) |
+| A finance job is taken away but the person keeps acting | Bundles are read on every request (`effectivePermissions`), so removal works on the very next call | `finance-invariants` SEC-FIN-06 |
+
+### Checklist (finance data)
+
+- [ ] **Lint.** `npm run lint` in `backend/` and `frontend/`: no errors.
+- [ ] **Backend tests.** `npm test` in `backend/`: green (`finance`, `finance-collections`, `finance-banking`, `finance-payroll`, `finance-expenses`, `finance-close`, `finance-invariants`, `finance-chain`).
+- [ ] **Frontend tests.** `npm test` in `frontend/`: green (`finance.test.tsx`, `finance-ops.test.tsx`: live allocation and advance note, double click saves once, Open Shift for cash, suggested bank line and duplicate warning, cheque receipt only after clear, refundable amount, reconciliation headline and inspector reasons, payroll exceptions first, finalise journal effect, bank file note, My Salary own data only, expense panel and ITC choices, close readiness levels, report basis line, parent "Awaiting school verification", no finance routes without a job).
+- [ ] **Browser tests.** `npm run e2e` in `frontend/`: green (`finance-chain.spec.ts` (the whole chain), `finance-flows.spec.ts`, `finance-limits.spec.ts`, `finance-money.spec.ts`, `finance-reconcile.spec.ts`, `finance-visual.spec.ts` at 1280px and 390px).
+
+Manual review (a person, not a script):
+
+- [ ] **Two tabs, one bill.** Open Take Payment for the same student in two tabs and save both with the full amount. The second must say the bill has nothing left to pay.
+- [ ] **A claim is not money.** Report a UPI payment as a parent. Until someone verifies it, the bill stays unpaid and no receipt exists.
+- [ ] **Another person's payslip.** Signed in as a teacher, call `/api/v1/payroll/payslips` and another person's payslip PDF in the network tab: 403 and 404.
+- [ ] **A closed month.** Close a month (with approval), then try an expense dated in it: refused.
+
+### Known limits (finance data)
+
+One legal entity per school; no payment gateway (money moves through the school's own bank, UPI and cash). Seeded tax codes and
+PF, ESI and PT values are examples until the school's accountant approves them. Payroll attendance is a monthly summary, not
+Module 8. See `docs/Module7.md`, "Simplifications versus the PRD", and `docs/FINANCE_RUNBOOK.md`.

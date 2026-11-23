@@ -10,6 +10,7 @@ import { formatDateOnly } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { useParentChildFees, useParentFees } from '../finance/api';
+import { PaymentsAndReceipts, ReportPayment } from './parent-payments';
 
 /** What the school asks the family to pay, in the plainest words: a total, then each child's bills with the maths. */
 function ChildFees({ studentId, name }: { studentId: string; name: string }) {
@@ -72,7 +73,7 @@ function ChildFees({ studentId, name }: { studentId: string; name: string }) {
   );
 }
 
-/** `/parent/fees`: the family's total, each child's bills, and how to pay. Receipts and reporting a payment come in a later release. */
+/** `/parent/fees`: the family's total, how to pay, Report a Payment, the reports and receipts, then each child's bills. */
 export function ParentFeesPage() {
   const q = useParentFees();
   const kids = q.data?.children ?? [];
@@ -145,10 +146,12 @@ export function ParentFeesPage() {
         </section>
       )}
 
+      <ReportPayment kids={kids} />
+      <PaymentsAndReceipts />
+
       {kids.map((c) => (
         <ChildFees key={c.studentId} studentId={c.studentId} name={c.studentName} />
       ))}
-      <p className="text-center text-[13px] text-muted">Reporting a payment and receipts are coming soon.</p>
     </div>
   );
 }

@@ -520,9 +520,10 @@ describe('student account, explanation and family (FEE-12 to 14, FUX-07, 08)', (
     // nothing edits a balance
     expect(screen.queryByRole('textbox', { name: /outstanding|balance|amount owed/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /(edit|change|set|adjust) (the )?(balance|outstanding)/i })).toBeNull();
-    // the payment buttons are on screen, greyed out, with the reason
-    for (const label of ['Collect', 'Report Claim', 'Refund', 'Send Reminder']) expect(screen.getByRole('button', { name: label })).toBeDisabled();
-    expect(screen.getByText(/coming soon: taking payments/i)).toBeInTheDocument();
+    // the money actions are switched on (Part 4): Collect opens Take Payment for this student
+    expect(screen.getByRole('link', { name: 'Collect' })).toHaveAttribute('href', `/finance/collect?tab=take&student=${STUDENT_ID}`);
+    for (const label of ['Report Claim', 'Refund', 'Send Reminder']) expect(screen.getByRole('button', { name: label })).toBeEnabled();
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
   });
 
   it('(FEE-13) Explain This Balance lists every part, each part adds up to the amount owed, and the drawer says it matches the account', async () => {

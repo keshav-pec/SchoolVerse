@@ -230,6 +230,7 @@ export async function closeReadiness(ctx: ServiceContext, periodId: string): Pro
     periodId: p._id, periodCode: p.code, state: p.state, checks, blockers, warnings,
     headline: parts.length ? `${monthLabel} close: ${parts.join(' + ')} = ${blockers} need attention.` : `${monthLabel} close: nothing needs attention.${warnings ? ` ${warnings} warning${warnings === 1 ? '' : 's'} can be accepted with a reason.` : ''}`,
     canClose: p.state === 'OPEN' && blockers === 0,
+    ...(p.state === 'OPEN' ? { closedByName: null, closedAt: null } : await periodDTO(f, p).then((d) => ({ closedByName: d.closedByName, closedAt: d.closedAt }))),
   };
 }
 

@@ -34,14 +34,53 @@ const META: Record<string, Meta> = {
   OPEN: { label: 'Open', tone: 'success', Icon: LockOpen },
   CLOSED: { label: 'Closed', tone: 'sun', Icon: Lock },
   LOCKED: { label: 'Locked', tone: 'neutral', Icon: Lock },
+  // money coming in (Part 4)
+  REPORTED: { label: 'Reported', tone: 'sun', Icon: Hourglass },
+  RECEIVED: { label: 'Received', tone: 'brand', Icon: FileCheck2 },
+  DEPOSITED: { label: 'Deposited', tone: 'sun', Icon: Clock },
+  PENDING_VERIFICATION: { label: 'Waiting for Check', tone: 'sun', Icon: Hourglass },
+  VERIFIED: { label: 'Verified', tone: 'success', Icon: CircleCheck },
+  POSTED: { label: 'Received', tone: 'success', Icon: CircleCheck },
+  CLEARED: { label: 'Cleared', tone: 'success', Icon: CircleCheck },
+  RETURNED: { label: 'Returned', tone: 'danger', Icon: Ban },
+  REVERSED: { label: 'Reversed', tone: 'neutral', Icon: Ban },
+  REQUESTED: { label: 'Requested', tone: 'sun', Icon: Hourglass },
+  ELIGIBLE: { label: 'Can Claim', tone: 'success', Icon: CircleCheck },
+  NOT_ELIGIBLE: { label: 'Not Claimed', tone: 'neutral', Icon: Ban },
+  NEEDS_REVIEW: { label: 'Decide Later', tone: 'warning', Icon: TriangleAlert },
+  PAID: { label: 'Paid', tone: 'success', Icon: CircleCheck },
+  SIGNED_OFF: { label: 'Signed Off', tone: 'success', Icon: CircleCheck },
+  // payroll
+  CALCULATED: { label: 'Calculated', tone: 'brand', Icon: FileCheck2 },
+  FINALIZED: { label: 'Finalised', tone: 'success', Icon: Lock },
+  UNPAID: { label: 'Unpaid', tone: 'danger', Icon: Clock },
+  PARTIALLY_PAID: { label: 'Part Paid', tone: 'sun', Icon: Clock },
+  NEEDS_ACTION: { label: 'Needs Action', tone: 'warning', Icon: TriangleAlert },
+  HELD: { label: 'On Hold', tone: 'neutral', Icon: PauseCircle },
+  BUILT: { label: 'File Made', tone: 'brand', Icon: FilePen },
+  RECORDED: { label: 'Recorded', tone: 'sun', Icon: Hourglass },
+  FAILED: { label: 'Failed', tone: 'danger', Icon: Ban },
+  PAID_OUT: { label: 'Paid Out', tone: 'brand', Icon: CircleCheck },
+  APPLIED: { label: 'Applied', tone: 'success', Icon: CircleCheck },
+  // bank lines
+  UNMATCHED: { label: 'Not Matched', tone: 'warning', Icon: TriangleAlert },
+  SUGGESTED: { label: 'Suggested', tone: 'sun', Icon: Hourglass },
+  AUTO_MATCHED: { label: 'Matched', tone: 'success', Icon: CircleCheck },
+  VERIFIED_MATCHED: { label: 'Matched', tone: 'success', Icon: CircleCheck },
+  CONFIRMED: { label: 'Matched', tone: 'success', Icon: CircleCheck },
+  PARTIAL: { label: 'Part Matched', tone: 'sun', Icon: Clock },
+  DUPLICATE_SUSPECTED: { label: 'Maybe a Duplicate', tone: 'danger', Icon: TriangleAlert },
+  VARIANCE: { label: 'Amount Differs', tone: 'danger', Icon: TriangleAlert },
+  IGNORED: { label: 'Ignored', tone: 'neutral', Icon: SkipForward },
 };
 
-export function FinanceStatusPill({ status }: { status: string }) {
+/** `label` replaces the word when one state means something else on a screen (a refund that is ELIGIBLE is "Ready to Approve"). */
+export function FinanceStatusPill({ status, label }: { status: string; label?: string }) {
   const meta = META[status] ?? { label: status, tone: 'neutral' as const, Icon: Clock };
   return (
     <Badge tone={meta.tone} data-status={status}>
       <meta.Icon aria-hidden />
-      {meta.label}
+      {label ?? meta.label}
     </Badge>
   );
 }

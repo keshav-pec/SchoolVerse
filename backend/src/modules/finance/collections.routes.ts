@@ -15,6 +15,7 @@ import { requirePermission } from '../../platform/rbac/require-permission';
 import { contextOf } from '../../platform/rbac/tenant-context';
 import * as collections from './collections/collection.service';
 import { clearanceSummary, commitFeeImport, previewFeeImport, previewReminders, sendReminders } from './collections/extras.service';
+import { verificationQueue } from './collections/queue.service';
 import * as refunds from './collections/refund.service';
 import { collectionReport, collectionReportCsv } from './collections/reports.service';
 import * as shifts from './collections/shift.service';
@@ -33,6 +34,7 @@ const proofUpload = singleDocumentUpload('file', MAX_DOCUMENT_BYTES);
 // ───────────────────────────────────────────────────────────── claims
 collectionsRouter.post('/payment-claims', RECORD, limiter(60), validate({ body: createStaffClaimSchema }), async (req, res) => created(res, await collections.createClaim(contextOf(req), req.body, 'STAFF')));
 collectionsRouter.get('/payment-claims/pending', requirePermission('finance:view'), async (req, res) => ok(res, await collections.listClaims(contextOf(req), { page: 1, pageSize: 100, status: 'PENDING_VERIFICATION' })));
+collectionsRouter.get('/verification-queue', VERIFY, async (req, res) => ok(res, await verificationQueue(contextOf(req))));
 collectionsRouter.get('/payment-claims', requirePermission('finance:view'), validate({ query: listClaimsQuerySchema }), async (req, res) => ok(res, await collections.listClaims(contextOf(req), res.locals.query)));
 collectionsRouter.post('/payment-claims/:id/proof', RECORD, limiter(30), idParams, proofUpload, async (req, res) => ok(res, await collections.attachClaimProof(contextOf(req), req.params.id as string, req.file)));
 collectionsRouter.get('/payment-claims/:id/proof', VERIFY, limiter(60), idParams, async (req, res) => {

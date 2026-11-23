@@ -1,5 +1,7 @@
 import { Link } from 'react-router';
-import { ArrowRight, CircleCheck, CircleDashed } from 'lucide-react';
+import { ArrowRight, Banknote, CircleCheck, CircleDashed, FileUp, ListChecks, ReceiptText, ShieldCheck, Users, Wallet } from 'lucide-react';
+import type { ComponentType } from 'react';
+import type { Permission } from '@shared';
 import { AGING_BUCKETS } from '@shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
@@ -10,6 +12,8 @@ import { PageHeader } from '@/components/sv/page-header';
 import { formatMoney } from '@/lib/money';
 import { useStudentContext } from '../students/context';
 import { useOutstanding, usePulse, useReadiness } from './api';
+import { useFinanceOverview } from './ops-api';
+import { useAuth } from '@/lib/auth';
 import { AGING_LABELS, OVERVIEW_INTRO, TIP_OUTSTANDING } from './help-copy';
 
 const monthLabel = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -20,6 +24,65 @@ function Tile({ label, value, note, tone }: { label: string; value: string; note
       <p className="text-[13px] font-semibold text-muted">{label}</p>
       <p className={`mt-1 text-2xl font-extrabold tabular-nums ${tone === 'danger' ? 'text-danger' : 'text-ink'}`}>{value}</p>
       <p className="text-xs text-muted">{note}</p>
+    </section>
+  );
+}
+
+const QUICK: { to: string; label: string; Icon: ComponentType<{ className?: string }>; any: Permission[] }[] = [
+  { to: '/finance/collect?tab=take', label: 'Take Payment', Icon: Banknote, any: ['finance:collection:record'] },
+  { to: '/finance/fees?tab=billing', label: 'Generate Bills', Icon: ReceiptText, any: ['finance:billing:create'] },
+  { to: '/finance/payroll', label: 'Process Payroll', Icon: Users, any: ['payroll:run:prepare'] },
+  { to: '/finance/expenses', label: 'Add Expense', Icon: Wallet, any: ['finance:expense:record'] },
+  { to: '/finance/banking', label: 'Import Statement', Icon: FileUp, any: ['finance:reconciliation:manage'] },
+  { to: '/finance/settings?tab=approvals', label: 'Review Approvals', Icon: ShieldCheck, any: ['finance:view'] },
+];
+
+/** Finance Pulse from the whole school: each tile only for people allowed to see it (the API sends `null` otherwise). */
+function Pulse() {
+  const { can } = useAuth();
+  const q = useFinanceOverview();
+  const d = q.data;
+  const tiles = d
+    ? ([
+        ['Collections today', d.collectionsTodayPaise, 'Money received and checked today'],
+        ['Payroll payable', d.payrollPayablePaise, 'Salaries finalised but not paid'],
+        ['Expenses this month', d.monthlyExpensesPaise, 'Booked so far'],
+        ['Cash in hand', d.cashInHandPaise, 'Counted in open shifts and cash boxes'],
+      ] as const)
+    : [];
+  return (
+    <section aria-label="Across the school" className="mt-4 space-y-3">
+      {d && d.attentionTotal > 0 && (
+        <Link to="/finance/attention" className="flex items-center gap-2 rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-[15px] hover:border-warning/50">
+          <ListChecks className="size-5 text-warning" aria-hidden="true" />
+          <span>
+            <b>{d.attentionTotal}</b> {d.attentionTotal === 1 ? 'thing needs' : 'things need'} attention
+          </span>
+          <ArrowRight className="ml-auto size-4" aria-hidden="true" />
+        </Link>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles
+          .filter(([, v]) => v !== null)
+          .map(([label, v, note]) => (
+            <Tile key={label} label={label} value={formatMoney(v ?? 0)} note={note} />
+          ))}
+        {d && d.unreconciledBankLines !== null && <Tile label="Bank lines not matched" value={String(d.unreconciledBankLines)} note="From imported statements" />}
+      </div>
+      <Card aria-label="Quick actions">
+        <CardHeader>
+          <HelpHeading title="Quick actions" help={<p>The jobs people do most often. Each button shows only if you are allowed to do it.</p>} />
+        </CardHeader>
+        <div className="flex flex-wrap gap-2">
+          {QUICK.filter((x) => x.any.some(can)).map((x) => (
+            <Button key={x.label} asChild variant="outline">
+              <Link to={x.to}>
+                <x.Icon /> {x.label}
+              </Link>
+            </Button>
+          ))}
+        </div>
+      </Card>
     </section>
   );
 }
@@ -57,6 +120,8 @@ export function FinanceOverviewPage() {
           </>
         )}
       </div>
+
+      <Pulse />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card aria-label="Setup checklist">

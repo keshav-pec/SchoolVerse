@@ -4,7 +4,7 @@ import type { ServiceContext } from '../../platform/rbac/tenant-context';
 import { ClassMaster } from '../academic/reference.model';
 import { ClassOffering } from '../academic/offering.model';
 import { AcademicSession } from '../academic/session.model';
-import { StudentEnrollment } from '../students/student.models';
+import { StudentAdmission, StudentEnrollment, StudentGuardianLink } from '../students/student.models';
 import { createBankAccount } from './core/bank.service';
 import { listAccounts } from './core/chart.service';
 import { financeCtx } from './core/context';
@@ -17,6 +17,7 @@ import { commitRun, createRun, validateRun } from './fees/billing.service';
 import { awardMany, createPolicy, recommendConcessions } from './fees/concession.service';
 import { createLateFeePolicy } from './fees/latefee.service';
 import { createFeeHead, createPlan, publishVersion } from './fees/plan.service';
+import { FINANCE_OPS_MODELS, seedFinanceOpsDemo } from './finance-ops.seed';
 import { BillingRun, BillingRunRow, ConcessionAward, ConcessionPolicy, FeeDocument, FeeDocumentLine, FeeHead, FeePlan, FeePlanItem, FeePlanVersion, FinancialAdjustment, LateFeePolicy, StudentFeeAssignment, StudentLedgerEntry } from './fees/models';
 
 /** Every finance collection, so the demo reset can clear a tenant. Immutable ones go through the raw collection (the model refuses deletes). */
@@ -25,7 +26,7 @@ const FINANCE_MODELS = [
   FeeHead, FeePlan, FeePlanVersion, FeePlanItem, StudentFeeAssignment, ConcessionPolicy, ConcessionAward, LateFeePolicy, BillingRun, BillingRunRow, FeeDocument, FeeDocumentLine, StudentLedgerEntry, FinancialAdjustment,
 ];
 export async function wipeFinanceTenant(tenantId: string) {
-  await Promise.all(FINANCE_MODELS.map((m) => m.collection.deleteMany({ tenantId })));
+  await Promise.all([...FINANCE_MODELS, ...FINANCE_OPS_MODELS].map((m) => m.collection.deleteMany({ tenantId })));
 }
 
 /**
@@ -74,9 +75,14 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   // ── the deliberate exceptions, written straight to the collections the way a half-finished setup would leave them
   const classIds = (await ClassOffering.find({ tenantId: ctx.tenantId, sessionId: session._id, locationId: input.mohaliId, classId: class8._id }).select('_id').lean<{ _id: string }[]>()).map((c) => c._id);
   const open = await StudentEnrollment.find({ tenantId: ctx.tenantId, academicSessionId: session._id, classOfferingId: { $in: classIds }, state: 'OPEN' }).sort({ _id: 1 }).lean<{ studentId: string }[]>();
-  const clashing = open[2];
-  const noTax = open[3];
-  const noPlan = open[4];
+  // The demo parent's children (Riya and Arjun Kaur) are never one of the deliberate exceptions: the parent portal and the e2e use them.
+  const riya = (await StudentAdmission.findOne({ tenantId: ctx.tenantId, admissionNumber: 'GPS/2021/00041' }).lean<{ studentId: string }>())?.studentId;
+  const riyaGuardians = (await StudentGuardianLink.find({ tenantId: ctx.tenantId, cancelledAt: null, studentId: riya ?? '' }).lean<{ guardianPersonId: string }[]>()).map((l) => l.guardianPersonId);
+  const family = new Set((await StudentGuardianLink.find({ tenantId: ctx.tenantId, cancelledAt: null, guardianPersonId: { $in: riyaGuardians } }).lean<{ studentId: string }[]>()).map((l) => l.studentId));
+  const pool = open.filter((o) => !family.has(o.studentId));
+  const clashing = pool[2];
+  const noTax = pool[3];
+  const noPlan = pool[4];
   const ids = { schoolId: f.schoolId, legalEntityId: f.legalEntityId, tenantId: ctx.tenantId };
   const forcePlan = async (name: string, studentId: string, feeHeadId: string) => {
     const planId = randomUUID();
@@ -104,6 +110,17 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   const found = await recommendConcessions(ctx, { sessionId: session._id });
   await awardMany(ctx, found.filter((s) => s.policyId === sibling.policyId).map((s) => ({ studentId: s.studentId, policyId: s.policyId })));
 
+  // ── Riya Kaur (Class VI, Arjun's sister) has a plan of her own, so the family has two children with bills
+  const class6 = await ClassMaster.findOne({ canonicalCode: 'G06' }).lean<{ _id: string }>();
+  if (riya && class6) {
+    const own = await createPlan(ctx, { name: 'Riya Kaur 2026-27', sessionId: session._id, appliesTo: { locationIds: [input.mohaliId], classIds: [], studentType: 'ALL', studentId: riya }, autoAssign: true, items: [item(heads.tuition!, 3000, 'MONTHLY')] });
+    await publishVersion(ctx, own.latestVersion!.versionId);
+    await bulkAssign(ctx, { sessionId: session._id, locationId: input.mohaliId, items: [{ studentId: riya, planVersionId: own.latestVersion!.versionId }] });
+    const run6 = await createRun(ctx, { sessionId: session._id, locationId: input.mohaliId, classIds: [class6._id], periodKey: '2026-10', issueDate: '2026-10-05' });
+    const checked6 = await validateRun(ctx, run6.runId);
+    await commitRun(ctx, run6.runId, { confirmedReadyCount: checked6.run.counts.ready, confirmedTotalPaise: checked6.run.totalPaise }, 'seed-2026-10-class6');
+  }
+
   // ── October is billed (so some bills are overdue); November is checked but not issued, so the exceptions show
   const october = await createRun(ctx, { sessionId: session._id, locationId: input.mohaliId, classIds: [class8._id], periodKey: '2026-10', issueDate: '2026-10-05' });
   const checked = await validateRun(ctx, october.runId);
@@ -112,7 +129,14 @@ export async function seedFinanceDemo(ctx: ServiceContext, input: { mohaliId: st
   await validateRun(ctx, november.runId);
 
   // ── an Accountant and an Approver (Staff logins with job bundles, not new roles)
-  await setAccess(ctx, input.userIdsByEmail['accounts@greenfield.demo']!, { bundles: ['ACCOUNTANT', 'FEE_MANAGER', 'COLLECTOR'] });
+  await setAccess(ctx, input.userIdsByEmail['accounts@greenfield.demo']!, { bundles: ['ACCOUNTANT', 'FEE_MANAGER', 'COLLECTOR', 'PAYROLL_OFFICER'] });
   await setAccess(ctx, input.userIdsByEmail['approver@greenfield.demo']!, { bundles: ['APPROVER'] });
+
+  // ── Part 4: payroll, money waiting for a check, a bank statement and expenses (two Class 8 students who are not the demo parent's child)
+  const exceptions = new Set([clashing?.studentId, noTax?.studentId, noPlan?.studentId]);
+  const others = open.map((o) => o.studentId).filter((id) => !family.has(id) && !exceptions.has(id)).slice(0, 2);
+  const bank = (await BankAccount.findOne({ tenantId: ctx.tenantId }).lean<{ _id: string }>())!;
+  const billFor = async (studentId: string) => (await FeeDocument.findOne({ tenantId: ctx.tenantId, studentId, kind: 'BILL', balancePaise: { $gt: 0 } }).sort({ dueDate: 1 }).lean<{ _id: string }>())?._id ?? null;
+  await seedFinanceOpsDemo(ctx, { mohaliId: input.mohaliId, bankAccountId: bank._id, userIdsByEmail: input.userIdsByEmail, studentIds: others, billFor });
   return { students: open.length };
 }

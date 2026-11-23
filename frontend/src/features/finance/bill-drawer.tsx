@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
@@ -141,6 +142,22 @@ export function BillDrawer({ documentId, onClose, onOpenJournal }: { documentId:
 }
 
 /** One entry in the books: what was debited and credited. Needs accounting access, so others see a plain message. */
+/** Where a journal's source record lives, so an entry can be traced back to the bill, receipt, payslip or expense it came from. */
+const SOURCE_PAGE: Record<string, { word: string; path: (id: string) => string }> = {
+  collection: { word: 'Payment', path: () => '/finance/collect?tab=receipts' },
+  refund: { word: 'Refund', path: () => '/finance/collect?tab=refunds' },
+  cash_deposit: { word: 'Cash deposit', path: () => '/finance/collect?tab=shift' },
+  student: { word: 'Student account', path: (id) => `/finance/fees/students/${id}` },
+  payroll_run: { word: 'Payroll run', path: () => '/finance/payroll?tab=runs' },
+  payroll_batch: { word: 'Salary payment', path: () => '/finance/payroll?tab=payments' },
+  employee_advance: { word: 'Salary advance', path: () => '/finance/payroll?tab=advances' },
+  expense: { word: 'Expense', path: () => '/finance/expenses' },
+  vendor_bill: { word: 'Vendor bill', path: () => '/finance/expenses?tab=vendors' },
+  vendor_payment: { word: 'Vendor payment', path: () => '/finance/expenses?tab=vendors' },
+  gst_payment: { word: 'GST payment', path: () => '/finance/tax' },
+  bank_statement_line: { word: 'Bank line', path: () => '/finance/banking' },
+};
+
 export function JournalModal({ journalId, onClose }: { journalId: string | null; onClose: () => void }) {
   const { can } = useAuth();
   const allowed = can('finance:accounting:view');
@@ -156,6 +173,14 @@ export function JournalModal({ journalId, onClose }: { journalId: string | null;
           <p className="text-sm text-muted">
             Dated {formatDateOnly(j.accountingDate)}. {j.source ? `From ${j.source.label}.` : ''} An entry in the books never changes. A mistake is fixed with a new entry that cancels it.
           </p>
+          {j.source && SOURCE_PAGE[j.source.type] && (
+            <p className="text-sm">
+              Came from:{' '}
+              <Link to={SOURCE_PAGE[j.source.type]!.path(j.source.id)} className="font-semibold text-brand hover:underline" onClick={onClose}>
+                Open {SOURCE_PAGE[j.source.type]!.word}
+              </Link>
+            </p>
+          )}
           <div className="overflow-x-auto rounded-xl border border-line">
             <table className="w-full text-sm">
               <thead className="bg-canvas text-left text-[13px] text-muted">

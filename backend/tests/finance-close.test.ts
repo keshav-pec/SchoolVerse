@@ -99,6 +99,24 @@ describe('closing, reopening and locking a month (FIN-15)', () => {
     expect((await trial(t)).balanced).toBe(true);
   });
 
+  it('QA FIN-06: asking again for exactly the same change, after it was approved, uses that approval once (the screen lost the id)', async () => {
+    const t = await moneySchool();
+    const d = new Date(`${today()}T00:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    const p = await periodOf(t, d.toISOString().slice(0, 7));
+    const other = await staffWith(t, ['APPROVER']);
+    const ask = await post(t.approver, `/accounting-periods/${p.periodId}/close`, {});
+    expectError(ask, 409, 'APPROVAL_REQUIRED');
+    // someone else asking for the same thing does not get to use it
+    const third = await staffWith(t, ['APPROVER']);
+    expectError(await post(third, `/accounting-periods/${p.periodId}/close`, {}), 409, 'APPROVAL_REQUIRED');
+    await ok(await post(other, `/approvals/${ask.body.error.details.approvalId}/decide`, { decision: 'APPROVE' }));
+    const closed = await ok<{ state: string }>(await post(t.approver, `/accounting-periods/${p.periodId}/close`, {}));
+    expect(closed.state).toBe('CLOSED');
+    // used once: reopening is a different request that needs its own approval
+    expectError(await post(t.approver, `/accounting-periods/${p.periodId}/reopen`, { reason: 'late bill' }), 409, 'APPROVAL_REQUIRED');
+  });
+
   it('QA FIN-15: reopening needs approval and a reason and is audited; a locked month can never be reopened', async () => {
     const t = await moneySchool();
     const d = new Date(`${today()}T00:00:00Z`);

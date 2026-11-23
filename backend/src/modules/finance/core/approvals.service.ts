@@ -137,7 +137,11 @@ export async function checkApproval(f: FinanceCtx, input: ApprovalCheck): Promis
     if (request.decision !== 'APPROVED') throw new AppError('APPROVAL_REQUIRED', request.decision === 'USED' ? 'This approval was already used. Ask for a new one.' : 'This request was not approved.', { approvalId: request._id });
     return request;
   }
-  const pending = await ApprovalRequest.findOne({ tenantId: f.tenantId, legalEntityId: f.legalEntityId, action: input.action, entityType: input.entityType, entityId: input.entityId ?? null, amountPaise: input.amountPaise, decision: 'PENDING' }).lean<ApprovalRequestDoc>();
+  const same = { tenantId: f.tenantId, legalEntityId: f.legalEntityId, action: input.action, entityType: input.entityType, entityId: input.entityId ?? null, amountPaise: input.amountPaise };
+  // The same person asking again for exactly the same change (the screen was closed and the approval id lost): use the approved request.
+  const approved = await ApprovalRequest.findOne({ ...same, decision: 'APPROVED', usedAt: null, requestedBy: f.userId }).sort({ createdAt: -1 }).lean<ApprovalRequestDoc>();
+  if (approved) return approved;
+  const pending = await ApprovalRequest.findOne({ ...same, decision: 'PENDING' }).lean<ApprovalRequestDoc>();
   if (pending) throw new AppError('APPROVAL_REQUIRED', 'Still waiting for approval.', { approvalId: pending._id });
   const [created] = await ApprovalRequest.create([
     {
