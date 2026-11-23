@@ -117,14 +117,28 @@ export async function updateCertificate(ctx: ServiceContext, certificateId: stri
     const before = await loadCertificate(ctx, certificateId, db);
     if (has(LOCKED, before.status)) throw new AppError('TC_ISSUED_LOCKED');
     if (!has(EDITABLE, before.status)) throw new AppError('TC_NOT_READY', 'This certificate can only be changed before it is approved.');
-    const patch = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+    const { duesOverrideReason, ...rest } = data;
+    const patch = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
     if (Object.keys(patch).length === 0) return;
+    // Finance is asked, not copied (Module 7). Marking dues cleared while money is owed or waiting needs a written reason.
+    let overridden: string | null = null;
+    if (patch.duesStatus === 'CLEARED' && before.duesStatus !== 'CLEARED') {
+      const { financeService } = await import('../finance/financeService');
+      const clearance = await financeService.getStudentClearance(ctx, before.studentId);
+      if (clearance.status !== 'CLEAR') {
+        if (!duesOverrideReason) throw new AppError('DUES_NOT_CLEAR', undefined, { status: clearance.status, outstandingPaise: clearance.outstandingPaise, pendingClaims: clearance.pendingClaims });
+        overridden = duesOverrideReason;
+      }
+    }
     await StudentTransferCertificate.updateOne({ _id: certificateId, tenantId: ctx.tenantId }, { $set: { ...patch, updatedBy: ctx.userId } }, { session: db });
     await recordStudentAudit(ctx, db, {
       entityType: 'transfer_certificate',
       entityId: certificateId,
       action: 'transfer_certificate.updated',
-      changes: Object.keys(patch).map((field) => ({ field, from: field === 'duesStatus' ? (before as unknown as Record<string, unknown>)[field] : '[redacted]', to: field === 'duesStatus' ? (patch as Record<string, unknown>)[field] : '[redacted]' })),
+      changes: [
+        ...Object.keys(patch).map((field) => ({ field, from: field === 'duesStatus' ? (before as unknown as Record<string, unknown>)[field] : '[redacted]', to: field === 'duesStatus' ? (patch as Record<string, unknown>)[field] : '[redacted]' })),
+        ...(overridden ? [{ field: 'duesOverrideReason', from: null, to: overridden }] : []),
+      ],
       studentId: before.studentId,
     });
   });
@@ -138,9 +152,16 @@ export async function approveCertificate(ctx: ServiceContext, certificateId: str
     if (has(LOCKED, before.status)) throw new AppError('TC_ISSUED_LOCKED');
     if (before.status === 'APPROVED') return;
     if (!has(EDITABLE, before.status)) throw new AppError('TC_NOT_READY');
-    const to = before.duesStatus === 'CLEARED' ? 'APPROVED' : 'PENDING_CLEARANCE';
-    if (to === before.status) return;
-    await StudentTransferCertificate.updateOne({ _id: certificateId, tenantId: ctx.tenantId }, { $set: { status: to, updatedBy: ctx.userId } }, { session: db });
+    // A student whose fees are fully settled in Finance is cleared automatically. Money owed, or a payment still being checked, keeps it waiting.
+    let duesStatus = before.duesStatus;
+    if (duesStatus !== 'CLEARED') {
+      const { financeService } = await import('../finance/financeService');
+      const clearance = await financeService.getStudentClearance(ctx, before.studentId);
+      if (clearance.status === 'CLEAR' && (clearance.billedPaise > 0 || clearance.paidPaise > 0)) duesStatus = 'CLEARED';
+    }
+    const to = duesStatus === 'CLEARED' ? 'APPROVED' : 'PENDING_CLEARANCE';
+    if (to === before.status && duesStatus === before.duesStatus) return;
+    await StudentTransferCertificate.updateOne({ _id: certificateId, tenantId: ctx.tenantId }, { $set: { status: to, duesStatus, updatedBy: ctx.userId } }, { session: db });
     await recordStudentAudit(ctx, db, { entityType: 'transfer_certificate', entityId: certificateId, action: to === 'APPROVED' ? 'transfer_certificate.approved' : 'transfer_certificate.pending_clearance', changes: [{ field: 'status', from: before.status, to }], studentId: before.studentId });
   });
   return toDTO(await loadCertificate(ctx, certificateId));

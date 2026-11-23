@@ -345,6 +345,8 @@ export const DATA_CLASSIFICATION = {
     to: 'PERSONAL',
     template: 'INTERNAL',
     link: 'SECRET',
+    /** A fee reminder: amounts and bill numbers only, never a link, account number or salary. */
+    body: 'PERSONAL',
   },
 } as const satisfies Record<string, Record<string, DataClass>>;
 
@@ -439,6 +441,54 @@ export const FINANCE_DATA_CLASSIFICATION = {
   },
   student_ledger_entry: { ...IDS, ...mark('INTERNAL', 'studentId', 'date', 'kind', 'documentId', 'collectionId', 'journalId', 'description', 'seq'), ...mark('PERSONAL', 'amountPaise') },
   financial_adjustment: { ...IDS, ...mark('INTERNAL', 'documentId', 'newDocumentId', 'studentId', 'type', 'status', 'approvalId'), ...mark('PERSONAL', 'amountPaise', 'reason') },
+} as const satisfies Record<string, Record<string, DataClass>>;
+
+/**
+ * Module 7, Part 3 collections. Student money (payments, receipts, refunds) is PERSONAL like bills. Salary, payslips and anything that shows what a person
+ * earns or owes the school is RESTRICTED, and a private file key is SECRET: none of them is ever returned to someone without the payroll permission.
+ * The same test that guards Part 1 fails when a stored field has no class here.
+ */
+export const FINANCE_OPS_DATA_CLASSIFICATION = {
+  payment_claim: { ...IDS, ...mark('INTERNAL', 'collectionId', 'decidedAt', 'decidedBy', 'flags', 'locationId', 'method', 'paidOn', 'reportedBy', 'reportedByParent', 'status'), ...mark('PERSONAL', 'amountPaise', 'reference', 'referenceNorm', 'rejectReason', 'students'), ...mark('SECRET', 'proofKey') },
+  collection: { ...IDS, ...mark('INTERNAL', 'autoAllocate', 'bankAccountId', 'cashAccountId', 'claimId', 'clearedOn', 'depositBatchId', 'depositedOn', 'flags', 'idempotencyKey', 'journalId', 'locationId', 'method', 'provisionalNumber', 'receiptId', 'receivedOn', 'returnedOn', 'shiftId', 'status', 'verifiedAt', 'verifiedBy', 'version'), ...mark('PERSONAL', 'advanceStudentId', 'amountPaise', 'cheque', 'evidence', 'payerName', 'plan', 'reference', 'referenceNorm', 'returnedReason', 'studentIds', 'unallocatedPaise') },
+  collection_allocation: { ...IDS, ...mark('INTERNAL', 'allocatedOn', 'collectionId', 'documentId', 'journalId', 'reversalOfId', 'status'), ...mark('PERSONAL', 'amountPaise', 'reason', 'studentId') },
+  finance_receipt: { ...IDS, ...mark('INTERNAL', 'cashierId', 'collectionId', 'locationId', 'method', 'number', 'receivedOn'), ...mark('PERSONAL', 'advancePaise', 'amountPaise', 'lines', 'payerName', 'studentIds') },
+  finance_receipt_cancellation: { ...IDS, ...mark('INTERNAL', 'approvalId', 'cancelledAt', 'cancelledBy', 'reason', 'receiptId') },
+  refund_request: { ...IDS, ...mark('INTERNAL', 'approveJournalId', 'approvedAt', 'approvedBy', 'disbursementId', 'locationId', 'number', 'paidOn', 'requestedBy', 'state'), ...mark('PERSONAL', 'amountPaise', 'fromAdvancePaise', 'fromDepositPaise', 'paidReference', 'reason', 'recipientName', 'recipientPersonId', 'rejectReason', 'studentId') },
+  refund_disbursement: { ...IDS, ...mark('INTERNAL', 'amountPaise', 'bankAccountId', 'cashAccountId', 'evidenceNote', 'journalId', 'paidOn', 'recordedBy', 'reference', 'referenceNorm', 'refundId', 'shiftId') },
+  cashier_shift: { ...IDS, ...mark('INTERNAL', 'cashAccountId', 'cashierId', 'closedAt', 'countedPaise', 'depositedPaise', 'expectedPaise', 'locationId', 'openedAt', 'openingPaise', 'signedOffAt', 'signedOffBy', 'state', 'varianceNote', 'variancePaise') },
+  cash_movement: { ...IDS, ...mark('INTERNAL', 'amountPaise', 'cashAccountId', 'collectionId', 'date', 'description', 'kind', 'locationId', 'refundId', 'shiftId') },
+  cash_deposit_batch: { ...IDS, ...mark('INTERNAL', 'amountPaise', 'bankAccountId', 'cashAccountId', 'depositedOn', 'journalId', 'locationId', 'matchedLineId', 'reference', 'shiftIds') },
+  bank_statement_mapping: { ...IDS, ...mark('INTERNAL', 'bankAccountId', 'mapping') },
+  bank_statement_import: { ...IDS, ...mark('INTERNAL', 'bankAccountId', 'closingPaise', 'creditsPaise', 'debitsPaise', 'fileHash', 'fileName', 'fromDate', 'importedBy', 'keptCount', 'mapping', 'openingPaise', 'rowCount', 'skippedCount', 'toDate'), ...mark('SECRET', 'fileKey') },
+  bank_statement_line: { ...IDS, ...mark('INTERNAL', 'balancePaise', 'bankAccountId', 'creditPaise', 'date', 'debitPaise', 'fingerprint', 'ignoredReason', 'importId', 'lineNo', 'matchId', 'occurrence', 'postedJournalId', 'status', 'variancePaise'), ...mark('PERSONAL', 'description', 'reference', 'referenceNorm') },
+  reconciliation_match: { ...IDS, ...mark('INTERNAL', 'approvalId', 'auto', 'bankAccountId', 'confidence', 'confirmedAt', 'confirmedBy', 'lineIds', 'linesPaise', 'needsVerification', 'reasons', 'reversedBy', 'reversedReason', 'state', 'targets', 'targetsPaise') },
+  payroll_policy: { ...IDS, ...mark('INTERNAL', 'approvalRequired', 'defaultBankAccountId', 'payDayBasis', 'rounding') },
+  salary_component: { ...IDS, ...mark('INTERNAL', 'calc', 'code', 'esiWage', 'glAccountId', 'isSystem', 'name', 'pfWage', 'prorate', 'status', 'type') },
+  salary_structure: { ...IDS, ...mark('INTERNAL', 'name', 'status') },
+  salary_structure_version: { ...IDS, ...mark('INTERNAL', 'approvedAt', 'approvedBy', 'effectiveFrom', 'items', 'state', 'structureId', 'versionNo') },
+  employee_compensation: { ...IDS, ...mark('INTERNAL', 'effectiveFrom', 'effectiveTo', 'employeeId', 'state', 'structureVersionId'), ...mark('RESTRICTED', 'basicPaise', 'mode', 'overrides') },
+  salary_revision: { ...IDS, ...mark('INTERNAL', 'approvalId', 'arrearPolicy', 'arrearsRunId', 'effectiveDate', 'employeeId', 'fromAssignmentId', 'newAssignmentId', 'status'), ...mark('RESTRICTED', 'fromBasicPaise', 'reason', 'toBasicPaise') },
+  payroll_input: { ...IDS, ...mark('INTERNAL', 'approvedBy', 'employeeId', 'month', 'source'), ...mark('RESTRICTED', 'extras', 'lopDays', 'paidLeaveDays', 'unitsWorked', 'workingDays') },
+  statutory_rule: { ...IDS, ...mark('INTERNAL', 'approvedAt', 'approvedBy', 'demo', 'effectiveFrom', 'kind', 'note', 'params', 'state') },
+  tax_declaration: { ...IDS, ...mark('INTERNAL', 'employeeId', 'fyCode', 'submittedBy'), ...mark('RESTRICTED', 'alreadyDeductedPaise', 'estimatedYearlyTaxPaise', 'note', 'regime') },
+  employee_advance: { ...IDS, ...mark('INTERNAL', 'approvedBy', 'employeeId', 'paidJournalId', 'paidOn', 'requestedBy', 'startMonth', 'state'), ...mark('RESTRICTED', 'installmentPaise', 'installments', 'principalPaise', 'reason', 'remainingPaise') },
+  payroll_run: { ...IDS, ...mark('INTERNAL', 'approvedAt', 'approvedBy', 'counts', 'employeeIds', 'finalizedAt', 'finalizedBy', 'inputHash', 'journalId', 'locationId', 'month', 'number', 'parentRunId', 'payoutStatus', 'preparedBy', 'ruleVersionIds', 'state', 'type', 'version', 'warnings'), ...mark('RESTRICTED', 'previousNetPaise', 'totals') },
+  payroll_run_employee: { ...IDS, ...mark('INTERNAL', 'arrearRevisionIds', 'compensationId', 'departmentId', 'designationId', 'employeeId', 'locationId', 'runId', 'status'), ...mark('RESTRICTED', 'advanceRecoveries', 'deductionsPaise', 'employerCostPaise', 'exceptions', 'fullMonthGrossPaise', 'grossPaise', 'held', 'holdReason', 'netPaise', 'oneOffLines', 'paidDen', 'paidNum') },
+  payroll_run_line: { ...IDS, ...mark('INTERNAL', 'componentKey', 'employeeId', 'glAccountId', 'kind', 'ruleVersionId', 'runEmployeeId', 'runId', 'sortOrder'), ...mark('RESTRICTED', 'amountPaise', 'formula', 'label') },
+  employee_payslip: { ...IDS, ...mark('INTERNAL', 'employeeId', 'month', 'number', 'runEmployeeId', 'runId'), ...mark('RESTRICTED', 'snapshot') },
+  payslip_publication: { ...IDS, ...mark('INTERNAL', 'publishedAt', 'publishedBy', 'runId') },
+  payroll_disbursement_batch: { ...IDS, ...mark('INTERNAL', 'bankAccountId', 'fileHash', 'month', 'runId', 'state'), ...mark('RESTRICTED', 'skipped', 'totalPaise') },
+  payroll_disbursement_item: { ...IDS, ...mark('INTERNAL', 'batchId', 'employeeId', 'journalId', 'paidOn', 'recordedBy', 'retryOfId', 'runEmployeeId', 'runId', 'status', 'verified', 'verifiedAt', 'verifiedBy'), ...mark('RESTRICTED', 'amountPaise', 'evidenceNote', 'mode', 'reason', 'reference') },
+  expense_category: { ...IDS, ...mark('INTERNAL', 'accountId', 'code', 'defaultItcStatus', 'name', 'status') },
+  finance_vendor: { ...IDS, ...mark('INTERNAL', 'bankIfsc', 'bankLast4', 'bankName', 'gstin', 'name', 'stateCode', 'status'), ...mark('PERSONAL', 'contactName', 'phone'), ...mark('RESTRICTED', 'bankAccountEnc', 'pan') },
+  tax_line: { ...IDS, ...mark('INTERNAL', 'cgstPaise', 'date', 'decidedBy', 'decisionReason', 'igstPaise', 'itcStatus', 'locationId', 'month', 'rateBps', 'sgstPaise', 'sourceId', 'sourceNumber', 'sourceType', 'taxPaise', 'taxableValuePaise', 'vendorId', 'voided') },
+  expense_record: { ...IDS, ...mark('INTERNAL', 'approvedAt', 'approvedBy', 'bankAccountId', 'cashAccountId', 'categoryId', 'date', 'description', 'journalId', 'locationId', 'needsApproval', 'number', 'paymentMode', 'rejectReason', 'reversalReason', 'state', 'taxPaise', 'taxableValuePaise', 'totalPaise', 'vendorId'), ...mark('SECRET', 'evidenceKey') },
+  vendor_bill: { ...IDS, ...mark('INTERNAL', 'approvedAt', 'approvedBy', 'balancePaise', 'date', 'dueDate', 'journalId', 'lines', 'locationId', 'needsApproval', 'number', 'paidPaise', 'rejectReason', 'state', 'taxPaise', 'taxableValuePaise', 'totalPaise', 'vendorBillNumber', 'vendorId') },
+  vendor_payment: { ...IDS, ...mark('INTERNAL', 'allocations', 'amountPaise', 'bankAccountId', 'journalId', 'number', 'paidOn', 'reference', 'referenceNorm', 'vendorId') },
+  gst_payment_record: { ...IDS, ...mark('INTERNAL', 'amountPaise', 'bankAccountId', 'challanRef', 'head', 'journalId', 'kind', 'month', 'paidOn') },
+  opening_balance_batch: { ...IDS, ...mark('INTERNAL', 'accountLines', 'advances', 'asOf', 'fileHash', 'postedBy', 'students', 'vendors') },
+  finance_close_run: { ...IDS, ...mark('INTERNAL', 'action', 'approvalId', 'checks', 'doneBy', 'periodCode', 'periodId', 'reason', 'warningReason') },
 } as const satisfies Record<string, Record<string, DataClass>>;
 
 /** Finance DTO kinds. A bank account DTO is INTERNAL only: the number is a masked last four. A parent sees PERSONAL money of their own child, never RESTRICTED. */

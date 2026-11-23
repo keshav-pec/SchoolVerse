@@ -98,7 +98,7 @@ export async function emitFinance(f: FinanceCtx, db: ClientSession | undefined, 
 
 // ───────────────────────────────────────────────────────────── numbers
 
-export const NUMBER_PREFIXES = ['BILL', 'CN', 'DN', 'JV', 'RCT', 'PSL', 'REF'] as const;
+export const NUMBER_PREFIXES = ['BILL', 'CN', 'DN', 'JV', 'RCT', 'PSL', 'REF', 'ACK', 'EXP', 'VBL', 'VPY', 'OPN', 'PRN', 'SET'] as const;
 export type NumberPrefix = (typeof NUMBER_PREFIXES)[number];
 
 /**

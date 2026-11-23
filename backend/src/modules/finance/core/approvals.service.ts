@@ -26,7 +26,17 @@ export const APPROVER_PERMISSION: Record<ApprovalAction, Permission> = {
   PERIOD_CLOSE: 'finance:period:close',
   BANK_DETAIL_CHANGE: 'finance:setup:manage',
   SYSTEM_ROLE_CHANGE: 'finance:setup:manage',
-  RECON_OVERRIDE: 'finance:reconciliation:manage',
+  RECON_OVERRIDE: 'finance:period:close',
+  RECEIPT_CANCEL: 'finance:adjustment:approve',
+  ADVANCE_TRANSFER: 'finance:refund:approve',
+  MANUAL_JOURNAL: 'finance:period:close',
+  PERIOD_REOPEN: 'finance:period:close',
+  EXPENSE: 'finance:expense:approve',
+  VENDOR_BILL: 'finance:expense:approve',
+  SALARY_REVISION: 'payroll:run:approve',
+  VENDOR_BANK_CHANGE: 'finance:expense:approve',
+  BANK_CHARGE_NOTE: 'finance:adjustment:approve',
+  LOAN_CHANGE: 'payroll:run:approve',
 };
 
 /** `thresholdPaise: null` means "always"; a number means "above this amount". */
@@ -40,6 +50,16 @@ export const DEFAULT_POLICIES: { action: ApprovalAction; thresholdPaise: number 
   { action: 'BANK_DETAIL_CHANGE', thresholdPaise: null, description: 'Changing a bank account number or IFSC needs approval.' },
   { action: 'SYSTEM_ROLE_CHANGE', thresholdPaise: null, description: 'Moving a system account to another account needs approval.' },
   { action: 'RECON_OVERRIDE', thresholdPaise: null, description: 'Matching a bank line by hand against the rules needs approval.' },
+  { action: 'RECEIPT_CANCEL', thresholdPaise: 1_000_000, description: 'Cancelling a receipt above ₹10,000 needs approval.' },
+  { action: 'ADVANCE_TRANSFER', thresholdPaise: null, description: 'Moving advance money from one child to another needs approval.' },
+  { action: 'MANUAL_JOURNAL', thresholdPaise: null, description: 'A manual accounting entry always needs approval.' },
+  { action: 'PERIOD_REOPEN', thresholdPaise: null, description: 'Reopening a closed month needs approval.' },
+  { action: 'EXPENSE', thresholdPaise: 2_500_000, description: 'An expense above ₹25,000 needs approval.' },
+  { action: 'VENDOR_BILL', thresholdPaise: 2_500_000, description: 'A vendor bill above ₹25,000 needs approval.' },
+  { action: 'SALARY_REVISION', thresholdPaise: null, description: 'A salary change needs approval.' },
+  { action: 'VENDOR_BANK_CHANGE', thresholdPaise: null, description: 'Changing a vendor bank account needs approval.' },
+  { action: 'BANK_CHARGE_NOTE', thresholdPaise: null, description: 'Charging a family for a returned cheque needs approval.' },
+  { action: 'LOAN_CHANGE', thresholdPaise: null, description: 'Changing a salary advance or loan plan needs approval.' },
 ];
 
 export async function seedApprovalPolicies(f: FinanceCtx, db?: ClientSession) {

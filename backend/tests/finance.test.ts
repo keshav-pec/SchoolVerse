@@ -1071,7 +1071,7 @@ describe('finance readiness (FUX-01)', () => {
     let ready = await getOk<FinanceReadinessDTO>(t, '/readiness');
     expect(ready.items.find((i) => i.key === 'tax_profile')).toMatchObject({ status: 'NOT_NEEDED' });
     expect(ready.items.find((i) => i.key === 'chart_of_accounts')).toMatchObject({ status: 'NEEDS_ATTENTION', fix: { label: 'Use Standard Chart', path: '/finance/settings?tab=chart' } });
-    expect(ready.headline).toMatch(/^\d of 9 ready\. Next: /);
+    expect(ready.headline).toMatch(/^\d+ of 16 ready\. Next: /);
     await post(t, '/setup/standard').expect(200);
     await post(t, '/financial-years', { code: '2026-27' }).expect(201);
     ready = await getOk<FinanceReadinessDTO>(t, '/readiness');
@@ -1081,7 +1081,7 @@ describe('finance readiness (FUX-01)', () => {
     await enrolled(full);
     const done = await getOk<FinanceReadinessDTO>(full, '/readiness');
     expect(done.items.filter((i) => i.status === 'NEEDS_ATTENTION').map((i) => i.key)).toEqual([]);
-    expect(done.headline).toBe('9 of 9 ready.');
+    expect(done.headline).toBe('16 of 16 ready.');
   });
 });
 

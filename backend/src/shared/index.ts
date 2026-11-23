@@ -23,4 +23,6 @@ export * from './space-allocation-dto';
 export * from './schemas/space-allocation';
 export * from './finance';
 export * from './schemas/finance';
+export * from './finance-ops';
+export * from './schemas/finance-ops';
 export * from './data-classification';

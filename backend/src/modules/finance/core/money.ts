@@ -66,3 +66,9 @@ export function proportion(amount: number, part: number, whole: number): number 
 }
 
 export const sumPaise = (values: readonly number[]): number => values.reduce((a, b) => a + b, 0);
+
+/** Plain rupees with two decimals for a spreadsheet: 123456 paise → "1234.56". No floating point. */
+export function toRupeesText(paise: number): string {
+  const abs = Math.abs(assertPaise(paise));
+  return `${paise < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}

@@ -6,6 +6,7 @@ import { Student } from '../../students/student.models';
 import { financeCtx, type FinanceCtx } from '../core/context';
 import { BankAccount, type BankAccountDoc } from '../core/models';
 import { studentLabels } from '../core/people';
+import { pendingClaimsOf } from '../collections/collection.service';
 import { balancesOf, placementOf } from './account.service';
 import { isOverdue } from './documents';
 import { FeeDocument, FeeDocumentLine, type FeeDocumentDoc, type FeeDocumentLineDoc } from './models';
@@ -70,13 +71,14 @@ export async function getStudentBalance(ctx: ServiceContext, studentId: string) 
   return { outstandingPaise: b.outstandingPaise, overduePaise: b.overduePaise, advancePaise: b.advancePaise };
 }
 
-/** "Can this student leave with nothing owed?" Used by the Transfer Certificate. Claims and deposits fill in with Part 3. */
+/** "Can this student leave with nothing owed?" Used by the Transfer Certificate. A payment still waiting to be checked is not money yet, so it holds the answer at PENDING_CLAIMS. */
 export async function getStudentClearance(ctx: ServiceContext, studentId: string): Promise<StudentClearanceDTO> {
   const f = await financeCtx(ctx);
   const b = await balancesOf(f, studentId, await todayFor(ctx));
   const deposits = await FeeDocumentLine.find({ tenantId: f.tenantId, studentId, isDeposit: true }).select('documentId totalPaise').lean<{ documentId: string; totalPaise: number }[]>();
   const settled = new Set((await FeeDocument.find({ tenantId: f.tenantId, _id: { $in: deposits.map((d) => d.documentId) }, status: 'SETTLED' }).select('_id').lean<{ _id: string }[]>()).map((d) => d._id));
-  const pendingClaims = 0;
+  const pending = await pendingClaimsOf(f, studentId);
+  const pendingClaims = pending.count;
   return {
     studentId, status: b.outstandingPaise > 0 ? 'DUES' : pendingClaims > 0 ? 'PENDING_CLAIMS' : 'CLEAR', billedPaise: b.billedPaise, paidPaise: b.paidPaise, outstandingPaise: b.outstandingPaise, pendingClaims, refundableAdvancePaise: b.advancePaise,
     refundableDepositPaise: deposits.filter((d) => settled.has(d.documentId)).reduce((s, d) => s + d.totalPaise, 0),

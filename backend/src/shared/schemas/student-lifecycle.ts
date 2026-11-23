@@ -182,6 +182,8 @@ export const updateTransferCertificateSchema = z
     reasonForLeaving: requiredText('Reason for leaving', 300),
     result: optionalText(120),
     duesStatus: z.enum(DUES_STATUSES, { message: 'Choose a valid option.' }),
+    /** Needed to mark dues as cleared by hand while Finance still shows money owed or waiting. */
+    duesOverrideReason: requiredText('Reason', 300),
   })
   .partial()
   .strict();

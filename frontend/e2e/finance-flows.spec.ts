@@ -52,13 +52,14 @@ test('admin sees the bank account masked and has to give a reason before the num
 test('admin settles the students that need a decision: only the exceptions are listed, each with a reason in words', async ({ page }) => {
   await login(page, 'admin@greenfield.demo');
   await page.goto('/finance/fees?tab=plans');
+  // the Class VIII plan belongs to the Mohali campus, so pick it in the context bar first
+  await chooseOption(page.getByRole('combobox', { name: 'Campus' }), /Mohali/);
   const panel = page.getByRole('region', { name: 'Assign fee plans' });
   await chooseOption(panel.getByLabel('Class'), /class 8/i);
   await expect(panel.getByText(/eligible · .* ready · .* need review/)).toBeVisible();
-  // the seed left two exceptions in Class 8
+  // the seed left a student with two matching plans in Class 8 (the "no plan" exception is checked in the component tests: the e2e data has a plan for every Class 8 student)
   const list = panel.getByRole('region', { name: 'Students that need a decision' });
   await expect(list.getByText('Two fee plans match. Choose the right one.')).toBeVisible();
-  await expect(list.getByText('No fee plan fits this class yet.')).toBeVisible();
   await expect(list.getByRole('button', { name: /^Choose plan for /i })).toHaveCount(1);
   await list.getByRole('button', { name: /^Choose plan for /i }).click();
   await expect(panel.getByText(/done 1/i)).toBeVisible();

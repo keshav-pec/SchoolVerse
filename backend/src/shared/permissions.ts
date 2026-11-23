@@ -147,7 +147,7 @@ export const FINANCE_BUNDLE_PERMISSIONS: Record<FinanceBundle, readonly Permissi
   FEE_MANAGER: ['finance:view', 'finance:fee_plan:manage', 'finance:billing:create', 'finance:concession:manage', 'finance:adjustment:create'],
   ACCOUNTANT: [
     'finance:view', 'finance:accounting:view', 'finance:accounting:post', 'finance:reconciliation:manage', 'finance:collection:verify', 'finance:refund:request',
-    'finance:expense:record', 'finance:vendor:manage', 'finance:tax:manage', 'finance:tax:review', 'finance:report:view', 'finance:report:export', 'finance:cashier:supervise',
+    'finance:expense:record', 'finance:vendor:manage', 'finance:tax:manage', 'finance:tax:review', 'finance:report:view', 'finance:report:export', 'finance:cashier:supervise', 'finance:refund:disburse',
   ],
   PAYROLL_OFFICER: ['finance:view', ...PAYROLL_ALL.filter((p) => p !== 'payroll:run:approve')],
   APPROVER: ['finance:view', ...ALL_APPROVE, 'finance:period:close'],

@@ -17,6 +17,7 @@ export const SYSTEM_ACCOUNT_ROLES = [
   'CASH', 'BANK_DEFAULT', 'STUDENT_RECEIVABLE', 'EMPLOYEE_ADVANCE', 'INPUT_CGST', 'INPUT_SGST', 'INPUT_IGST',
   'STUDENT_ADVANCE', 'REFUNDABLE_DEPOSIT', 'SALARY_PAYABLE', 'PF_PAYABLE', 'ESI_PAYABLE', 'PT_PAYABLE', 'TDS_PAYABLE', 'REFUND_PAYABLE', 'VENDOR_PAYABLE',
   'OUTPUT_CGST', 'OUTPUT_SGST', 'OUTPUT_IGST', 'OPENING_EQUITY', 'LATE_FEE_INCOME', 'SALARY_EXPENSE', 'EMPLOYER_CONTRIBUTION_EXPENSE', 'BANK_CHARGES',
+  'BANK_INTEREST_INCOME', 'GENERAL_EXPENSE',
 ] as const;
 export type SystemAccountRole = (typeof SYSTEM_ACCOUNT_ROLES)[number];
 
@@ -35,10 +36,17 @@ export type FinanceAccountStatus = (typeof FINANCE_ACCOUNT_STATUSES)[number];
 export const JOURNAL_EVENT_TYPES = [
   'bill.issued', 'latefee.issued', 'credit_note.issued', 'debit_note.issued', 'journal.reversed',
   'collection.posted', 'receipt.cancelled', 'refund.paid', 'payroll.finalized', 'salary.paid', 'expense.posted', 'vendor_bill.posted', 'vendor_payment.posted', 'opening.balance', 'manual',
+  // Part 3
+  'allocation.applied', 'allocation.reversed', 'collection.returned', 'refund.approved', 'cash.deposited', 'bank.charge', 'bank.interest', 'advance.transferred', 'gst.paid', 'gst.itc_used', 'payroll.correction',
+  'salary.advance_paid', 'salary.advance_recovered', 'collection.reversed',
 ] as const;
 export type JournalEventType = (typeof JOURNAL_EVENT_TYPES)[number];
 
-export const APPROVAL_ACTIONS = ['REFUND', 'CREDIT_NOTE', 'WAIVER', 'CONCESSION', 'PAYROLL_FINALIZE', 'PERIOD_CLOSE', 'BANK_DETAIL_CHANGE', 'SYSTEM_ROLE_CHANGE', 'RECON_OVERRIDE'] as const;
+export const APPROVAL_ACTIONS = [
+  'REFUND', 'CREDIT_NOTE', 'WAIVER', 'CONCESSION', 'PAYROLL_FINALIZE', 'PERIOD_CLOSE', 'BANK_DETAIL_CHANGE', 'SYSTEM_ROLE_CHANGE', 'RECON_OVERRIDE',
+  // Part 3
+  'RECEIPT_CANCEL', 'ADVANCE_TRANSFER', 'MANUAL_JOURNAL', 'PERIOD_REOPEN', 'EXPENSE', 'VENDOR_BILL', 'SALARY_REVISION', 'VENDOR_BANK_CHANGE', 'BANK_CHARGE_NOTE', 'LOAN_CHANGE',
+] as const;
 export type ApprovalAction = (typeof APPROVAL_ACTIONS)[number];
 export const APPROVAL_DECISIONS = ['PENDING', 'APPROVED', 'REJECTED', 'USED', 'CANCELLED'] as const;
 export type ApprovalDecision = (typeof APPROVAL_DECISIONS)[number];
@@ -116,6 +124,9 @@ export const TAX_EXAMPLE_NOTE = 'Example only. Confirm with your accountant.';
 /** Domain events written to `outbox_events` in the same transaction as the change. */
 export const FINANCE_EVENT_TYPES = [
   'fee_plan.published', 'fee_assignment.created', 'fee_demand.issued', 'fee_demand.adjusted', 'journal.posted', 'journal.reversed', 'approval.decided', 'financial_year.created',
+  // Part 3
+  'collection.recorded', 'collection.verified', 'collection.allocated', 'collection.reversed', 'receipt.issued', 'receipt.cancelled', 'refund.approved', 'refund.disbursed', 'bank_statement.imported',
+  'reconciliation.match.confirmed', 'payroll.finalized', 'salary.disbursement.verified', 'expense.posted', 'accounting.period.closed', 'accounting.period.reopened',
 ] as const;
 export type FinanceEventType = (typeof FINANCE_EVENT_TYPES)[number];
 

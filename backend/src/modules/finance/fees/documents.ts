@@ -83,7 +83,7 @@ export function creditSideOf(lines: BuiltLine[], roles: Map<string, ChartAccount
 }
 
 export interface IssueSpec {
-  kind: Extract<FeeDocumentKind, 'BILL' | 'LATE_FEE' | 'DEBIT_NOTE'>;
+  kind: Extract<FeeDocumentKind, 'BILL' | 'LATE_FEE' | 'DEBIT_NOTE' | 'OPENING'>;
   student: { studentId: string; enrollmentId: string | null; locationId: string; sessionId: string; classOfferingId: string | null };
   periodKey: string | null;
   issueDate: string;
@@ -114,12 +114,12 @@ export async function issueDocument(f: FinanceCtx, db: ClientSession, spec: Issu
   const totals = sumLines(spec.lines);
   if (totals.totalPaise <= 0) throw new AppError('ADJUSTMENT_INVALID', 'A bill must be for more than zero.');
   const documentId = randomUUID();
-  const prefix = spec.kind === 'DEBIT_NOTE' ? 'DN' : 'BILL';
+  const prefix = spec.kind === 'DEBIT_NOTE' ? 'DN' : spec.kind === 'OPENING' ? 'OPN' : 'BILL';
   const number = await nextNumber(f, db, prefix, fyCodeFor(spec.issueDate, f.entity.fyStartMonth));
   const base = { tenantId: f.tenantId, schoolId: f.schoolId, legalEntityId: f.legalEntityId };
 
   const { journal } = await postJournal(f, db, {
-    eventType: spec.kind === 'BILL' ? 'bill.issued' : spec.kind === 'LATE_FEE' ? 'latefee.issued' : 'debit_note.issued',
+    eventType: spec.kind === 'BILL' ? 'bill.issued' : spec.kind === 'LATE_FEE' ? 'latefee.issued' : spec.kind === 'OPENING' ? 'opening.balance' : 'debit_note.issued',
     sourceKey: spec.journalKey, accountingDate: spec.issueDate, memo: spec.memo, sourceType: 'fee_document', sourceId: documentId, correlationId: spec.correlationId,
     lines: [{ accountId: receivable._id, debitPaise: totals.totalPaise, locationId: spec.student.locationId, studentId: spec.student.studentId }, ...creditSideOf(spec.lines, roles).map((l) => ({ ...l, locationId: spec.student.locationId, studentId: spec.student.studentId }))],
   });
@@ -137,7 +137,7 @@ export async function issueDocument(f: FinanceCtx, db: ClientSession, spec: Issu
   );
   await FeeDocumentLine.create(spec.lines.map((l, i) => ({ ...base, documentId, studentId: spec.student.studentId, lineNo: i + 1, qty: 1, ...l })), { session: db, ordered: true });
   await StudentLedgerEntry.create(
-    [{ ...base, studentId: spec.student.studentId, date: spec.issueDate, kind: spec.kind === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'BILL', amountPaise: totals.totalPaise, documentId, journalId: journal._id, description: `${spec.kind === 'LATE_FEE' ? 'Late fee' : spec.kind === 'DEBIT_NOTE' ? 'Debit note' : 'Bill'} ${number}`, seq: nextSeq() }],
+    [{ ...base, studentId: spec.student.studentId, date: spec.issueDate, kind: spec.kind === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'BILL', amountPaise: totals.totalPaise, documentId, journalId: journal._id, description: `${spec.kind === 'LATE_FEE' ? 'Late fee' : spec.kind === 'DEBIT_NOTE' ? 'Debit note' : spec.kind === 'OPENING' ? 'Opening balance' : 'Bill'} ${number}`, seq: nextSeq() }],
     { session: db },
   );
   await auditFinance(f, db, { action: 'fee_document.issued', entityType: 'fee_document', entityId: documentId, after: { number, kind: spec.kind, studentId: spec.student.studentId, totalPaise: totals.totalPaise, periodKey: spec.periodKey }, correlationId: spec.correlationId });

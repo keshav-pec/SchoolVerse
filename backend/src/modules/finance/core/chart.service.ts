@@ -51,6 +51,7 @@ export const STANDARD_CHART: Seed[] = [
   ['4500', 'Exam Fee Income', 'INCOME', '4000', null, true],
   ['4600', 'Other Fee Income', 'INCOME', '4000', null, true],
   ['4700', 'Late Fee Income', 'INCOME', '4000', 'LATE_FEE_INCOME', true],
+  ['4800', 'Bank Interest Income', 'INCOME', '4000', 'BANK_INTEREST_INCOME', true],
   ['5000', 'Expenses', 'EXPENSE', null, null, false],
   ['5100', 'Salaries', 'EXPENSE', '5000', 'SALARY_EXPENSE', true],
   ['5110', 'Employer Contributions', 'EXPENSE', '5000', 'EMPLOYER_CONTRIBUTION_EXPENSE', true],
@@ -59,6 +60,7 @@ export const STANDARD_CHART: Seed[] = [
   ['5220', 'Repairs and Maintenance', 'EXPENSE', '5000', null, true],
   ['5230', 'Supplies', 'EXPENSE', '5000', null, true],
   ['5300', 'Bank Charges', 'EXPENSE', '5000', 'BANK_CHARGES', true],
+  ['5900', 'General Expenses', 'EXPENSE', '5000', 'GENERAL_EXPENSE', true],
 ];
 
 /** "Use the standard chart": safe to press twice. Missing accounts are added; ones already there are left alone. */

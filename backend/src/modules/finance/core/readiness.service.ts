@@ -6,9 +6,13 @@ import { todayFor } from '../../staff/status';
 import { StudentEnrollment } from '../../students/student.models';
 import { FeeHead, FeePlan, FeePlanVersion, StudentFeeAssignment } from '../fees/models';
 import { financeCtx } from './context';
+import { Employee } from '../../staff/employee.model';
+import { Compensation, PayrollPolicy, PayrollRun, StatutoryRule } from '../payroll/models';
+import { firstCloseDone, openingPosted } from '../accounting/close.service';
+import { CashAccount } from './models';
 import { AccountingPeriod, ApprovalPolicy, BankAccount, ChartAccount, FinancialYear } from './models';
 
-/** FUX-01. A short checklist the setup screen shows: what is done, what needs attention, and where to fix it. Part 3 adds its own items later. */
+/** FUX-01 and the Part 3 additions: a short checklist the setup screen shows: what is done, what needs attention, and where to fix it. Payroll items stay "not needed" until payroll is in use. */
 export async function financeReadiness(ctx: ServiceContext): Promise<FinanceReadinessDTO> {
   const f = await financeCtx(ctx);
   const t = { tenantId: f.tenantId, legalEntityId: f.legalEntityId };
@@ -45,6 +49,33 @@ export async function financeReadiness(ctx: ServiceContext): Promise<FinanceRead
     item('students_assigned', 'Students on a plan', unassigned === 0, { done: enrolled.length === 0 ? 'No students are enrolled yet.' : 'Every enrolled student has a fee plan.', todo: `${unassigned} enrolled student${unassigned === 1 ? ' has' : 's have'} no fee plan yet.` }, { label: 'Assign Students', path: '/finance/fees?tab=accounts' }, enrolled.length === 0),
     item('approval_rules', 'Approval rules', policies > 0, { done: 'Approval rules are set.', todo: 'Use the standard setup to add the approval rules.' }, { label: 'Use Standard Setup', path: '/finance/settings?tab=approvals' }),
   ];
+
+  // Part 3: payroll, receipts, opening balances, the first close. Payroll items appear as "not needed" until someone has a salary or a run exists.
+  const [policy, rules, salaried, runs, employees, cashAccounts, openingDone, closedOnce, billedOld] = await Promise.all([
+    PayrollPolicy.exists(t),
+    StatutoryRule.find({ ...t, state: 'APPROVED' }).select('kind').lean<{ kind: string }[]>(),
+    Compensation.distinct('employeeId', { tenantId: f.tenantId, state: 'OPEN' }) as Promise<string[]>,
+    PayrollRun.countDocuments(t),
+    Employee.find({ tenantId: f.tenantId, status: { $in: ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD'] } }).select('_id').lean<{ _id: string }[]>(),
+    CashAccount.countDocuments({ ...t, status: 'ACTIVE' }),
+    openingPosted(f),
+    firstCloseDone(f),
+    AccountingPeriod.exists({ ...t, endDate: { $lt: today }, state: 'OPEN' }),
+  ]);
+  const payrollInUse = salaried.length > 0 || runs > 0;
+  const unpaid = employees.filter((e) => !salaried.includes(e._id)).length;
+  const kinds = new Set(rules.map((r) => r.kind));
+  const salaryBank = await BankAccount.countDocuments({ ...t, status: 'ACTIVE', purpose: { $in: ['SALARY', 'OPERATING', 'FEES'] } });
+  const hasBills = billedOld ? await (await import('../fees/models')).FeeDocument.exists({ ...t, kind: 'BILL' }) : null;
+  items.push(
+    item('payroll_policy', 'Payroll rules', Boolean(policy), { done: 'The payroll policy is set.', todo: 'Set how a part month is paid.' }, { label: 'Open Payroll', path: '/finance/payroll?tab=setup' }, !payrollInUse),
+    item('statutory_rules', 'PF, ESI and Professional Tax', ['PF', 'ESI', 'PT'].every((k) => kinds.has(k)), { done: payrollInUse ? 'The PF, ESI and Professional Tax rules are approved.' : 'Not needed until payroll is used.', todo: 'The PF, ESI and Professional Tax rules are demo values. Your accountant must approve the real ones.' }, { label: 'Approve Rules', path: '/finance/payroll?tab=rules' }, !payrollInUse),
+    item('employees_salary', 'Employee salaries', unpaid === 0, { done: payrollInUse ? 'Every active employee has a salary.' : 'Not needed until payroll is used.', todo: `${unpaid} active employee${unpaid === 1 ? ' has' : 's have'} no salary assigned.` }, { label: 'Assign Salaries', path: '/finance/payroll?tab=salaries' }, !payrollInUse),
+    item('salary_bank', 'Bank account for salaries', salaryBank > 0, { done: payrollInUse ? 'A bank account is ready to pay salaries from.' : 'Not needed until payroll is used.', todo: 'Add the bank account salaries are paid from.' }, { label: 'Add Bank Account', path: '/finance/settings?tab=bank' }, !payrollInUse),
+    item('receipts', 'Receipts', banks + cashAccounts > 0, { done: 'Receipts can be issued: money can be received into a bank or cash account.', todo: 'Add a bank account or a cash account so receipts can be issued.' }, { label: 'Add Account', path: '/finance/settings?tab=bank' }, banks + cashAccounts === 0),
+    item('opening_balances', 'Opening balances', openingDone, { done: openingDone ? 'Opening balances are posted.' : 'Optional: only needed when the school moves from another system.', todo: '' }, { label: 'Import Balances', path: '/finance/settings?tab=opening' }, !openingDone),
+    item('first_close', 'First month closed', closedOnce, { done: closedOnce ? 'A month has been closed.' : 'No month has ended with bills yet.', todo: 'A finished month is still open. Check it and close it.' }, { label: 'Open Month Close', path: '/finance/accounting?tab=close' }, !closedOnce && !hasBills),
+  );
   const ready = items.filter((i) => i.status !== 'NEEDS_ATTENTION').length;
   const next = items.find((i) => i.status === 'NEEDS_ATTENTION');
   return { items, ready, total: items.length, headline: `${ready} of ${items.length} ready.${next ? ` Next: ${next.fix?.label.toLowerCase() ?? next.title.toLowerCase()}.` : ''}` };
