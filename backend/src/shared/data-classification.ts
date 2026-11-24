@@ -517,4 +517,12 @@ export const TIMETABLE_DATA_CLASSIFICATION = {
   teaching_group: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'academicSessionId', 'locationId', 'name', 'nameKey', 'kind', 'classOfferingId', 'subjectOfferingId', 'sectionPool', 'teacherIds', 'status', 'version') },
   teaching_group_membership: { ...TT_IDS, ...mark('INTERNAL', 'groupId', 'studentId', 'source', 'addedBy') },
   timetable_access_grant: { ...TT_IDS, ...mark('INTERNAL', 'userId', 'bundles', 'locationIds', 'grantedBy') },
+  timetable_version: { ...TT_IDS, ...mark('INTERNAL', 'planId', 'versionNumber', 'versionName', 'sourceVersionId', 'status', 'isOpen', 'rev', 'effectiveFrom', 'effectiveTo', 'publishedAt', 'publishedBy') },
+  timetable_entry: { ...TT_IDS, ...mark('INTERNAL', 'versionId', 'planId', 'weekday', 'periodId', 'startMin', 'endMin', 'entryType', 'subjectOfferingId', 'activityName', 'teachingGroupId', 'physicalSpaceId', 'isFixed', 'source', 'copiedFromEntryId', 'notes', 'version', 'rev') },
+  timetable_entry_section: { ...TT_IDS, ...mark('INTERNAL', 'entryId', 'versionId', 'sectionOfferingId', 'weekday', 'periodId') },
+  timetable_entry_faculty: { ...TT_IDS, ...mark('INTERNAL', 'entryId', 'versionId', 'employeeId', 'role', 'weekday', 'periodId') },
+  timetable_conflict_override: { ...TT_IDS, ...mark('INTERNAL', 'entryId', 'versionId', 'rule', 'reason', 'byUserId', 'at', 'signature') },
+  timetable_change_set: { ...TT_IDS, ...mark('INTERNAL', 'versionId', 'planId', 'requestId', 'actorId', 'kind', 'label', 'rev', 'before', 'after', 'undoneAt', 'undoneBy') },
+  timetable_generation_run: { ...TT_IDS, ...mark('INTERNAL', 'versionId', 'planId', 'runType', 'mode', 'requestedBy', 'startedAt', 'completedAt', 'totalRequirements', 'totalPeriods', 'entriesCreated', 'unresolvedCount', 'warningCount', 'status', 'configurationSnapshot', 'unresolved', 'rev', 'changeSetId') },
+  timetable_run_item: { ...TT_IDS, ...mark('INTERNAL', 'runId', 'versionId', 'kind', 'reason', 'payload', 'suggestion', 'status', 'resolvedBy') },
 } as const;

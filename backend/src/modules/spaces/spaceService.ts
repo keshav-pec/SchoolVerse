@@ -4,7 +4,7 @@ import { checkSpaceAvailability } from './availability.service';
 import { getSectionHomeClassroom } from './assignment.service';
 import { findAvailable, readiness, recommendRooms } from './integration';
 import { getSpaceContext, loadVisibleSpace } from './space.service';
-import { listSchedulableRooms, sectionsWithHomeClassroom } from './timetable-support';
+import { homeClassroomRooms, listRoomInfos, listSchedulableRooms, longClosures, roomCampuses, sectionsWithHomeClassroom } from './timetable-support';
 
 /**
  * Rooms, for every other module (Timetable, Exams, Attendance, Assets, Maintenance, Visitor, Events).
@@ -36,4 +36,9 @@ export const spaceService = {
   /** For the Timetable: which sections have a Home Classroom on a date, and which open rooms can hold a lesson (with their suitability tags). */
   sectionsWithHomeClassroom,
   listSchedulableRooms,
+  /** For the Timetable's clash checker: the Home Classroom room of each section, every room with its suitability and whether it is open, and long closures. */
+  homeClassroomRooms,
+  listRoomInfos,
+  roomCampuses,
+  longClosures,
 };

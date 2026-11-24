@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
 import request from 'supertest';
-import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AccountDTO, type AuditEventDTO, type BankAccountDTO, type BillingCommitDTO, type BillingRunDTO, type BillingValidationDTO, type CollectionResultDTO, type CreateStudentResultDTO, type EmployeeProfileDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type LocationDetailDTO, type PayrollRunDTO, type Role, type RunEmployeeDTO, type RunLineDTO, type SalaryComponentDTO, type SalaryStructureDTO, type SchoolDTO, type SessionStatus, type StatutoryRuleDTO, type SubjectOfferingDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
+import { DEFAULT_TIMEZONE, permissionsFor, type AcademicSessionDTO, type AccountDTO, type AuditEventDTO, type BankAccountDTO, type BellGenerateResultDTO, type TimetableVersionDTO, type BillingCommitDTO, type BillingRunDTO, type BillingValidationDTO, type CollectionResultDTO, type CreateStudentResultDTO, type EmployeeProfileDTO, type FeeDocumentListDTO, type FeeHeadDTO, type FeePlanDTO, type FinancialYearDTO, type LocationDetailDTO, type PayrollRunDTO, type Role, type RunEmployeeDTO, type RunLineDTO, type SalaryComponentDTO, type SalaryStructureDTO, type SchoolDTO, type SessionStatus, type StatutoryRuleDTO, type SubjectOfferingDTO, type TaxCodeDTO, type TrialBalanceDTO } from '@shared';
 import type { ServiceContext } from '../src/platform/rbac/tenant-context';
 import { afterAll, beforeAll, beforeEach, expect, inject } from 'vitest';
 import { createApp } from '../src/app';
@@ -747,3 +747,54 @@ export async function timetableSchool(options: { operatingDays?: string[] } = {}
   return { ...t, tt, unwrap, plan, planId, regular, getData };
 }
 export type TimetableSchool = Awaited<ReturnType<typeof timetableSchool>>;
+
+// ───────────────────────────────────────────────────────────── timetable lessons and the clash checker (Module 6, Part 3)
+
+/**
+ * `timetableSchool()` made ready to schedule: Regular Daily Periods (seven lessons a day, Monday to Saturday), Maths 6 and Science 5 a
+ * week for Class VIII, one Maths teacher and one Science teacher for sections A, B and C, a Home Classroom for each section (Room 101 to
+ * 103, 40 seats), a Chemistry Lab (30 seats) and a small Counselling Room (10 seats) when asked, and an open Draft. `lesson` and `put`
+ * build and send a lesson as the School Admin.
+ */
+export async function scheduleSchool(options: { lab?: boolean; needsLab?: boolean; draft?: boolean; operatingDays?: string[] } = {}) {
+  const t = await timetableSchool({ operatingDays: options.operatingDays });
+  const bell = t.unwrap<BellGenerateResultDTO>(await t.tt.post(`/timetable-plans/${t.planId}/bell-schedules/generate`, t.regular), 201).schedule;
+  const needs = [
+    { subjectOfferingId: t.offerings.MATH, periodsPerWeek: 6 },
+    { subjectOfferingId: t.offerings.SCI, periodsPerWeek: 5, ...(options.needsLab ? { neededSuitability: ['CHEMISTRY_PRACTICAL'] } : {}) },
+  ];
+  t.unwrap(await t.tt.post('/subject-schedule-requirements/apply-grade', { planId: t.planId, classOfferingId: t.classOfferingId, items: needs }));
+
+  const maths = await addActiveEmployee(t);
+  const sci = await addActiveEmployee(t);
+  for (const [teacher, subject] of [[maths, t.offerings.MATH], [sci, t.offerings.SCI]] as const) {
+    await t.agent.post(`${API}/employees/${teacher.employeeId}/academic-assignments`).send({ items: (['A', 'B', 'C'] as const).map((c) => ({ assignmentType: 'SUBJECT_FACULTY', sectionId: t.sections[c], subjectOfferingId: subject })) }).expect(201);
+  }
+
+  const post = async <T>(path: string, body: unknown) => t.unwrap<T>(await t.tt.post(path, body), 201);
+  const building = await post<{ buildingId: string }>(`/locations/${t.moh.locationId}/buildings`, { buildingName: 'Main Block', buildingCode: 'MAB' });
+  const floors = await post<{ floors: { floorId: string }[] }>(`/buildings/${building.buildingId}/floors/bulk`, { floors: [{ name: 'Ground' }] });
+  const types = Object.fromEntries((await t.getData<{ code: string; spaceTypeId: string }[]>('/space-types')).map((x) => [x.code, x.spaceTypeId]));
+  const room = (name: string, type: string, capacity: number) =>
+    post<{ spaceId: string }>('/physical-spaces', { locationId: t.moh.locationId, buildingId: building.buildingId, floorId: floors.floors[0]!.floorId, spaceTypeId: types[type], spaceName: name, roomNumber: name.replace(/\D/g, '') || undefined, academicCapacity: capacity, physicalCapacity: capacity + 2 });
+  const home = {} as Record<'A' | 'B' | 'C', string>;
+  for (const code of ['A', 'B', 'C'] as const) {
+    const r = await room(`Room 10${code.charCodeAt(0) - 64}`, 'STANDARD_CLASSROOM', 40);
+    home[code] = r.spaceId;
+    t.unwrap(await t.tt.post('/section-space-assignments', { sectionOfferingId: t.sections[code], physicalSpaceId: r.spaceId }), 201);
+  }
+  const spare = (await room('Room 104', 'STANDARD_CLASSROOM', 40)).spaceId;
+  const small = (await room('Counselling Room 1', 'STANDARD_CLASSROOM', 10)).spaceId;
+  const lab = options.lab || options.needsLab ? (await room('Chemistry Lab 1', 'CHEMISTRY_LAB', 30)).spaceId : null;
+
+  const draft = options.draft === false ? null : t.unwrap<TimetableVersionDTO>(await t.tt.post(`/timetable-plans/${t.planId}/versions`, {}), 201);
+  /** The seven lesson periods of a day, in order: `p[1]` is the first. */
+  const p = ['', ...bell.periods.filter((x) => x.schedulable).map((x) => x.periodId)];
+  const breakId = bell.periods.find((x) => !x.schedulable)!.periodId;
+  const versionId = draft?.versionId ?? '';
+  const lesson = (section: 'A' | 'B' | 'C', subject: 'MATH' | 'SCI', weekday: string, period: number, extra: Record<string, unknown> = {}) => ({ weekday, periodId: p[period]!, sectionOfferingIds: [t.sections[section]], subjectOfferingId: t.offerings[subject], ...extra });
+  const put = (body: Record<string, unknown>, agent: Agent = t.agent, id = versionId) => agent.post(`${API}/timetable-versions/${id}/entries`).send(body);
+  const send = (method: 'post' | 'patch' | 'delete' | 'get', path: string, body: unknown = {}, agent: Agent = t.agent) => (method === 'get' ? agent.get(`${API}${path}`) : agent[method](`${API}${path}`).send(body as object));
+  return { ...t, bell, maths, sci, rooms: { ...home, spare, small, lab }, versionId, draft, p, breakId, lesson, put, send };
+}
+export type ScheduleSchool = Awaited<ReturnType<typeof scheduleSchool>>;

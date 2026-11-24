@@ -347,3 +347,20 @@ export async function groupsNeedingTeacher(ctx: ServiceContext, plan: TimetableP
   }
   return out;
 }
+
+/** For the clash checker: every active group of the plan with the students in it today and the teachers it may use. */
+export interface GroupFacts {
+  group: TeachingGroupDoc;
+  members: Set<string>;
+  teacher: GroupTeacherDTO;
+}
+
+export async function loadGroupFacts(ctx: ServiceContext, plan: TimetablePlanDoc): Promise<Map<string, GroupFacts>> {
+  const groups = await TeachingGroup.find({ tenantId: ctx.tenantId, planId: plan._id, status: 'ACTIVE' }).lean<TeachingGroupDoc[]>();
+  if (groups.length === 0) return new Map();
+  const day = await memberDay(ctx, plan);
+  const states = await loadStates(ctx, groups, day);
+  const out = new Map<string, GroupFacts>();
+  for (const group of groups) out.set(group._id, { group, members: states.get(group._id)!.sets.all, teacher: await teacherOf(ctx, plan, group, day) });
+  return out;
+}

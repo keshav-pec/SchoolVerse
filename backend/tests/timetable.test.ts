@@ -29,7 +29,7 @@ import { AuditEvent } from '../src/modules/audit/audit.model';
 import { withTransaction } from '../src/db/transaction';
 import { runOfferingCleanup } from '../src/modules/academic/cleanup';
 import { registerPeriodUsage } from '../src/modules/timetable/usage';
-import { Availability, AvailabilityException, BellAssignment, BellPeriod, BellSchedule, GroupMembership, Requirement, TeachingGroup, TimetableGrant, TimetablePlan, WorkloadRule } from '../src/modules/timetable/models';
+import { Availability, AvailabilityException, BellAssignment, BellPeriod, BellSchedule, ChangeSet, ConflictOverride, EntryFaculty, EntrySection, GenerationRun, GroupMembership, Requirement, RunItem, TeachingGroup, TimetableEntry, TimetableGrant, TimetablePlan, TimetableVersion, WorkloadRule } from '../src/modules/timetable/models';
 import { SecurityEvent } from '../src/platform/identity/security-event.model';
 import { addActiveEmployee, addClasses, addStudent, API, app, createUserAndLogin, data, expectError, forceStatus, loginAs, offer, setupSchool, timetableSchool, useTestDatabase, type TimetableSchool } from './helpers';
 
@@ -641,6 +641,8 @@ describe('isolation, permissions and audit (TT-49)', () => {
       ['timetable_plan', TimetablePlan], ['bell_schedule_template', BellSchedule], ['bell_schedule_period', BellPeriod], ['bell_schedule_assignment', BellAssignment],
       ['subject_schedule_requirement', Requirement], ['faculty_schedule_availability', Availability], ['faculty_schedule_availability_exception', AvailabilityException],
       ['faculty_workload_rule', WorkloadRule], ['teaching_group', TeachingGroup], ['teaching_group_membership', GroupMembership], ['timetable_access_grant', TimetableGrant],
+      ['timetable_version', TimetableVersion], ['timetable_entry', TimetableEntry], ['timetable_entry_section', EntrySection], ['timetable_entry_faculty', EntryFaculty], ['timetable_conflict_override', ConflictOverride],
+      ['timetable_change_set', ChangeSet], ['timetable_generation_run', GenerationRun], ['timetable_run_item', RunItem],
     ];
     for (const [entity, model] of cases) expect(businessPaths(model.schema).sort(), entity).toEqual(Object.keys(TIMETABLE_DATA_CLASSIFICATION[entity]).sort());
     expect(cases).toHaveLength(Object.keys(TIMETABLE_DATA_CLASSIFICATION).length);

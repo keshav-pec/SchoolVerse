@@ -27,4 +27,6 @@ export * from './finance-ops';
 export * from './schemas/finance-ops';
 export * from './timetable';
 export * from './schemas/timetable';
+export * from './timetable-schedule';
+export * from './schemas/timetable-schedule';
 export * from './data-classification';

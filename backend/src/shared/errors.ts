@@ -277,6 +277,16 @@ export const ERROR_CODES = {
   GROUP_INVALID: { status: 422, message: 'This Teaching Group is not valid.' },
   NOT_READY: { status: 409, message: 'The timetable setup is not ready yet. Finish the missing steps first.' },
   WRONG_CAMPUS: { status: 409, message: 'This belongs to a different campus than the timetable plan.' },
+  TIMETABLE_CLASH: { status: 409, message: 'This change clashes with something already in the timetable, so it was not saved.' },
+  STALE_TIMETABLE: { status: 409, message: 'Someone just changed this period. We refreshed it.' },
+  VERSION_PUBLISHED: { status: 409, message: 'This timetable is published and cannot be edited. Create a revision to change it.' },
+  DRAFT_EXISTS: { status: 409, message: 'This plan already has a draft timetable. Open it, or finish it first.' },
+  OVERRIDE_NOT_ALLOWED: { status: 403, message: 'This clash cannot be overridden.' },
+  UNDO_NOT_POSSIBLE: { status: 409, message: 'This change cannot be undone any more.' },
+  SMART_DRAFT_BUSY: { status: 409, message: 'Someone is editing. Try again.' },
+  ENTRY_FIXED: { status: 409, message: 'This is a fixed period. Unlock it first.' },
+  ENTRY_INVALID: { status: 422, message: 'This lesson is not valid.' },
+  COPY_NOT_AVAILABLE: { status: 409, message: "There is no published timetable from the last session at this campus to copy." },
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

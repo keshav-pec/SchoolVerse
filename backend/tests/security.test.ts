@@ -108,6 +108,9 @@ interface TimetableIds {
   bellId: string;
   periodId: string;
   groupId: string;
+  versionId: string;
+  entryId: string;
+  changeSetId: string;
 }
 
 type RouteIds = { schoolId: string; locationId: string; identifierId: string; academic: AcademicIds; staff: StaffIds; students: StudentIds; spaces: SpaceIds; timetable: TimetableIds };
@@ -129,6 +132,7 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
   const room = `${API}/physical-spaces/${sp.spaceId}`;
   const tt = ids.timetable;
   const plan = `${API}/timetable-plans/${tt.planId}`;
+  const version = `${API}/timetable-versions/${tt.versionId}`;
   const generate = { name: 'Matrix', kind: 'REGULAR', start: '08:00', end: '12:00', periodMinutes: 45 };
   const needs = { subjectOfferingId: x.subjectOfferingId, periodsPerWeek: 4 };
   return {
@@ -205,6 +209,17 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'GET timetable plan', send: (c) => c.get(plan) },
       { name: 'GET timetable readiness', send: (c) => c.get(`${plan}/readiness`) },
       { name: 'GET timetable teachers', send: (c) => c.get(`${plan}/teachers`) },
+      { name: 'GET timetable versions', send: (c) => c.get(`${plan}/versions`) },
+      { name: 'GET previous session', send: (c) => c.get(`${plan}/previous-session`) },
+      { name: 'GET timetable version', send: (c) => c.get(version) },
+      { name: 'GET timetable grid', send: (c) => c.get(`${version}/grid?view=section&id=${sp.sectionId}`) },
+      { name: 'GET timetable changes', send: (c) => c.get(`${version}/changes?since=0`) },
+      { name: 'GET timetable history', send: (c) => c.get(`${version}/history`) },
+      { name: 'GET timetable health', send: (c) => c.get(`${version}/health`) },
+      { name: 'GET needs attention', send: (c) => c.get(`${version}/attention`) },
+      { name: 'GET last year items', send: (c) => c.get(`${version}/run-items`) },
+      { name: 'GET timetable lesson', send: (c) => c.get(`${API}/timetable-entries/${tt.entryId}`) },
+      { name: 'GET unplaced explanation', send: (c) => c.get(`${API}/timetable/explain-unplaced?versionId=${tt.versionId}&sectionId=${sp.sectionId}&subjectOfferingId=${x.subjectOfferingId}`) },
       { name: 'GET daily periods', send: (c) => c.get(`${plan}/bell-schedules`) },
       { name: 'GET daily period', send: (c) => c.get(`${API}/bell-schedules/${tt.bellId}`) },
       { name: 'GET bell resolution', send: (c) => c.get(`${plan}/bell-resolution`) },
@@ -385,6 +400,20 @@ function routes(ids: RouteIds): { reads: Call[]; mutations: Call[] } {
       { name: 'rollover preview', send: (c) => c.post(`${API}/section-space-assignments/rollover/preview`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
       { name: 'rollover commit', send: (c) => c.post(`${API}/section-space-assignments/rollover/commit`).send({ fromSessionId: sp.sessionId, toSessionId: sp.otherSessionId, locationId: ids.locationId }) },
       { name: 'replace room', send: (c) => c.post(`${room}/replace`).send({ mode: 'AFTER_SESSION' }) },
+      { name: 'POST timetable draft', send: (c) => c.post(`${plan}/versions`).send({}) },
+      { name: 'POST timetable lesson', send: (c) => c.post(`${version}/entries`).send({ weekday: 'TUE', periodId: tt.periodId, entryType: 'LIBRARY', sectionOfferingIds: [sp.sectionId] }) },
+      { name: 'PATCH timetable lesson', send: (c) => c.patch(`${API}/timetable-entries/${tt.entryId}`).send({ notes: 'Hijacked' }) },
+      { name: 'DELETE timetable lesson', send: (c) => c.delete(`${API}/timetable-entries/${tt.entryId}`).send({}) },
+      { name: 'move timetable lesson', send: (c) => c.post(`${API}/timetable-entries/${tt.entryId}/move`).send({ weekday: 'TUE', periodId: tt.periodId }) },
+      { name: 'bulk timetable lessons', send: (c) => c.post(`${API}/timetable-entries/bulk`).send({ versionId: tt.versionId, op: 'CLEAR', items: [{ entryId: tt.entryId }] }) },
+      { name: 'undo timetable change', send: (c) => c.post(`${API}/timetable-changes/${tt.changeSetId}/undo`).send({}) },
+      { name: 'apply timetable fix', send: (c) => c.post(`${API}/timetable-changes/apply`).send({ versionId: tt.versionId, suggestionToken: Buffer.from(JSON.stringify({ v: 1, versionId: tt.versionId, label: 'x', ops: [{ op: 'delete', entryId: tt.entryId }] })).toString('base64url') }) },
+      { name: 'check timetable change', send: (c) => c.post(`${API}/timetable/check`).send({ versionId: tt.versionId, ops: [{ op: 'delete', entryId: tt.entryId }] }) },
+      { name: 'timetable slot map', send: (c) => c.post(`${API}/timetable/slot-map`).send({ versionId: tt.versionId, entryId: tt.entryId }) },
+      { name: 'recommend timetable slots', send: (c) => c.post(`${API}/timetable/recommend-slots`).send({ versionId: tt.versionId, sectionId: sp.sectionId, subjectOfferingId: x.subjectOfferingId }) },
+      { name: 'timetable fix recommendations', send: (c) => c.post(`${API}/timetable/conflicts/recommendations`).send({ versionId: tt.versionId, entryId: tt.entryId, rule: 'MAX_PER_DAY' }) },
+      { name: 'run Smart Draft', send: (c) => c.post(`${version}/smart-draft`).send({}) },
+      { name: 'copy last year', send: (c) => c.post(`${plan}/copy-previous-session`).send({ mode: 'PREVIEW' }) },
       { name: 'POST timetable plan', send: (c) => c.post(`${API}/timetable-plans`).send({ locationId: ids.locationId, academicSessionId: x.sessionId }) },
       { name: 'PATCH timetable plan', send: (c) => c.patch(plan).send({ version: 1, planName: 'Hijacked' }) },
       { name: 'timetable plan status', send: (c) => c.post(`${plan}/status`).send({ to: 'ARCHIVED' }) },
@@ -551,7 +580,9 @@ async function victim() {
   const plan = (await b.agent.post(`${API}/timetable-plans`).send({ locationId: b.moh.locationId, academicSessionId: session.academicSessionId }).expect(201)).body.data as { planId: string };
   const bell = (await b.agent.post(`${API}/timetable-plans/${plan.planId}/bell-schedules/generate`).send({ name: 'Victim Regular', start: '08:00', end: '12:00', periodMinutes: 45 }).expect(201)).body.data.schedule as { bellScheduleId: string; periods: { periodId: string }[] };
   const teachingGroup = (await b.agent.post(`${API}/teaching-groups`).send({ planId: plan.planId, name: 'Victim Group', kind: 'SUBJECT', classOfferingId: academic.classOfferingId, subjectOfferingId: academic.subjectOfferingId, sectionPool: [academic.sectionId] }).expect(201)).body.data as { groupId: string };
-  const timetable: TimetableIds = { planId: plan.planId, bellId: bell.bellScheduleId, periodId: bell.periods[0]!.periodId, groupId: teachingGroup.groupId };
+  const draft = (await b.agent.post(`${API}/timetable-plans/${plan.planId}/versions`).send({}).expect(201)).body.data as { versionId: string };
+  const lesson = (await b.agent.post(`${API}/timetable-versions/${draft.versionId}/entries`).send({ weekday: 'MON', periodId: bell.periods[0]!.periodId, entryType: 'LIBRARY', activityName: 'Library', sectionOfferingIds: [academic.sectionId] }).expect(201)).body.data as { changeSetId: string; entries: { entryId: string }[] };
+  const timetable: TimetableIds = { planId: plan.planId, bellId: bell.bellScheduleId, periodId: bell.periods[0]!.periodId, groupId: teachingGroup.groupId, versionId: draft.versionId, entryId: lesson.entries[0]!.entryId, changeSetId: lesson.changeSetId };
   return { ...b, identifierId: ident.body.data.identifierId as string, academic, staff, students, spaces, timetable };
 }
 

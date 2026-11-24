@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 and 2: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 3: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -245,6 +245,20 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 **The room picker** (one component everywhere) lists rooms that can be picked first, best fit on top, with seats; the others are greyed out with the reason ("Taken by 8-B", "Under maintenance", "Not a classroom", "Floor or building closed"). When a room is too small the same **This room is too small** dialog opens everywhere, with **Choose Larger Room** (the free room we found) and **Keep Room Anyway** (asks for a reason). The Space Setup room panel links its **Home section** to Classroom Allocation, the room search also finds a room by the section that sits in it today ("8-A"), and the KPI strip adds **Recommended automatically** and **Setup completeness**. **Archive** of a used room now offers **Choose Replacement** (the suggested room is picked already; the sections move today, then the room is archived) and **Archive After Current Session**, and shows what moved.
 
 **Things that differ from the plan.** Shifts have no field yet (an "i" card on Current Rooms explains why two sections cannot share a room). Part 4 added two read-only API pieces: `GET /spaces/my-classrooms` (Faculty "My Classroom") and room search by section in `GET /physical-spaces?q=`. History is per section; a carried-forward row says where it came from ("Carried forward from VIII-A").
+
+## Timetable lessons and the clash checker (Module 6, Part 3, backend)
+
+Code: `backend/src/modules/timetable/engine/` (the one clash checker), `schedule/` (services) and `schedule.routes.ts`.
+
+| Area | What it does |
+|---|---|
+| Versions | `POST /timetable-plans/:id/versions` makes the one open Draft (`DRAFT_EXISTS` otherwise). Published versions refuse every edit with `VERSION_PUBLISHED` and a Create Revision hint. |
+| Lessons | `POST /timetable-versions/:id/entries`, `PATCH`/`DELETE /timetable-entries/:id`, `POST …/:id/move` (with `swapWith`), `POST /timetable-entries/bulk` (`MOVE`, `CLEAR`, `MARK_FIXED`, `UNLOCK`, `SET_ROOM`, `DUPLICATE_TO`, `COPY_REQUIREMENTS`). Teacher and Home Classroom are filled in when left out. |
+| Safe editing | Every write is checked on fresh data inside a transaction. A clash is `409 TIMETABLE_CLASH` with reasons and up to three options. Warnings are saved and listed. `expectedVersion` catches a stale screen (`STALE_TIMETABLE`), `requestId` makes a retry safe, `POST /timetable-changes/:id/undo` undoes through the same checker. |
+| Dry runs | `POST /timetable/check`, `/slot-map`, `/recommend-slots`, `/recommend-room`, `/recommend-faculty`, `/conflicts/recommendations` (+ `POST /timetable-changes/apply`), `GET /timetable/available-faculty`, `/available-spaces`, `/explain-unplaced`. |
+| Reads | `GET /timetable-versions/:id/grid?view=section\|teacher\|room\|group&id=`, `/changes?since=`, `/history`, `/health`, `/attention`. |
+| Last year | `GET /timetable-plans/:id/previous-session`, `POST …/copy-previous-session` (`PREVIEW` or `COMMIT`), `POST /timetable-run-items/:id/accept`, `/dismiss`, `POST /timetable-run-items/accept-group`. |
+| Smart Draft | `POST /timetable-versions/:id/smart-draft` (`FILL_GAPS` or `START_FRESH` with `confirm`). Deterministic; plans in memory, saves in one transaction, re-plans up to 3 times if someone edited meanwhile (`SMART_DRAFT_BUSY`), stops at 30 seconds with a `PARTIAL` run. |
 
 ## Timetable setup screens (Module 6, Part 2)
 

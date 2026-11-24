@@ -61,6 +61,10 @@ export const AUDIT_ENTITY_TYPES = [
   'faculty_availability',
   'teaching_group',
   'timetable_access',
+  'timetable_version',
+  'timetable_entry',
+  'generation_run',
+  'conflict_override',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 

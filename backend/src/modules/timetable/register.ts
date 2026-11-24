@@ -3,10 +3,42 @@ import { registerPermissionProvider } from '../../platform/rbac/permission-provi
 import { registerAcademicDependency } from '../academic/dependencies';
 import { registerOfferingCleanup } from '../academic/cleanup';
 import { registerLocationDependency } from '../dependencies/registry';
-import { Availability, BellAssignment, BellPeriod, BellSchedule, GroupMembership, Requirement, TeachingGroup, TimetableGrant, TimetablePlan, WorkloadRule } from './models';
+import { SectionOffering } from '../academic/offering.model';
+import {
+  Availability,
+  BellAssignment,
+  BellPeriod,
+  BellSchedule,
+  ChangeSet,
+  ConflictOverride,
+  EntryFaculty,
+  EntrySection,
+  GenerationRun,
+  GroupMembership,
+  Requirement,
+  RunItem,
+  TeachingGroup,
+  TimetableEntry,
+  TimetableGrant,
+  TimetablePlan,
+  TimetableVersion,
+  WorkloadRule,
+} from './models';
 import './usage';
+import './schedule/usage';
 
 let registered = false;
+
+/** Takes lessons out of every draft: their claims, overrides and the empty shell. Used when the section or subject they name is deleted. */
+async function removeLessons(tenantId: string, entryIds: string[], db: import('mongoose').ClientSession) {
+  if (entryIds.length === 0) return;
+  await Promise.all([
+    EntrySection.deleteMany({ tenantId, entryId: { $in: entryIds } }, { session: db }),
+    EntryFaculty.deleteMany({ tenantId, entryId: { $in: entryIds } }, { session: db }),
+    ConflictOverride.deleteMany({ tenantId, entryId: { $in: entryIds } }, { session: db }),
+    TimetableEntry.deleteMany({ tenantId, _id: { $in: entryIds } }, { session: db }),
+  ]);
+}
 
 /**
  * Module 6 on the registries Modules 1 to 5 built:
@@ -52,7 +84,16 @@ export function registerTimetableDependencies() {
       if (planIds.length > 0) {
         const groupIds = (await TeachingGroup.find({ tenantId, planId: { $in: planIds } }).select('_id').session(db).lean<{ _id: string }[]>()).map((g) => g._id);
         const byPlan = { tenantId, planId: { $in: planIds } };
+        const versionIds = (await TimetableVersion.find(byPlan).select('_id').session(db).lean<{ _id: string }[]>()).map((v) => v._id);
         await Promise.all([
+          EntrySection.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          EntryFaculty.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          ConflictOverride.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          TimetableEntry.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          ChangeSet.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          RunItem.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          GenerationRun.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          TimetableVersion.deleteMany(byPlan, { session: db }),
           GroupMembership.deleteMany({ tenantId, groupId: { $in: groupIds } }, { session: db }),
           TeachingGroup.deleteMany(byPlan, { session: db }),
           Requirement.deleteMany(byPlan, { session: db }),
@@ -67,6 +108,7 @@ export function registerTimetableDependencies() {
       return;
     }
     if (scope.sectionOfferingIds?.length) {
+      await removeLessons(tenantId, (await EntrySection.distinct('entryId', { tenantId, sectionOfferingId: { $in: scope.sectionOfferingIds } }).session(db)) as string[], db);
       await Promise.all([
         BellAssignment.deleteMany({ tenantId, scope: 'SECTION', sectionOfferingId: { $in: scope.sectionOfferingIds } }, { session: db }),
         Requirement.deleteMany({ tenantId, scope: 'SECTION', sectionOfferingId: { $in: scope.sectionOfferingIds } }, { session: db }),
@@ -74,12 +116,15 @@ export function registerTimetableDependencies() {
       ]);
     }
     if (scope.classOfferingIds?.length) {
+      const sectionIds = (await SectionOffering.find({ tenantId, classOfferingId: { $in: scope.classOfferingIds } }).select('_id').session(db).lean<{ _id: string }[]>()).map((s) => s._id);
+      await removeLessons(tenantId, (await EntrySection.distinct('entryId', { tenantId, sectionOfferingId: { $in: sectionIds } }).session(db)) as string[], db);
       await Promise.all([BellAssignment.deleteMany({ tenantId, classOfferingId: { $in: scope.classOfferingIds } }, { session: db }), Requirement.deleteMany({ tenantId, classOfferingId: { $in: scope.classOfferingIds } }, { session: db })]);
       const groupIds = (await TeachingGroup.find({ tenantId, classOfferingId: { $in: scope.classOfferingIds } }).select('_id').session(db).lean<{ _id: string }[]>()).map((g) => g._id);
       await GroupMembership.deleteMany({ tenantId, groupId: { $in: groupIds } }, { session: db });
       await TeachingGroup.deleteMany({ tenantId, _id: { $in: groupIds } }, { session: db });
     }
     if (scope.subjectOfferingIds?.length) {
+      await removeLessons(tenantId, (await TimetableEntry.distinct('_id', { tenantId, subjectOfferingId: { $in: scope.subjectOfferingIds } }).session(db)) as string[], db);
       await Requirement.deleteMany({ tenantId, subjectOfferingId: { $in: scope.subjectOfferingIds } }, { session: db });
       const groupIds = (await TeachingGroup.find({ tenantId, subjectOfferingId: { $in: scope.subjectOfferingIds } }).select('_id').session(db).lean<{ _id: string }[]>()).map((g) => g._id);
       await GroupMembership.deleteMany({ tenantId, groupId: { $in: groupIds } }, { session: db });
