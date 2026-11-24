@@ -44,7 +44,27 @@ export const GROUPS_INTRO = (
   </>
 );
 
+export const START_INTRO = (
+  <>
+    <p>Nobody builds the whole timetable by hand. Pick one way to fill it, then fix only what is left.</p>
+    <p>You can always change a lesson afterwards. Every change is checked for clashes before it is saved.</p>
+  </>
+);
+
+export const ATTENTION_INTRO = (
+  <>
+    <p>This is the short list of what is still to fix. Each row says what is wrong in plain words and has the right button.</p>
+    <p>When the list is empty, the timetable is complete and clash-free.</p>
+  </>
+);
+
 export const TIPS: Record<string, ReactNode> = {
+  fixedPeriod: <p>A fixed period is locked in place, like Assembly. Smart Draft never moves it, and you must unlock it before you move or clear it.</p>,
+  swap: <p>Swap puts two lessons in each other’s place. Both are checked together, so a swap only works if both sides fit.</p>,
+  fillGaps: <p>Fill Gaps Only keeps every lesson that is already there and only adds what is missing. This is the safe choice.</p>,
+  startFresh: <p>Start Fresh removes every lesson that is not fixed, then builds the timetable again. Lessons you placed by hand are removed too.</p>,
+  leftToPlace: <p>Subjects that still have periods to place this week. Each shows the best slot we found. Press Place to use it.</p>,
+  startEmpty: <p>An empty timetable is rarely needed. Smart Draft or last year’s timetable fill most of it, and you only fix the rest.</p>,
   dailyPeriods: <p>Daily Periods are the bell of the school: each period with its start and end time, and the breaks between them. A lesson is placed in a period.</p>,
   specialRoom: <p>Choose this only if the subject cannot be taught in the section’s own classroom. Example: Computer Science needs a computer lab. Normal subjects use the Home Classroom, so leave this empty.</p>,
   doublePeriods: <p>Two periods in a row for one subject, like a practical or a long lesson. “Prefer” means we try. “Must” means the timetable needs it.</p>,

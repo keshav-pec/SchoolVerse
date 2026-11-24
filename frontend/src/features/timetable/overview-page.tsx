@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { InfoTip } from '@/components/ui/tooltip';
 import { ErrorState } from '@/components/sv/error-state';
 import { TabIntro } from '@/components/sv/help';
 import { PageHeader } from '@/components/sv/page-header';
@@ -97,12 +96,11 @@ export function TimetableOverviewPage() {
                     </p>
                   </div>
                   <span className="flex items-center gap-2">
-                    <Button disabled aria-describedby="open-schedule-note">
-                      <CalendarCheck2 /> Open Schedule
+                    <Button asChild>
+                      <Link to="/timetable/schedule">
+                        <CalendarCheck2 /> Open Schedule
+                      </Link>
                     </Button>
-                    <InfoTip label="About Open Schedule">
-                      <p id="open-schedule-note">The schedule screen, where the timetable is built and checked, comes in the next update. Finish the setup first so it is ready.</p>
-                    </InfoTip>
                   </span>
                 </Card>
                 <div className="grid gap-4 lg:grid-cols-2">

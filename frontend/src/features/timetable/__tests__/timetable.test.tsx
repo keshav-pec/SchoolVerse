@@ -200,7 +200,7 @@ describe('Timetable overview (TT-UX-01)', () => {
     expect(screen.getByRole('link', { name: /Go To Assign Classes/ })).toHaveAttribute('href', '/people');
     expect(screen.getByRole('link', { name: /Set Daily Periods/ })).toHaveAttribute('href', '/timetable/setup?tab=periods');
     // Until the schedule screen exists the button is off, and says why.
-    expect(screen.getByRole('button', { name: 'Open Schedule' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: /Open Schedule/ })).toHaveAttribute('href', '/timetable/schedule');
   });
 
   it('(TT-UX-01) a ready plan says so in one line', async () => {

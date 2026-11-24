@@ -40,6 +40,8 @@ import { WorkspacePage } from '@/features/spaces/workspace-page';
 import { TimetableLayout } from '@/features/timetable/context';
 import { TimetableOverviewPage } from '@/features/timetable/overview-page';
 import { TimetableSetupPage } from '@/features/timetable/setup-page';
+import { AttentionPage as ScheduleAttentionPage } from '@/features/timetable/schedule/attention-page';
+import { SchedulePage, StartRoute } from '@/features/timetable/schedule/schedule-page';
 import { AttentionPage } from '@/features/students/attention-page';
 import { ExitsPage } from '@/features/students/exits-page';
 import { ImportPage } from '@/features/students/import-page';
@@ -89,6 +91,7 @@ import {
   RequireSetupComplete,
   RequireSpaceAccess,
   RequireSpacePermission,
+  RequireTimetableSchedule,
   RequireTimetableSetup,
 } from '@/routes/guards';
 
@@ -302,6 +305,14 @@ const router = createBrowserRouter([
                         children: [
                           { index: true, element: <TimetableOverviewPage /> },
                           { path: 'setup', element: <TimetableSetupPage /> },
+                          {
+                            element: <RequireTimetableSchedule />,
+                            children: [
+                              { path: 'schedule', element: <SchedulePage /> },
+                              { path: 'start', element: <StartRoute /> },
+                              { path: 'attention', element: <ScheduleAttentionPage /> },
+                            ],
+                          },
                         ],
                       },
                     ],

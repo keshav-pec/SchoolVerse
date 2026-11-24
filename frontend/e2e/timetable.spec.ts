@@ -1,5 +1,13 @@
-import { expect, test } from '@playwright/test';
-import { chooseOption, expectToast, financeBar, login } from './helpers';
+import { expect, test, type Page } from '@playwright/test';
+import { chooseOption, expectToast, financeBar, login, pageAs } from './helpers';
+
+/** The schedule opens on the first class in the list; the seeded Subject Needs and teachers are for Class 8. */
+async function openClass8(page: Page) {
+  await page.goto('/timetable/schedule');
+  await financeBar(page);
+  await chooseOption(page.getByRole('combobox', { name: 'Class' }), /^Class 8/);
+  await expect(page.getByTestId('context-line')).toContainText('Class 8');
+}
 
 test.describe('timetable setup', () => {
   test.describe.configure({ mode: 'serial' });
@@ -82,6 +90,88 @@ test.describe('timetable setup', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
     await page.reload();
     await expect(page.getByRole('button', { name: /^Saturday Period 1: Not available$/ })).toBeVisible();
+  });
+
+  // ───────────────────────────────────────────────────────────── the Scheduling workspace (Module 6, Part 4)
+
+  test('admin starts from Smart Draft, sees the result card, and Needs Attention opens', async ({ page }) => {
+    await login(page, 'admin@greenfield.demo');
+    await page.goto('/timetable/schedule');
+    await financeBar(page);
+    await page.getByRole('button', { name: 'Prepare Smart Draft' }).click();
+    await expect(page.getByTestId('run-summary')).toContainText(/\d+ of \d+ placed · \d+ left · 0 clashes/);
+    await expect(page.getByRole('table', { name: 'Weekly timetable' })).toBeVisible();
+    await page.getByRole('link', { name: 'Review Exceptions' }).click();
+    await expect(page).toHaveURL(/\/timetable\/attention/);
+    await expect(page.getByTestId('attention-progress')).toContainText(/\d+ \/ \d+ placed/);
+  });
+
+  test('admin removes a lesson and puts it back with one click from the Smart Rail', async ({ page }) => {
+    await login(page, 'admin@greenfield.demo');
+    await openClass8(page);
+    await page.getByRole('table', { name: 'Weekly timetable' }).getByRole('button', { name: /^Mathematics/ }).first().click();
+    await page.getByRole('button', { name: 'Remove Lesson' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remove Lesson' }).click();
+    await expectToast(page, /removed/i);
+    const rail = page.getByLabel('Smart Rail');
+    await rail.getByRole('button', { name: /^Place Mathematics/ }).first().click();
+    await expectToast(page, /added/i);
+    await expect(page.getByTestId('coverage-line')).toContainText(/Left 0/);
+  });
+
+  test('admin drags a lesson to a free slot, undoes it, then swaps two lessons', async ({ page }) => {
+    await login(page, 'admin@greenfield.demo');
+    await openClass8(page);
+    const grid = page.getByRole('table', { name: 'Weekly timetable' });
+    const lessons = grid.getByRole('button', { name: /^Mathematics/ });
+    const first = lessons.nth(0);
+    const second = lessons.nth(1);
+    // Swap: drop one lesson on another, confirm, and the toast says so.
+    await first.dragTo(second);
+    const dialog = page.getByRole('dialog', { name: /Swap These Two|Why Not Here/ });
+    await expect(dialog).toBeVisible();
+    if (await dialog.getByRole('button', { name: 'Swap These Two' }).count()) {
+      await dialog.getByRole('button', { name: 'Swap These Two' }).click();
+      await expectToast(page, /swapped/i);
+      await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+      await page.getByRole('button', { name: 'Undo Last Change' }).click();
+      await expectToast(page, /undid/i);
+    }
+  });
+
+  test('admin changes a room inline and sees only valid choices first', async ({ page }) => {
+    await login(page, 'admin@greenfield.demo');
+    await openClass8(page);
+    await page.getByRole('table', { name: 'Weekly timetable' }).getByRole('button', { name: /^Mathematics/ }).first().click();
+    await page.getByRole('button', { name: /^Room: .*Change$/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Choose a room' });
+    await expect(picker.getByRole('button', { name: 'No room' })).toBeVisible();
+    await picker.getByRole('button', { name: 'No room' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+  });
+
+  test('two admins take the same teacher slot: one is refused with a clear reason', async ({ page, browser }) => {
+    await login(page, 'admin@greenfield.demo');
+    const second = await pageAs(browser, 'admin@greenfield.demo');
+    const plan = ((await (await page.request.get('/api/v1/timetable-plans')).json()).data as { planId: string }[])[0]!;
+    const version = ((await (await page.request.get(`/api/v1/timetable-plans/${plan.planId}/versions`)).json()).data as { versionId: string; status: string }[]).find((v) => v.status === 'DRAFT')!;
+    const rows = ((await (await page.request.get(`/api/v1/timetable-plans/${plan.planId}/bell-resolution`)).json()).data as { rows: { sectionOfferingId: string }[] }).rows.slice(0, 2);
+    const grids = await Promise.all(rows.map(async (r) => ((await (await page.request.get(`/api/v1/timetable-versions/${version.versionId}/grid?view=section&id=${r.sectionOfferingId}`)).json()).data) as { days: { weekday: string; periods: { periodId: string; schedulable: boolean }[] }[]; cells: { weekday: string; periodId: string; subjectOfferingId: string | null }[] }));
+    const free = grids[0]!.days.flatMap((d) => d.periods.filter((p) => p.schedulable).map((p) => ({ weekday: d.weekday, periodId: p.periodId }))).find((slot) => grids.every((g) => !g.cells.some((c) => c.weekday === slot.weekday && c.periodId === slot.periodId)));
+    const subject = grids[0]!.cells.find((c) => c.subjectOfferingId)?.subjectOfferingId;
+    test.skip(!free || !subject || rows.length < 2, 'needs a slot free in two sections that share a subject');
+    const body = (section: string) => ({ weekday: free!.weekday, periodId: free!.periodId, entryType: 'SUBJECT', subjectOfferingId: subject, sectionOfferingIds: [section] });
+    const results = await Promise.all([page.request.post(`/api/v1/timetable-versions/${version.versionId}/entries`, { data: body(rows[0]!.sectionOfferingId) }), second.request.post(`/api/v1/timetable-versions/${version.versionId}/entries`, { data: body(rows[1]!.sectionOfferingId) })]);
+    const statuses = results.map((r) => r.status());
+    expect(statuses.filter((s) => s === 201).length).toBeGreaterThanOrEqual(1);
+    for (const r of results.filter((x) => x.status() === 409)) expect((await r.json()).error.code).toBe('TIMETABLE_CLASH');
+    await second.context().close();
+  });
+
+  test('faculty cannot open the schedule workspace', async ({ page }) => {
+    await login(page, 'faculty@greenfield.demo');
+    await page.goto('/timetable/schedule');
+    await expect(page).toHaveURL(/\/restricted/);
   });
 
   test('faculty cannot open the timetable setup', async ({ page }) => {

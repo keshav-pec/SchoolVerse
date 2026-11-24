@@ -37,6 +37,7 @@ import {
   UserRound,
   UsersRound,
   Users,
+  CalendarCheck2,
   CalendarRange,
 } from 'lucide-react';
 import { SchoolLogo } from '@/components/sv/school-logo';
@@ -55,6 +56,7 @@ import { usePendingRequestCount } from '@/features/people/api';
 import { useFinanceAttentionCount } from '@/features/finance/attention-page';
 import { FinanceSearch } from '@/features/finance/finance-search';
 import { useSpaceAttentionCount } from '@/features/spaces/attention';
+import { useScheduleAttentionCount } from '@/features/timetable/schedule/attention-count';
 import { useAttentionCount } from '@/features/students/api';
 import { usePendingStudentRequests } from '@/features/students/lifecycle-api';
 import { useAuth, useSession } from '@/lib/auth';
@@ -71,7 +73,7 @@ interface NavItem {
   /** Extra condition on the signed-in person (for example, only those whose login is linked to an employee). */
   when?: (user: { role: string; personId: string | null }, can: (p: Permission) => boolean) => boolean;
   /** Shows the pending change-request count beside the label. */
-  badge?: 'requests' | 'attention' | 'student-requests' | 'space-attention' | 'finance-attention';
+  badge?: 'requests' | 'attention' | 'student-requests' | 'space-attention' | 'finance-attention' | 'timetable-attention';
 }
 
 interface NavSection {
@@ -167,6 +169,8 @@ const NAV: NavSection[] = [
     items: [
       { to: '/timetable', label: 'Overview', Icon: CalendarRange, permission: 'timetable:setup:manage', end: true },
       { to: '/timetable/setup', label: 'Setup', Icon: Settings2, permission: 'timetable:setup:manage' },
+      { to: '/timetable/schedule', label: 'Schedule', Icon: CalendarCheck2, permission: 'timetable:entry:edit' },
+      { to: '/timetable/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'timetable:entry:edit', badge: 'timetable-attention' },
     ],
   },
   {
@@ -252,6 +256,9 @@ const CRUMBS: [string, string[]][] = [
   ['/finance/settings', ['Finance', 'Settings']],
   ['/finance', ['Finance', 'Overview']],
   ['/timetable/setup', ['Timetable', 'Setup']],
+  ['/timetable/schedule', ['Timetable', 'Schedule']],
+  ['/timetable/start', ['Timetable', 'Start']],
+  ['/timetable/attention', ['Timetable', 'Needs Attention']],
   ['/timetable', ['Timetable', 'Overview']],
   ['/spaces/allocation', ['Campus', 'Classroom Allocation']],
   ['/spaces/rollover', ['Campus', 'Rollover']],
@@ -343,6 +350,7 @@ function SidebarContent({
   const attention = useAttentionCount(can('student:view'), {});
   const spaceAttention = useSpaceAttentionCount(can('space:edit'));
   const financeAttention = useFinanceAttentionCount();
+  const timetableAttention = useScheduleAttentionCount(can('timetable:entry:edit'));
   const studentRequests = usePendingStudentRequests(can('student:approve_changes'));
   return (
     <div
@@ -400,6 +408,8 @@ function SidebarContent({
                     ? (attention.data ?? 0)
                     : item.badge === 'finance-attention'
                       ? financeAttention
+                    : item.badge === 'timetable-attention'
+                      ? timetableAttention
                     : item.badge === 'space-attention'
                       ? spaceAttention
                     : item.badge === 'student-requests'
@@ -481,6 +491,14 @@ function SidebarContent({
                           aria-label={`${financeAttention} things need attention`}
                         >
                           {financeAttention}
+                        </span>
+                      )}
+                      {!collapsed && badge === 'timetable-attention' && timetableAttention > 0 && (
+                        <span
+                          className="ml-auto grid min-w-5 place-items-center rounded-full bg-sun px-1.5 text-[11px] leading-5 font-bold text-navy"
+                          aria-label={`${timetableAttention} things need attention`}
+                        >
+                          {timetableAttention}
                         </span>
                       )}
                       {!collapsed && badge === 'space-attention' && spaceAttention > 0 && (

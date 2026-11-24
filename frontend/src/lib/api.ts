@@ -79,7 +79,7 @@ export const api = {
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>('POST', path, body ?? {}, true, headers),
   patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
   put: <T>(path: string, body: unknown) => request<T>('PUT', path, body),
-  delete: <T>(path: string) => request<T>('DELETE', path),
+  delete: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
   /** multipart/form-data upload (logo). */
   upload: <T>(path: string, form: FormData) => request<T>('POST', path, form),
 };

@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 3: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 4: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -245,6 +245,16 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 **The room picker** (one component everywhere) lists rooms that can be picked first, best fit on top, with seats; the others are greyed out with the reason ("Taken by 8-B", "Under maintenance", "Not a classroom", "Floor or building closed"). When a room is too small the same **This room is too small** dialog opens everywhere, with **Choose Larger Room** (the free room we found) and **Keep Room Anyway** (asks for a reason). The Space Setup room panel links its **Home section** to Classroom Allocation, the room search also finds a room by the section that sits in it today ("8-A"), and the KPI strip adds **Recommended automatically** and **Setup completeness**. **Archive** of a used room now offers **Choose Replacement** (the suggested room is picked already; the sections move today, then the room is archived) and **Archive After Current Session**, and shows what moved.
 
 **Things that differ from the plan.** Shifts have no field yet (an "i" card on Current Rooms explains why two sections cannot share a room). Part 4 added two read-only API pieces: `GET /spaces/my-classrooms` (Faculty "My Classroom") and room search by section in `GET /physical-spaces?q=`. History is per section; a carried-forward row says where it came from ("Carried forward from VIII-A").
+
+## Scheduling workspace (Module 6, Part 4, frontend)
+
+Code: `frontend/src/features/timetable/schedule/` (`schedule-page`, `start`, `grid`, `rail`, `inspector`, `add-lesson`, `bulk`, `dialogs`, `pickers`, `editor`, `attention-page`, `attention-count`). Tests: `__tests__/schedule.test.tsx` (20) and the Playwright block in `e2e/timetable.spec.ts`.
+
+| Route | Who | What |
+|---|---|---|
+| `/timetable/schedule` (`?view=section\|teacher\|room\|group&id=&entry=&focus=`) | School Admin, or Staff with the Scheduling Coordinator job (`timetable:entry:edit`) | With no draft: the **Start** page (Reuse Last Year, Prepare Smart Draft, Start Empty). With a draft: the weekly grid, Smart Rail (Left To Place, Needs Attention, Coverage) and the lesson inspector. Drag to move (slots turn green, amber or grey from the slot map), drop on a lesson to swap, Shift-click for several, **Add** on a free period, **Move To…** for touch and keyboard. Every change autosaves (Saving…, Saved, or Not saved yet with Try Again), has an Undo, and a clash opens **Why Not Here?** with better options. |
+| `/timetable/start` | same | The Start page on its own; goes to the schedule once a draft exists. |
+| `/timetable/attention` | same | Needs Attention: Not Placed (Place, Why?), Teachers, Rooms, Coverage, Workload (Fix This For Me), Changed Since You Scheduled, Last Year (Accept, Dismiss, Accept All N Teacher Changes). The sidebar badge shows the same total. |
 
 ## Timetable lessons and the clash checker (Module 6, Part 3, backend)
 

@@ -187,3 +187,10 @@ export function RequireTimetableSetup() {
   if (!can('timetable:setup:manage')) return <Navigate to="/restricted" replace />;
   return <Outlet />;
 }
+
+/** The schedule workspace and Needs Attention: whoever can edit lessons (School Admin, or Staff with the Scheduling Coordinator job). Faculty get the restricted page. */
+export function RequireTimetableSchedule() {
+  const { can } = useAuth();
+  if (!can('timetable:entry:edit')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}
