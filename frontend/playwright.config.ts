@@ -30,12 +30,12 @@ export default defineConfig({
     // these run first, on purpose.
     {
       name: 'people',
-      testMatch: /(people|students|spaces)\.spec\.ts/,
+      testMatch: /(people|students|spaces|timetable)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
     },
     {
       name: 'chromium',
-      testIgnore: /(people|students|spaces)\.spec\.ts/,
+      testIgnore: /(people|students|spaces|timetable)\.spec\.ts/,
       dependencies: ['people'],
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
     },

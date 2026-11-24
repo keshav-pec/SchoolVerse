@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 and 2: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -245,6 +245,19 @@ The **year and campus bar** at the top of the admin pages ("2026-27 · Mohali Ca
 **The room picker** (one component everywhere) lists rooms that can be picked first, best fit on top, with seats; the others are greyed out with the reason ("Taken by 8-B", "Under maintenance", "Not a classroom", "Floor or building closed"). When a room is too small the same **This room is too small** dialog opens everywhere, with **Choose Larger Room** (the free room we found) and **Keep Room Anyway** (asks for a reason). The Space Setup room panel links its **Home section** to Classroom Allocation, the room search also finds a room by the section that sits in it today ("8-A"), and the KPI strip adds **Recommended automatically** and **Setup completeness**. **Archive** of a used room now offers **Choose Replacement** (the suggested room is picked already; the sections move today, then the room is archived) and **Archive After Current Session**, and shows what moved.
 
 **Things that differ from the plan.** Shifts have no field yet (an "i" card on Current Rooms explains why two sections cannot share a room). Part 4 added two read-only API pieces: `GET /spaces/my-classrooms` (Faculty "My Classroom") and room search by section in `GET /physical-spaces?q=`. History is per section; a carried-forward row says where it came from ("Carried forward from VIII-A").
+
+## Timetable setup screens (Module 6, Part 2)
+
+Part 1 built the API (`/timetable-plans`, `/bell-schedules`, `/subject-schedule-requirements`, `/faculty-availability`, `/faculty-workload-rules`, `/teaching-groups`, `/timetable/access`). Part 2 adds the screens. The Schedule, Needs Attention and Daily Operations screens come in later parts.
+
+| Route | Who | What |
+|---|---|---|
+| `/timetable` | School Admin, or Staff with the Scheduling Coordinator job | **Overview.** The year and campus bar, then "Timetable setup needs N actions" (or "Ready to build"), four tiles (Classes & Subjects, Teachers, Rooms, Time) and a fix button on every item. A campus with no plan sees one big **Create Timetable Plan** button. **Open Schedule** is switched off until Part 4. |
+| `/timetable/setup?tab=` | same | Five tabs. The tab is kept in the address, so the fix buttons land on the right one. |
+
+Tabs: **School Week** (school days as toggles, school hours, period length, breaks, optional assembly, a live preview of the day with a timeline, **Create Daily Periods**) · **Daily Periods** (timeline per set, inline time edits with a red reason when periods overlap, **Insert Period**, make a copy for Junior or Saturday, **Who uses which**: many classes in one save, optional day rule, one section can differ) · **Subject Needs** (pick a class, fill periods a week, special room, double periods, **More**; a live total line; a section shows "Using class default" until **Change For This Section**; Reset; **Copy To Other Sections**) · **Teacher Availability** (click a box to cycle Available, Not available, Prefers, Prefers not; saves by itself; **Apply To More Teachers**, **Copy From Teacher**; workload limits that show "Using school default (6)") · **Teaching Groups** (cards with member count, teacher source and a health badge; **Fix** lists students in no group; add by hand).
+
+**Things that differ from the plan.** Teacher grid clicks and workload boxes save by themselves ("Saving…", "Saved"). Subject Needs uses a **Save Needs** button instead, because one wrong number would otherwise be sent before the total line is checked. Removing a school day is refused by the server with the list of lessons (a confirm dialog is not needed until lessons exist). Wording is in `frontend/src/features/timetable/help-copy.tsx`.
 
 ## Finance screens (Module 7, Part 2)
 

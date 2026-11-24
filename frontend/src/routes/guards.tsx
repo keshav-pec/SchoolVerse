@@ -180,3 +180,10 @@ export function RequireEmployeeLogin() {
   if (u.role !== 'FACULTY' && u.role !== 'STAFF' && !u.personId) return <NotFoundPage />;
   return <Outlet />;
 }
+
+/** Timetable setup: the School Admin, or Staff holding a Scheduling Coordinator job. Faculty only look at the timetable later, so they get the restricted page. */
+export function RequireTimetableSetup() {
+  const { can } = useAuth();
+  if (!can('timetable:setup:manage')) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}

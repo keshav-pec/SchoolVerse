@@ -49,6 +49,8 @@ const UI_MESSAGES: Record<string, string> = {
   PREVIEW_CHANGED: 'The numbers changed since you checked them. Press Check Again, then issue the bills.',
   IDEMPOTENCY_KEY_REQUIRED: 'Something went wrong while sending this. Please try again.',
   PLAN_VERSION_FROZEN: 'A published fee plan cannot be changed. Make a new version instead.',
+  PLAN_EXISTS: 'This campus already has a timetable plan for this year. Open it from the Timetable Overview.',
+  PLAN_READ_ONLY: 'This timetable plan is archived, so it cannot be changed.',
   ANOTHER_SESSION_ACTIVE: 'Another academic session is already active. Close it before activating this one.',
 };
 

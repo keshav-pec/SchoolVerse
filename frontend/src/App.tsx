@@ -37,6 +37,9 @@ import { SpaceImportsPage } from '@/features/spaces/imports-page';
 import { SpacesLayout } from '@/features/spaces/spaces-layout';
 import { SpaceTypesPage } from '@/features/spaces/types-page';
 import { WorkspacePage } from '@/features/spaces/workspace-page';
+import { TimetableLayout } from '@/features/timetable/context';
+import { TimetableOverviewPage } from '@/features/timetable/overview-page';
+import { TimetableSetupPage } from '@/features/timetable/setup-page';
 import { AttentionPage } from '@/features/students/attention-page';
 import { ExitsPage } from '@/features/students/exits-page';
 import { ImportPage } from '@/features/students/import-page';
@@ -86,6 +89,7 @@ import {
   RequireSetupComplete,
   RequireSpaceAccess,
   RequireSpacePermission,
+  RequireTimetableSetup,
 } from '@/routes/guards';
 
 function SetupHome() {
@@ -285,6 +289,19 @@ const router = createBrowserRouter([
                               { path: 'imports/:importId', element: <SpaceImportPage /> },
                             ],
                           },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    path: '/timetable',
+                    element: <RequireTimetableSetup />,
+                    children: [
+                      {
+                        element: <TimetableLayout />,
+                        children: [
+                          { index: true, element: <TimetableOverviewPage /> },
+                          { path: 'setup', element: <TimetableSetupPage /> },
                         ],
                       },
                     ],

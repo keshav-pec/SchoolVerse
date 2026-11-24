@@ -37,6 +37,7 @@ import {
   UserRound,
   UsersRound,
   Users,
+  CalendarRange,
 } from 'lucide-react';
 import { SchoolLogo } from '@/components/sv/school-logo';
 import { Avatar } from '@/components/ui/avatar';
@@ -162,6 +163,13 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    label: 'Timetable',
+    items: [
+      { to: '/timetable', label: 'Overview', Icon: CalendarRange, permission: 'timetable:setup:manage', end: true },
+      { to: '/timetable/setup', label: 'Setup', Icon: Settings2, permission: 'timetable:setup:manage' },
+    ],
+  },
+  {
     label: 'Finance',
     items: [
       { to: '/finance', label: 'Overview', Icon: IndianRupee, permission: 'finance:view', end: true },
@@ -243,6 +251,8 @@ const CRUMBS: [string, string[]][] = [
   ['/finance/fees', ['Finance', 'Student Fees']],
   ['/finance/settings', ['Finance', 'Settings']],
   ['/finance', ['Finance', 'Overview']],
+  ['/timetable/setup', ['Timetable', 'Setup']],
+  ['/timetable', ['Timetable', 'Overview']],
   ['/spaces/allocation', ['Campus', 'Classroom Allocation']],
   ['/spaces/rollover', ['Campus', 'Rollover']],
   ['/spaces/reports', ['Campus', 'Reports']],
