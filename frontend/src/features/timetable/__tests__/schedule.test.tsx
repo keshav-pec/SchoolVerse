@@ -57,7 +57,7 @@ const plan: TimetablePlanDTO = {
   version: 1,
 };
 
-const version: TimetableVersionDTO = { versionId: VERSION_ID, planId: PLAN_ID, versionNumber: 1, versionName: 'Draft 1', sourceVersionId: null, status: 'DRAFT', rev: 3, entryCount: 3, effectiveFrom: null, effectiveTo: null, publishedAt: null, createdAt: '2026-04-01T00:00:00.000Z' };
+const version: TimetableVersionDTO = { versionId: VERSION_ID, planId: PLAN_ID, versionNumber: 1, versionName: 'Draft 1', sourceVersionId: null, status: 'DRAFT', rev: 3, entryCount: 3, effectiveFrom: null, effectiveTo: null, publishedAt: null, createdAt: '2026-04-01T00:00:00.000Z', phase: 'DRAFT', publishedByName: null, publishedWarningCount: 0, publishedUnplacedCount: 0 };
 
 const period = (n: number, startMin: number, endMin: number, schedulable = true) => ({
   periodId: `p${n}`,

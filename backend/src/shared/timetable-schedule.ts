@@ -4,6 +4,7 @@
  */
 import type { SuitabilityTagCode } from './spaces';
 import type { Weekday } from './timetable';
+import type { VersionPhase } from './timetable-ops';
 
 // ───────────────────────────────────────────────────────────── versions
 
@@ -237,6 +238,13 @@ export interface TimetableVersionDTO {
   effectiveTo: string | null;
   publishedAt: string | null;
   createdAt: string;
+  /** Worked out from the status and the dates: Draft, Ready, Published (running), Upcoming, Superseded or Discarded. */
+  phase: VersionPhase;
+  /** Who published it. */
+  publishedByName: string | null;
+  /** Warnings and unplaced periods the publisher accepted. */
+  publishedWarningCount: number;
+  publishedUnplacedCount: number;
 }
 
 // ───────────────────────────────────────────────────────────── grid, coverage and workload

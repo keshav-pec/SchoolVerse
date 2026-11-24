@@ -28,6 +28,7 @@ import { Person } from '../modules/staff/person.model';
 import { seedStaffDemo } from '../modules/staff/staff.seed';
 import { seedFinanceDemo, wipeFinanceTenant } from '../modules/finance/finance.seed';
 import { seedSpacesDemo } from '../modules/spaces/spaces.seed';
+import { seedTimetableDemo } from '../modules/timetable/timetable.seed';
 import { Building, Floor, OutboxEvent, PhysicalSpace, SpaceAvailabilityBlock, SpaceChangeLog, SpaceImport, SpaceImportRow, SpaceType } from '../modules/spaces/space.models';
 import { seedStudentsDemo } from '../modules/students/students.seed';
 import { seedStudentLifecycleDemo } from '../modules/students/students.lifecycle.seed';
@@ -308,6 +309,8 @@ export async function seedDemo({ quiet = false, clean = false }: { quiet?: boole
           log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, a fee plan for every class, October and November billed, payments checked and matched, salaries for everyone, finished months closed; accounts@ is the Accountant, approver@ the Approver`);
           log(`    🏫 Campus: ${campus.rooms} rooms and spaces at Mohali and Chandigarh, and every section has a Home Classroom (carried forward to 2027-28)`);
           log('    👪 Parent portal: parent@greenfield.demo has two children');
+          const timetable = await seedTimetableDemo(ctx, { mohaliId: byCode('MOH') });
+          log(`    📅 Timetable: Class VIII (${timetable.sections} sections, ${timetable.periodsPerSection} periods a week each) built by Smart Draft and published from today, with nothing left to fix; the rest of the school is not on the timetable yet`);
         } else {
           log(`    💰 Finance: standard chart, FY 2026-27, State Bank ••••1234, Class VIII plan for ${finance.students} students, a sibling concession, a late-fee rule; accounts@ is the Accountant, approver@ the Approver`);
           log(`    🏫 Mohali campus: Main Academic Block with ${campus.rooms} rooms and spaces (a small room, a large room, one with no seat count)`);

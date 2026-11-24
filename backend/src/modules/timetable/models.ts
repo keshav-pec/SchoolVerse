@@ -1,5 +1,11 @@
 import { Schema, model } from 'mongoose';
 import {
+  OVERRIDE_ROLES,
+  OVERRIDE_STATUSES,
+  OVERRIDE_TYPES,
+  type OverrideRole,
+  type OverrideStatus,
+  type OverrideType,
   AVAILABILITY_KINDS,
   BELL_KINDS,
   CAPACITY_POLICIES,
@@ -441,6 +447,9 @@ export interface TimetableVersionDoc extends BaseDoc, AuditFields {
   effectiveTo: string | null;
   publishedAt: Date | null;
   publishedBy: string | null;
+  /** What the publisher accepted: warnings and periods that were still not placed. */
+  publishedWarningCount: number;
+  publishedUnplacedCount: number;
 }
 
 const versionSchema = new Schema<TimetableVersionDoc>(
@@ -457,6 +466,8 @@ const versionSchema = new Schema<TimetableVersionDoc>(
     effectiveTo: { type: String, default: null },
     publishedAt: { type: Date, default: null },
     publishedBy: { type: String, default: null },
+    publishedWarningCount: { type: Number, default: 0 },
+    publishedUnplacedCount: { type: Number, default: 0 },
   },
   baseSchemaOptions('timetable_versions'),
 );
@@ -744,3 +755,85 @@ runItemSchema.index({ tenantId: 1, versionId: 1, status: 1 });
 runItemSchema.index({ tenantId: 1, runId: 1, reason: 1 });
 runItemSchema.plugin(tenantScopePlugin);
 export const RunItem = model<RunItemDoc>('TimetableRunItem', runItemSchema);
+
+// ───────────────────────────────────────────────────────────── Part 5: one-day changes
+
+/** A change for one date. It points at a lesson of a published version and never edits it. */
+export interface OverrideDoc extends BaseDoc, AuditFields {
+  tenantId: string;
+  schoolId: string;
+  planId: string;
+  versionId: string;
+  entryId: string;
+  date: string;
+  weekday: string;
+  type: OverrideType;
+  /** New room, new subject, the other lesson of a swap… ids only. */
+  payload: Record<string, unknown>;
+  reason: string | null;
+  status: OverrideStatus;
+  /** Clashes someone accepted (overridable rules only), with their reasons. */
+  acknowledged: { rule: RuleCode; reason: string; by: string }[];
+  /** Groups the rows one bulk request made. */
+  batchId: string | null;
+  requestId: string | null;
+  cancelledAt: Date | null;
+  cancelledBy: string | null;
+}
+
+const overrideSchema = new Schema<OverrideDoc>(
+  {
+    ...common,
+    planId: { type: String, required: true, immutable: true },
+    // A one-day change moves to the new version's copy of the lesson when a revision is published.
+    versionId: { type: String, required: true },
+    entryId: { type: String, required: true },
+    date: { type: String, required: true },
+    weekday: { type: String, enum: WEEKDAYS, required: true },
+    type: { type: String, enum: OVERRIDE_TYPES, required: true, immutable: true },
+    payload: { type: Schema.Types.Mixed, default: () => ({}) },
+    reason: { type: String, default: null },
+    status: { type: String, enum: OVERRIDE_STATUSES, default: 'ACTIVE' },
+    acknowledged: { type: Schema.Types.Mixed, default: () => [] },
+    batchId: { type: String, default: null },
+    requestId: { type: String, default: null },
+    cancelledAt: { type: Date, default: null },
+    cancelledBy: { type: String, default: null },
+  },
+  { ...baseSchemaOptions('timetable_overrides'), minimize: false },
+);
+// At most one active change of the same kind for a lesson on a date.
+overrideSchema.index({ tenantId: 1, entryId: 1, date: 1, type: 1 }, { unique: true, partialFilterExpression: { status: 'ACTIVE' } });
+overrideSchema.index({ tenantId: 1, planId: 1, date: 1, status: 1 });
+overrideSchema.index({ tenantId: 1, requestId: 1 }, { unique: true, partialFilterExpression: { requestId: { $type: 'string' } } });
+overrideSchema.plugin(tenantScopePlugin);
+export const Override = model<OverrideDoc>('TimetableOverride', overrideSchema);
+
+/** Who is replaced and who covers, per change. `date` is copied so "covers this month" is one query. */
+export interface OverrideFacultyDoc extends BaseDoc, AuditFields {
+  tenantId: string;
+  schoolId: string;
+  overrideId: string;
+  planId: string;
+  date: string;
+  employeeId: string;
+  role: OverrideRole;
+  status: OverrideStatus;
+}
+
+const overrideFacultySchema = new Schema<OverrideFacultyDoc>(
+  {
+    ...common,
+    overrideId: { type: String, required: true, immutable: true },
+    planId: { type: String, required: true, immutable: true },
+    date: { type: String, required: true },
+    employeeId: { type: String, required: true, immutable: true },
+    role: { type: String, enum: OVERRIDE_ROLES, required: true },
+    status: { type: String, enum: OVERRIDE_STATUSES, default: 'ACTIVE' },
+  },
+  baseSchemaOptions('timetable_override_faculty'),
+);
+overrideFacultySchema.index({ tenantId: 1, overrideId: 1 });
+overrideFacultySchema.index({ tenantId: 1, employeeId: 1, date: 1, status: 1 });
+overrideFacultySchema.plugin(tenantScopePlugin);
+export const OverrideFaculty = model<OverrideFacultyDoc>('TimetableOverrideFaculty', overrideFacultySchema);

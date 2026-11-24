@@ -11,8 +11,11 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 export const listWords = (items: string[]) => (items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
 export const tagLabel = (code: string) => SPACE_SUITABILITY_TAGS.find((t) => t.code === code)?.label ?? code;
 
+/** What the Namer needs. The full snapshot has it, and so does the light loader used for reading a day. */
+export type NamerSource = Pick<Snapshot, 'facts' | 'teacherNames' | 'rooms' | 'strangerRooms' | 'groups' | 'periods'>;
+
 export class Namer {
-  constructor(readonly snap: Snapshot) {}
+  constructor(readonly snap: NamerSource) {}
 
   teacher(id: string) {
     return this.snap.teacherNames.get(id) ?? 'A teacher';
@@ -64,8 +67,8 @@ export class Namer {
   }
 }
 
-const cache = new WeakMap<Snapshot, Namer>();
-export const namerOf = (snap: Snapshot): Namer => {
+const cache = new WeakMap<NamerSource, Namer>();
+export const namerOf = (snap: NamerSource): Namer => {
   let n = cache.get(snap);
   if (!n) {
     n = new Namer(snap);

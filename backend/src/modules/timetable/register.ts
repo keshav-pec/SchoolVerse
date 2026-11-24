@@ -15,6 +15,8 @@ import {
   EntrySection,
   GenerationRun,
   GroupMembership,
+  Override,
+  OverrideFaculty,
   Requirement,
   RunItem,
   TeachingGroup,
@@ -38,6 +40,9 @@ async function removeLessons(tenantId: string, entryIds: string[], db: import('m
     ConflictOverride.deleteMany({ tenantId, entryId: { $in: entryIds } }, { session: db }),
     TimetableEntry.deleteMany({ tenantId, _id: { $in: entryIds } }, { session: db }),
   ]);
+  // One-day changes that point at a lesson that is gone go with it.
+  const gone = (await Override.find({ tenantId, entryId: { $in: entryIds } }).select('_id').session(db).lean<{ _id: string }[]>()).map((o) => o._id);
+  if (gone.length > 0) await Promise.all([OverrideFaculty.deleteMany({ tenantId, overrideId: { $in: gone } }, { session: db }), Override.deleteMany({ tenantId, _id: { $in: gone } }, { session: db })]);
 }
 
 /**
@@ -89,6 +94,8 @@ export function registerTimetableDependencies() {
           EntrySection.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
           EntryFaculty.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
           ConflictOverride.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
+          Override.deleteMany(byPlan, { session: db }),
+          OverrideFaculty.deleteMany(byPlan, { session: db }),
           TimetableEntry.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
           ChangeSet.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),
           RunItem.deleteMany({ tenantId, versionId: { $in: versionIds } }, { session: db }),

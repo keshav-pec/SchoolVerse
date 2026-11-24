@@ -798,3 +798,44 @@ export async function scheduleSchool(options: { lab?: boolean; needsLab?: boolea
   return { ...t, bell, maths, sci, rooms: { ...home, spare, small, lab }, versionId, draft, p, breakId, lesson, put, send };
 }
 export type ScheduleSchool = Awaited<ReturnType<typeof scheduleSchool>>;
+
+// ───────────────────────────────────────────────────────────── publishing and one-day changes (Module 6, Part 5)
+
+/** The next date on or after `from` that falls on this weekday, as `YYYY-MM-DD`. */
+export function nextDate(weekday: 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT' | 'SUN', from = today()) {
+  const index = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].indexOf(weekday);
+  const d = new Date(`${from}T00:00:00Z`);
+  while (d.getUTCDay() !== index) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+export const plusDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * `scheduleSchool()` with a small, known week placed by hand and published from today (Monday and Tuesday, Period 1 to 4):
+ *   MON  P1 8-A Maths · 8-B Science     P2 8-B Maths · 8-A Science     P3 8-C Maths      P4 8-C Science
+ *   TUE  P1 8-A Maths
+ * Maths is taught by `maths`, Science by `sci`. `spare` is a third teacher with no lessons and no assignments. Everything not placed is
+ * left unplaced on purpose (the publish tick covers it). `lessons` gives each placed lesson by name.
+ */
+export async function publishedSchool(options: { lab?: boolean } = {}) {
+  const t = await scheduleSchool({ lab: options.lab });
+  const place = async (section: 'A' | 'B' | 'C', subject: 'MATH' | 'SCI', weekday: string, period: number) => {
+    const res = await t.put(t.lesson(section, subject, weekday, period));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return (res.body.data as { entries: { entryId: string }[] }).entries[0]!.entryId;
+  };
+  const lessons = {
+    monAMath: await place('A', 'MATH', 'MON', 1),
+    monBSci: await place('B', 'SCI', 'MON', 1),
+    monBMath: await place('B', 'MATH', 'MON', 2),
+    monASci: await place('A', 'SCI', 'MON', 2),
+    monCMath: await place('C', 'MATH', 'MON', 3),
+    monCSci: await place('C', 'SCI', 'MON', 4),
+    tueAMath: await place('A', 'MATH', 'TUE', 1),
+  };
+  const spare = await addActiveEmployee(t);
+  const res = await t.send('post', `/timetable-versions/${t.versionId}/publish`, { acknowledgeWarnings: true });
+  expect(res.status, JSON.stringify(res.body)).toBe(200);
+  return { ...t, spare, lessons, monday: nextDate('MON'), tuesday: plusDays(nextDate('MON'), 1), published: (res.body.data as { version: TimetableVersionDTO }).version };
+}
+export type PublishedSchool = Awaited<ReturnType<typeof publishedSchool>>;

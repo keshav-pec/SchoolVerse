@@ -298,13 +298,14 @@ describe('isolation and permissions (TT-49)', () => {
     expect(await SecurityEvent.countDocuments({ tenantId: t.tenantId, type: 'CROSS_SCOPE_DENIED', actorUserId: chd.userId })).toBe(3);
   });
 
-  it('QA TT-49: Faculty may look at the schedule but never change it; a coordinator builds it but cannot override a clash', async () => {
+  it('QA TT-49: Faculty see published timetables only (a draft is a 404) and never change anything; a coordinator builds it but cannot override a clash', async () => {
     const t = await scheduleSchool();
     const lesson = saved(await t.put(t.lesson('A', 'MATH', 'MON', 1))).entries[0]!;
     const teacher = await addActiveEmployee(t);
     const faculty = await loginAs(t, 'FACULTY', teacher);
-    expect((await t.send('get', `/timetable-versions/${t.versionId}/grid?view=teacher&id=${t.maths.employeeId}`, {}, faculty.agent)).status).toBe(200);
-    expect((await t.send('get', `/timetable-versions/${t.versionId}/attention`, {}, faculty.agent)).status).toBe(200);
+    expect((await t.send('get', `/timetable-versions/${t.versionId}/grid?view=teacher&id=${t.maths.employeeId}`, {}, faculty.agent)).status).toBe(404);
+    expect((await t.send('get', `/timetable-versions/${t.versionId}/attention`, {}, faculty.agent)).status).toBe(404);
+    expect(ok<{ versionId: string }[]>(await t.send('get', `/timetable-plans/${t.planId}/versions`, {}, faculty.agent))).toEqual([]);
     for (const res of [
       await t.put(t.lesson('B', 'MATH', 'TUE', 1), faculty.agent),
       await t.send('patch', `/timetable-entries/${lesson.entryId}`, { notes: 'x' }, faculty.agent),
@@ -325,7 +326,8 @@ describe('isolation and permissions (TT-49)', () => {
     expect(await AuditEvent.countDocuments({ tenantId: t.tenantId, entityType: 'timetable_entry', actorId: staff.userId })).toBe(2);
     t.unwrap(await t.tt.put(`/timetable/access/${staff.userId}`, { bundles: ['FRONT_OFFICE'] }));
     expect((await t.put(t.lesson('C', 'MATH', 'TUE', 2), staff.agent)).status).toBe(403);
-    expect((await t.send('get', `/timetable-versions/${t.versionId}/grid?view=section&id=${t.sections.A}`, {}, staff.agent)).status).toBe(200);
+    // The front office reads published timetables only, never a draft.
+    expect((await t.send('get', `/timetable-versions/${t.versionId}/grid?view=section&id=${t.sections.A}`, {}, staff.agent)).status).toBe(404);
   });
 
   it('QA TT-49: the first draft of a plan is made once, deleting a draft session takes its lessons with it, and a closed session is read-only', async () => {

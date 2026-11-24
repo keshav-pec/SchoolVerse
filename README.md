@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 4: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 5: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -269,6 +269,25 @@ Code: `backend/src/modules/timetable/engine/` (the one clash checker), `schedule
 | Reads | `GET /timetable-versions/:id/grid?view=section\|teacher\|room\|group&id=`, `/changes?since=`, `/history`, `/health`, `/attention`. |
 | Last year | `GET /timetable-plans/:id/previous-session`, `POST …/copy-previous-session` (`PREVIEW` or `COMMIT`), `POST /timetable-run-items/:id/accept`, `/dismiss`, `POST /timetable-run-items/accept-group`. |
 | Smart Draft | `POST /timetable-versions/:id/smart-draft` (`FILL_GAPS` or `START_FRESH` with `confirm`). Deterministic; plans in memory, saves in one transaction, re-plans up to 3 times if someone edited meanwhile (`SMART_DRAFT_BUSY`), stops at 30 seconds with a `PARTIAL` run. |
+
+## Publishing, one-day changes and reports (Module 6, Part 5, backend)
+
+Code: `backend/src/modules/timetable/schedule/` (`publish.service`, `override.service`, `absence.service`, `day`, `pick`, `effective.service`, `daily.service`, `report.service`, `overview.service`), `engine/effective.ts` and `engine/lite.ts`, routes in `ops.routes.ts`, seed in `timetable.seed.ts`. Tests: `tests/timetable-ops.test.ts` (20).
+
+| Area | What it does |
+|---|---|
+| Versions | `POST /timetable-versions/:id/validate` (every lesson through the one checker, section completeness), `/mark-ready` (`timetable:review`, needs zero clashes, any edit sends it back to Draft), `/publish { effectiveFrom, acknowledgeWarnings }` (`timetable:publish`; `PUBLISH_BLOCKED` while a clash remains, `ACKNOWLEDGE_REQUIRED` for warnings or unplaced periods, counts stored), `/clone` (a Revision with new lesson ids; `DRAFT_EXISTS` while a draft is open), `/discard`, `GET …/compare?to=`. A future start date leaves the running timetable until the day before; the phase (Draft, Ready, Published, Upcoming, Superseded) is worked out from dates. |
+| One-day changes | `POST /timetable-overrides` (`SUBSTITUTE_FACULTY`, `ROOM_CHANGE`, `CLASS_CANCELLED`, `PERIOD_SWAP`, `SUBJECT_CHANGE`, `SPECIAL_ACTIVITY`, `COMBINED_CLASS`), `PATCH`, `POST …/:id/cancel`, `POST /timetable-overrides/bulk-cancel` (a lesson list, a section, or the whole campus day), `GET /timetable-overrides?planId&date`. Each is judged by the same checker on the real date (`engine/check.ts` with `onDate`), inside a transaction that locks the plan. The weekly lessons are never touched. |
+| Absence and cover | `POST /faculty-absence`, `/impact`, `/:id/cancel`, `GET /faculty-absence`; `POST /substitutions/recommend` (subject, then class, then section; free; light day; fewest covers this month) and `/bulk` (valid ones save, failures say why). |
+| Room changes | `POST /room-changes/impact`, `/recommend`, `/apply`. A closed or taken room is never offered. |
+| Reading | `GET /daily-schedule?planId\|locationId&date`, `GET /schedule/effective` (section, teacher or `me`, room, student, group; up to 31 days; a parent only for their own child), `GET /timetable/section\|teacher\|space\|teaching-group/:id`, `GET /timetable/reports/:type?planId&format=json\|csv` (7 reports; CSV is audited and spreadsheet-safe), `GET /timetable/overview?locationId`. |
+| Drafts | Anyone without a building permission (Faculty, front office, substitution manager) gets a 404 for a draft version and sees published versions only. |
+
+Seed: `npm run seed` builds Class VIII at Mohali (Maths 6, Science 5, Social Studies 4, PE 2, Art 2 a week) with the real Smart Draft and publishes it from today with zero clashes, zero warnings and zero Needs Attention. Every other subject of the campus is set to 0 periods ("not on the timetable yet"). The test and e2e seed (`seedDemo()` without `clean`) has no timetable, because the Playwright specs create their own.
+
+## Schedule for other modules
+
+Attendance, Homework, Communication and Exams read the schedule only through `timetableService` (`getEffectiveSchedule`, `getEntryContext`, `isClassHeld`) and store `timetableEntryId` and `date`. **Do not rebuild versions and overrides yourself.** See `backend/src/modules/timetable/CONTRACTS.md`.
 
 ## Timetable setup screens (Module 6, Part 2)
 

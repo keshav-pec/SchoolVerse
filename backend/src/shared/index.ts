@@ -29,4 +29,6 @@ export * from './timetable';
 export * from './schemas/timetable';
 export * from './timetable-schedule';
 export * from './schemas/timetable-schedule';
+export * from './timetable-ops';
+export * from './schemas/timetable-ops';
 export * from './data-classification';

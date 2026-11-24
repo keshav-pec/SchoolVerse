@@ -77,10 +77,15 @@ function indexRequirements(rows: RequirementDoc[], facts: Snapshot['facts']): Re
   };
 }
 
-export async function loadSnapshot(ctx: ServiceContext, plan: TimetablePlanDoc, version: Pick<TimetableVersionDoc, '_id' | 'rev'>, db?: ClientSession): Promise<Snapshot> {
+export interface SnapshotOptions {
+  /** Read the plan's data as of this date and judge a real day (one-day changes) instead of the recurring week. */
+  asOf?: string;
+}
+
+export async function loadSnapshot(ctx: ServiceContext, plan: TimetablePlanDoc, version: Pick<TimetableVersionDoc, '_id' | 'rev'>, db?: ClientSession, options: SnapshotOptions = {}): Promise<Snapshot> {
   const session = await loadSession(ctx, plan.academicSessionId, db);
   const today = await todayFor(ctx);
-  const day = clampDate(today, plan.effectiveFrom, plan.effectiveTo);
+  const day = options.asOf ?? clampDate(today, plan.effectiveFrom, plan.effectiveTo);
   const byPlan = { tenantId: ctx.tenantId, planId: plan._id };
 
   const [facts, bell, entryDocs, sectionDocs, facultyDocs, overrideDocs, teachers, availDocs, exceptionDocs, workloadDocs, roomList, groupFacts, assignments, requirementDocs] = await Promise.all([
@@ -122,7 +127,7 @@ export async function loadSnapshot(ctx: ServiceContext, plan: TimetablePlanDoc, 
   const strangerIds = [...new Set(recs.map((e) => e.spaceId).filter((id): id is string => Boolean(id) && !rooms.has(id!)))];
   const strangers = await spaceService.roomCampuses(ctx, strangerIds);
   const strangerRooms = new Map([...strangers].map(([id, s]) => [id, { spaceName: s.spaceName, archived: s.archived && s.locationId === plan.locationId }]));
-  const closures = await spaceService.longClosures(ctx, [...rooms.keys()], day, plan.effectiveTo);
+  const closures = options.asOf ? await spaceService.longClosures(ctx, [...rooms.keys()], day, day, 1) : await spaceService.longClosures(ctx, [...rooms.keys()], day, plan.effectiveTo);
 
   const homeRoom = await spaceService.homeClassroomRooms(ctx, facts.sections.map((s) => s._id), day, session.endDate);
 
@@ -171,6 +176,7 @@ export async function loadSnapshot(ctx: ServiceContext, plan: TimetablePlanDoc, 
     versionId: version._id,
     rev: version.rev,
     day,
+    onDate: options.asOf ?? null,
     facts,
     bell,
     periods,
@@ -200,13 +206,14 @@ async function loadOutside(ctx: ServiceContext, plan: TimetablePlanDoc, employee
   if (employeeIds.length === 0) return out;
   const others = await TimetablePlan.find({ tenantId: ctx.tenantId, locationId: { $ne: plan.locationId }, status: { $ne: 'ARCHIVED' }, effectiveFrom: { $lte: plan.effectiveTo }, effectiveTo: { $gte: plan.effectiveFrom } }).session(db ?? null).lean<TimetablePlanDoc[]>();
   if (others.length === 0) return out;
-  const versions = await TimetableVersion.find({ tenantId: ctx.tenantId, planId: { $in: others.map((p) => p._id) }, status: 'PUBLISHED' }).session(db ?? null).lean<TimetableVersionDoc[]>();
+  const versions = await TimetableVersion.find({ tenantId: ctx.tenantId, planId: { $in: others.map((p) => p._id) }, status: 'PUBLISHED', $and: [{ $or: [{ effectiveFrom: null }, { effectiveFrom: { $lte: plan.effectiveTo } }] }, { $or: [{ effectiveTo: null }, { effectiveTo: { $gte: plan.effectiveFrom } }] }] }).session(db ?? null).lean<TimetableVersionDoc[]>();
   if (versions.length === 0) return out;
   const rows = await EntryFaculty.find({ tenantId: ctx.tenantId, versionId: { $in: versions.map((v) => v._id) }, employeeId: { $in: employeeIds } }).session(db ?? null).lean<EntryFacultyDoc[]>();
   if (rows.length === 0) return out;
   const entries = await TimetableEntry.find({ tenantId: ctx.tenantId, _id: { $in: rows.map((r) => r.entryId) } }).select('weekday startMin endMin versionId').session(db ?? null).lean<Pick<TimetableEntryDoc, '_id' | 'weekday' | 'startMin' | 'endMin' | 'versionId'>[]>();
   const entryOf = new Map(entries.map((e) => [e._id, e]));
   const planOfVersion = new Map(versions.map((v) => [v._id, others.find((p) => p._id === v.planId)!]));
+  const versionOf = new Map(versions.map((v) => [v._id, v]));
   const locations = await Location.find({ tenantId: ctx.tenantId, _id: { $in: others.map((p) => p.locationId) } }).select('displayName').lean<{ _id: string; displayName: string }[]>();
   const nameOf = new Map(locations.map((l) => [l._id, l.displayName]));
   for (const r of rows) {
@@ -214,7 +221,8 @@ async function loadOutside(ctx: ServiceContext, plan: TimetablePlanDoc, employee
     const p = planOfVersion.get(r.versionId);
     if (!e || !p) continue;
     const list = out.get(r.employeeId) ?? [];
-    list.push({ weekday: e.weekday as Weekday, startMin: e.startMin, endMin: e.endMin, locationName: nameOf.get(p.locationId) ?? 'another campus', from: p.effectiveFrom, to: p.effectiveTo });
+    const v = versionOf.get(r.versionId)!;
+    list.push({ weekday: e.weekday as Weekday, startMin: e.startMin, endMin: e.endMin, locationName: nameOf.get(p.locationId) ?? 'another campus', from: v.effectiveFrom ?? p.effectiveFrom, to: v.effectiveTo ?? p.effectiveTo });
     out.set(r.employeeId, list);
   }
   return out;

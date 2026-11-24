@@ -286,6 +286,11 @@ export const ERROR_CODES = {
   SMART_DRAFT_BUSY: { status: 409, message: 'Someone is editing. Try again.' },
   ENTRY_FIXED: { status: 409, message: 'This is a fixed period. Unlock it first.' },
   ENTRY_INVALID: { status: 422, message: 'This lesson is not valid.' },
+  PUBLISH_BLOCKED: { status: 409, message: 'This timetable still has clashes, so it cannot be published yet. Fix them first.' },
+  ACKNOWLEDGE_REQUIRED: { status: 409, message: 'Some periods are not placed or have warnings. Tick the box to publish anyway.' },
+  EFFECTIVE_DATE_INVALID: { status: 422, message: 'This start date is not allowed.' },
+  OVERRIDE_INVALID: { status: 422, message: 'This one-day change is not valid.' },
+  NO_PUBLISHED_TIMETABLE: { status: 409, message: 'There is no published timetable for this date.' },
   COPY_NOT_AVAILABLE: { status: 409, message: "There is no published timetable from the last session at this campus to copy." },
 } as const;
 

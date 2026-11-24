@@ -143,8 +143,8 @@ export function issuesFor(snap: Snapshot, e: EntryRec): Issue[] {
     }
   }
 
-  // ── Teachers: assigned to this subject in these sections
-  if (isSubject && e.subjectOfferingId) {
+  // ── Teachers: assigned to this subject in these sections (a one-day substitute does not need an assignment)
+  if (isSubject && e.subjectOfferingId && !snap.onDate) {
     const allowed = allowedTeachers(snap, e);
     const subject = n.subject(e.subjectOfferingId);
     const target = e.groupId ? n.group(e.groupId) : n.sections(e.sectionIds);
@@ -161,10 +161,10 @@ export function issuesFor(snap: Snapshot, e: EntryRec): Issue[] {
     const name = n.teacher(t.employeeId);
     for (const o of snap.board.ofTeacher(t.employeeId, e.weekday)) {
       if (o.id === e.id || !overlaps(e, o)) continue;
-      const free = teacherFreeSlots(snap, t.employeeId, e);
+      const free = snap.onDate ? [] : teacherFreeSlots(snap, t.employeeId, e);
       add('TEACHER_BUSY', `${name} is already teaching ${n.lesson(o)} on ${n.when(o.weekday, o.periodId)}.${free.length ? ` ${name} is free on ${listWords(free)}.` : ''}`, { who: [name], blockedBy: [o.id], fix: FIX.move, culprit: { kind: 'TEACHER', id: t.employeeId } });
     }
-    for (const o of snap.outside.get(t.employeeId) ?? []) {
+    for (const o of (snap.outside.get(t.employeeId) ?? []).filter((x) => !snap.onDate || (x.from <= snap.onDate && snap.onDate <= x.to))) {
       if (o.weekday === e.weekday && overlaps(e, { weekday: o.weekday, startMin: o.startMin, endMin: o.endMin })) add('TEACHER_BUSY', `${name} is teaching at ${o.locationName} on ${n.weekday(o.weekday)}, ${n.time(o.startMin, o.endMin)}.`, { who: [name], fix: FIX.move, culprit: { kind: 'TEACHER', id: t.employeeId } });
     }
   }
@@ -206,10 +206,12 @@ export function issuesFor(snap: Snapshot, e: EntryRec): Issue[] {
     for (const x of snap.exceptions.get(t.employeeId) ?? []) {
       const days = (Date.parse(x.dateTo) - Date.parse(x.dateFrom)) / 86_400_000 + 1;
       const timeHit = x.startMin === null || x.endMin === null || (x.startMin < e.endMin && e.startMin < x.endMin);
-      if (days >= 7 && timeHit) add('TEACHER_UNAVAILABLE', `${name} is away from ${x.dateFrom} to ${x.dateTo}.`, { who: [name], fix: FIX.teacher, culprit: { kind: 'TEACHER', id: t.employeeId } });
+      if (snap.onDate) {
+        if (x.dateFrom <= snap.onDate && snap.onDate <= x.dateTo && timeHit) add('TEACHER_UNAVAILABLE', `${name} is ${x.kind === 'ABSENT' ? 'away' : 'not available'} on ${snap.onDate}${x.startMin !== null && x.endMin !== null ? `, ${n.time(x.startMin, x.endMin)}` : ''}.`, { who: [name], fix: FIX.teacher, culprit: { kind: 'TEACHER', id: t.employeeId } });
+      } else if (days >= 7 && timeHit) add('TEACHER_UNAVAILABLE', `${name} is away from ${x.dateFrom} to ${x.dateTo}.`, { who: [name], fix: FIX.teacher, culprit: { kind: 'TEACHER', id: t.employeeId } });
     }
     const gap = snap.plan.transitionMinutes;
-    for (const o of snap.outside.get(t.employeeId) ?? []) {
+    for (const o of (snap.outside.get(t.employeeId) ?? []).filter((x) => !snap.onDate || (x.from <= snap.onDate && snap.onDate <= x.to))) {
       if (o.weekday !== e.weekday) continue;
       const between = o.endMin <= e.startMin ? e.startMin - o.endMin : o.startMin >= e.endMin ? o.startMin - e.endMin : null;
       if (between !== null && between < gap) add('TRAVEL_TIME', `${name} has only ${plural(between, 'minute')} to get between ${o.locationName} and this campus (${gap} are needed).`, { who: [name] });
@@ -233,15 +235,15 @@ export function issuesFor(snap: Snapshot, e: EntryRec): Issue[] {
       if (missing.length > 0) add('ROOM_NOT_SUITABLE', `${n.subject(e.subjectOfferingId)} needs ${listWords(needs.map(tagLabel))}, and ${roomName} is not set up for ${missing.length === 1 ? 'it' : 'all of that'}.`, { who: [roomName], fix: FIX.room, culprit: { kind: 'ROOM', id: e.spaceId } });
       const students = studentsIn(snap, e);
       if (room.capacity !== null && students > room.capacity) add('ROOM_TOO_SMALL', `${roomName} holds ${room.capacity}, but ${plural(students, 'student')} need a seat.`, { who: [roomName], severity: snap.plan.capacityPolicy === 'BLOCK' ? 'CLASH' : 'WARNING', fix: FIX.room });
-      if (isSubject && needs.length === 0 && e.sectionIds.length === 1) {
+      if (isSubject && needs.length === 0 && e.sectionIds.length === 1 && !snap.onDate) {
         const home = snap.homeRoom.get(e.sectionIds[0]!);
         if (home && home !== e.spaceId && snap.rooms.has(home)) add('NOT_HOME_ROOM', `${n.section(e.sectionIds[0]!)} usually sits in ${n.room(home)}. This lesson is in ${roomName}.`, { who: [roomName] });
       }
     }
   }
 
-  // ── Soft rules about the subject
-  if (isSubject && e.subjectOfferingId) {
+  // ── Soft rules about the subject (about the whole week, so not for one day)
+  if (isSubject && e.subjectOfferingId && !snap.onDate) {
     const targets: { label: string; req: ReturnType<Snapshot['requirements']['forSection']>; lessons: EntryRec[] }[] = [];
     if (e.groupId) targets.push({ label: n.group(e.groupId), req: snap.requirements.forGroup(e.groupId), lessons: snap.plan.operatingDays.flatMap((d) => snap.board.groupLessons(d).filter((o) => o.groupId === e.groupId)) });
     else for (const s of e.sectionIds) targets.push({ label: n.section(s), req: snap.requirements.forSection(s, e.subjectOfferingId), lessons: snap.plan.operatingDays.flatMap((d) => snap.board.ofSection(s, d).filter((o) => o.subjectOfferingId === e.subjectOfferingId && o.entryType === 'SUBJECT' && !o.groupId)) });
@@ -272,7 +274,7 @@ export function issuesFor(snap: Snapshot, e: EntryRec): Issue[] {
     if (lim.maxPerDay !== null && day.length > lim.maxPerDay) add('TEACHER_LOAD', `${name} would have ${plural(day.length, 'period')} on ${n.weekday(e.weekday)}. The limit is ${lim.maxPerDay}.`, { who: [name] });
     const run = lim.maxConsecutive !== null ? runOf(snap, day, e) : 0;
     if (lim.maxConsecutive !== null && run > lim.maxConsecutive) add('TEACHER_LOAD', `${name} would teach ${run} periods in a row on ${n.weekday(e.weekday)}. The limit is ${lim.maxConsecutive}.`, { who: [name] });
-    if (lim.maxPerWeek !== null) {
+    if (lim.maxPerWeek !== null && !snap.onDate) {
       const week = weekLessons(snap, t.employeeId).length;
       if (week > lim.maxPerWeek) add('TEACHER_LOAD', `${name} would have ${plural(week, 'period')} a week. The limit is ${lim.maxPerWeek}.`, { who: [name] });
     }

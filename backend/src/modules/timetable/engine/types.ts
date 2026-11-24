@@ -110,6 +110,8 @@ export interface Snapshot {
   rev: number;
   /** The date the plan's data was read for (today, held inside the plan's dates). */
   day: string;
+  /** Set when the board is one real date (the published lessons with that day's one-day changes). The same rules apply, minus the weekly ones. */
+  onDate: string | null;
   facts: PlanFacts;
   bell: BellContext;
   periods: Map<string, PeriodRec>;
