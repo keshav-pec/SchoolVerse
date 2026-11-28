@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ListChecks, MoreHorizontal, Undo2 } from 'lucide-react';
 import type { CheckResultDTO, GridCellDTO, GridPeriodDTO, GridView, TimetablePlanDTO, TimetableVersionDTO, Weekday } from '@shared';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -14,7 +15,8 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useCampusRooms } from '../../spaces/api';
 import { useStudentContext } from '../../students/context';
-import { TT, useBellResolution, useGroups, usePlanTeachers } from '../api';
+import { TT, useBellResolution, useGroups, usePlanTeachers, useTimetableMutation } from '../api';
+import { ops } from '../ops/api';
 import { CreatePlanCard, useTimetablePlan } from '../context';
 import { TIPS } from '../help-copy';
 import { AddLesson, type AddTarget } from './add-lesson';
@@ -44,6 +46,8 @@ export function SchedulePage() {
   const versions = useVersions(plan?.planId);
   const [result, setResult] = useState<RunResult | null>(null);
   const open = versions.data?.find(isOpen);
+  // With no draft, the published timetable is shown read-only, with a way to make a revision.
+  const published = versions.data?.find((v) => v.phase === 'ACTIVE') ?? versions.data?.find((v) => v.phase === 'UPCOMING');
 
   return (
     <>
@@ -51,13 +55,38 @@ export function SchedulePage() {
       {(loading || versions.isLoading) && <Skeleton className="h-64 rounded-card" role="status" aria-label="Loading" />}
       {versions.isError && <ErrorState error={versions.error} onRetry={() => void versions.refetch()} />}
       {!loading && !plan && <CreatePlanCard />}
-      {plan && versions.data && !open && <StartPage plan={plan} onResult={setResult} />}
+      {plan && versions.data && !open && !published && <StartPage plan={plan} onResult={setResult} />}
+      {plan && !open && published && (
+        <EditorProvider versionId={published.versionId}>
+          <PublishedBanner version={published} />
+          <Workspace plan={plan} version={published} result={result} onResult={setResult} />
+        </EditorProvider>
+      )}
       {plan && open && (
         <EditorProvider versionId={open.versionId}>
           <Workspace plan={plan} version={open} result={result} onResult={setResult} />
         </EditorProvider>
       )}
     </>
+  );
+}
+
+/** "This timetable is published. To change it, create a revision." */
+function PublishedBanner({ version }: { version: TimetableVersionDTO }) {
+  const { can } = useAuth();
+  const navigate = useNavigate();
+  const revise = useTimetableMutation(() => ops.clone(version.versionId), { success: 'Revision made. You can change it now.' });
+  return (
+    <Alert tone="info" title="This timetable is published" className="mb-3">
+      <span className="flex flex-wrap items-center gap-3">
+        <span>To change it, create a revision. Nothing changes for anyone until you publish the revision.</span>
+        {can('timetable:draft:create') && (
+          <Button size="sm" loading={revise.isPending} loadingText="Making a copy…" onClick={() => revise.mutate(undefined, { onSuccess: () => navigate('/timetable/schedule') })}>
+            Create Revision
+          </Button>
+        )}
+      </span>
+    </Alert>
   );
 }
 

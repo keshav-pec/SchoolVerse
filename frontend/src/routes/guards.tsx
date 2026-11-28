@@ -194,3 +194,10 @@ export function RequireTimetableSchedule() {
   if (!can('timetable:entry:edit')) return <Navigate to="/restricted" replace />;
   return <Outlet />;
 }
+
+/** Timetable screens that more than one kind of person uses. The server decides the rest; this only sends people away from a page they can never use. */
+export function RequireTimetableAny({ any }: { any: Permission[] }) {
+  const { can } = useAuth();
+  if (!any.some((p) => can(p))) return <Navigate to="/restricted" replace />;
+  return <Outlet />;
+}

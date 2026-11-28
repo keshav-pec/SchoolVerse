@@ -76,11 +76,11 @@ describe('Parent portal (Module 4, Part 4)', () => {
     expect(screen.getByLabelText('Primary parent')).toHaveTextContent('Simran Kaur');
   });
 
-  it('shows no admin controls: only the four portal links, no sidebar, no edit buttons', async () => {
+  it('shows no admin controls: only the five portal links, no sidebar, no edit buttons', async () => {
     portal('/parent');
     await screen.findByLabelText('Selected child');
     const nav = screen.getByRole('navigation', { name: 'Parent portal' });
-    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Home', 'My Child', 'Documents', 'Requests']);
+    expect(within(nav).getAllByRole('link').map((l) => l.textContent)).toEqual(['Home', 'My Child', 'Timetable', 'Documents', 'Requests']);
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
     for (const name of [/add student/i, /edit/i, /remove access/i, /change section/i, /delete/i]) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
   });

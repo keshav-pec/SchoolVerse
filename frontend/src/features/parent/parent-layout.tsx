@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ROLE_LABELS, type ParentChildDTO } from '@shared';
-import { FileText, House, Inbox, PanelLeftClose, PanelLeftOpen, ReceiptText, UserRound } from 'lucide-react';
+import { CalendarDays, FileText, House, Inbox, PanelLeftClose, PanelLeftOpen, ReceiptText, UserRound } from 'lucide-react';
 import { CollapsedTip, UserMenu } from '@/layouts/app-shell';
 import { SchoolLogo } from '@/components/sv/school-logo';
 import { useSession } from '@/lib/auth';
@@ -68,6 +68,7 @@ interface Tab {
 const TABS: Tab[] = [
   { label: 'Home', Icon: House, to: (c) => (c ? `/parent?child=${c}` : '/parent'), match: (p) => p === '/parent' },
   { label: 'My Child', Icon: UserRound, to: (c) => (c ? `/parent/children/${c}` : '/parent'), match: (p) => p.startsWith('/parent/children') },
+  { label: 'Timetable', Icon: CalendarDays, to: (c) => (c ? `/parent/timetable?child=${c}` : '/parent/timetable'), match: (p) => p.startsWith('/parent/timetable') },
   { label: 'Documents', Icon: FileText, to: (c) => (c ? `/parent/documents?child=${c}` : '/parent/documents'), match: (p) => p.startsWith('/parent/documents') },
   { label: 'Fees', Icon: ReceiptText, to: () => '/parent/fees', match: (p) => p.startsWith('/parent/fees') },
   { label: 'Requests', Icon: Inbox, to: () => '/parent/requests', match: (p) => p.startsWith('/parent/requests') },
@@ -128,7 +129,7 @@ export function ParentLayout() {
         </NavLink>
         </CollapsedTip>
         <nav aria-label="Parent portal" className="md:mt-3 md:flex-1">
-          <ul className={cn('mx-auto grid max-w-3xl md:block md:max-w-none md:space-y-0.5', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
+          <ul className={cn('mx-auto grid max-w-3xl md:block md:max-w-none md:space-y-0.5', tabs.length >= 6 ? 'grid-cols-6' : tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
             {tabs.map((t) => {
               const active = t.match(location.pathname);
               return (

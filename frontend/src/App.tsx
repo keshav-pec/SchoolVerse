@@ -42,6 +42,13 @@ import { TimetableOverviewPage } from '@/features/timetable/overview-page';
 import { TimetableSetupPage } from '@/features/timetable/setup-page';
 import { AttentionPage as ScheduleAttentionPage } from '@/features/timetable/schedule/attention-page';
 import { SchedulePage, StartRoute } from '@/features/timetable/schedule/schedule-page';
+import { MyTimetablePage } from '@/features/me/my-timetable-page';
+import { ParentTimetablePage } from '@/features/parent/parent-timetable-page';
+import { DailyPage } from '@/features/timetable/ops/daily-page';
+import { PublishPage } from '@/features/timetable/ops/publish-page';
+import { ReportsPage } from '@/features/timetable/ops/reports-page';
+import { VersionsPage } from '@/features/timetable/ops/versions-page';
+import { ViewsPage } from '@/features/timetable/ops/views-page';
 import { AttentionPage } from '@/features/students/attention-page';
 import { ExitsPage } from '@/features/students/exits-page';
 import { ImportPage } from '@/features/students/import-page';
@@ -91,6 +98,7 @@ import {
   RequireSetupComplete,
   RequireSpaceAccess,
   RequireSpacePermission,
+  RequireTimetableAny,
   RequireTimetableSchedule,
   RequireTimetableSetup,
 } from '@/routes/guards';
@@ -156,6 +164,7 @@ const router = createBrowserRouter([
                   { path: 'documents', element: <ParentDocumentsPage /> },
                   { path: 'requests', element: <ParentRequestsPage /> },
                   { path: 'fees', element: <ParentFeesPage /> },
+                  { path: 'timetable', element: <ParentTimetablePage /> },
                 ],
               },
             ],
@@ -298,24 +307,48 @@ const router = createBrowserRouter([
                   },
                   {
                     path: '/timetable',
-                    element: <RequireTimetableSetup />,
+                    element: <TimetableLayout />,
                     children: [
                       {
-                        element: <TimetableLayout />,
+                        element: <RequireTimetableSetup />,
                         children: [
                           { index: true, element: <TimetableOverviewPage /> },
                           { path: 'setup', element: <TimetableSetupPage /> },
-                          {
-                            element: <RequireTimetableSchedule />,
-                            children: [
-                              { path: 'schedule', element: <SchedulePage /> },
-                              { path: 'start', element: <StartRoute /> },
-                              { path: 'attention', element: <ScheduleAttentionPage /> },
-                            ],
-                          },
                         ],
                       },
+                      {
+                        element: <RequireTimetableSchedule />,
+                        children: [
+                          { path: 'schedule', element: <SchedulePage /> },
+                          { path: 'start', element: <StartRoute /> },
+                          { path: 'attention', element: <ScheduleAttentionPage /> },
+                        ],
+                      },
+                      {
+                        element: <RequireTimetableAny any={['timetable:draft:create', 'timetable:review', 'timetable:publish']} />,
+                        children: [
+                          { path: 'versions', element: <VersionsPage /> },
+                          { path: 'versions/:id/publish', element: <PublishPage /> },
+                        ],
+                      },
+                      {
+                        element: <RequireTimetableAny any={['timetable:override:manage', 'timetable:substitution:manage', 'timetable:report:view']} />,
+                        children: [{ path: 'daily', element: <DailyPage /> }],
+                      },
+                      {
+                        element: <RequireTimetableAny any={['timetable:report:view']} />,
+                        children: [{ path: 'reports', element: <ReportsPage /> }],
+                      },
+                      {
+                        element: <RequireTimetableAny any={['timetable:view']} />,
+                        children: [{ path: 'views', element: <ViewsPage /> }],
+                      },
                     ],
+                  },
+                  {
+                    path: '/me/timetable',
+                    element: <RequireEmployeeLogin />,
+                    children: [{ index: true, element: <MyTimetablePage /> }],
                   },
                   {
                     path: '/finance',

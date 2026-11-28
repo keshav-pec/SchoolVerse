@@ -213,3 +213,53 @@ Manual review (a person, not a script):
 One legal entity per school; no payment gateway (money moves through the school's own bank, UPI and cash). Seeded tax codes and
 PF, ESI and PT values are examples until the school's accountant approves them. Payroll attendance is a monthly summary, not
 Module 8. See `docs/Module7.md`, "Simplifications versus the PRD", and `docs/FINANCE_RUNBOOK.md`.
+
+## Timetable data (Module 6)
+
+The timetable is the plan for every class, every teacher and every room for a year, and the record of who was away or covered a
+lesson. It holds ids and times, no money and no restricted personal data. The one free-text field about a person, the reason for a
+teacher's absence, is classed PERSONAL. What matters here is **who may change what is published**, **that nobody can be in two places**,
+and **that nobody sees a draft or another child's day**.
+
+### Threat model on one page
+
+**Assets.** The published timetable (what the school follows) · absences and the reasons for them · one-day changes (substitutes, room
+changes, cancellations, swaps) · accepted clashes (who allowed what, and why) · the drafts and revisions behind it.
+
+**Actors.** School Admin (everything, audited) · Scheduling Coordinator (builds and checks, cannot publish or accept a clash) ·
+Substitution Manager (one-day changes only, cannot touch the weekly timetable) · Front Office (reads published days and reports) ·
+Faculty (their own and published timetables, never a draft) · Parent (their own child's day and week only) · another campus's staff ·
+another school (a different tenant). Timetable access is a **job bundle** on a Staff or Faculty login, read on every request.
+
+| Threat | Control | Test that proves it |
+|---|---|---|
+| Someone guesses another campus's or another school's plan, version, lesson or one-day change id | Every read and write is tenant-scoped and campus-scoped; another school's id is **404**, another campus **403** with `CROSS_SCOPE_DENIED` | `timetable-ops` QA SEC-TT-02 (daily schedule, reports, absence impact, clone, one-day change by id) · `timetable-draft` QA TT-49 |
+| A parent reads another child's day, or the school's whole schedule | `GET /schedule/effective` for a parent needs a live guardian link to **that** student with academics access; any other child is **404** (and a security event), any other target or route is **403** | `timetable-ops` QA TT-62 · frontend "(TT-43) the parent timetable asks for the chosen child only" · e2e "a parent sees only their own child" |
+| A published timetable is changed quietly | Published versions refuse every lesson edit (`VERSION_PUBLISHED`, with a Create Revision hint). A revision is a copy with new ids; it replaces the published one only when published, in one transaction | `timetable-ops` QA TT-34 · QA TT-36 · QA TT-37 |
+| A clash is saved, by a stale screen or a direct API call | One clash checker judges every change inside a transaction on fresh data; the screen's earlier check is never trusted. Publishing and Mark Ready re-check the whole version | `timetable-engine` and `timetable-draft` (all) · `timetable-ops` QA TT-34 (a clash blocks publishing) |
+| Two people take one teacher or one room at the same moment | One-day changes lock the plan row and re-check on fresh data, so the second is refused with the clash reason; two admins publishing get one success | `timetable-ops` QA TT-55 · QA TT-37b · e2e "two admins publish at the same moment" |
+| A substitute is named who is busy, away or not available | The substitute is checked like any teacher on that date (teaching elsewhere, away, unavailable, at another campus). Only the rules marked overridable can be accepted, with a reason and `timetable:conflict:override`; double-booking never | `timetable-ops` QA TT-54 · QA TT-55 |
+| A coordinator publishes, or a substitution manager edits the weekly timetable | `timetable:publish` is not in the coordinator bundle; the substitution manager has no `entry:*`, `draft:*` or `review` permission. Hiding a button is never the control | `timetable-ops` QA TT-35 (coordinator cannot publish) · QA SEC-TT-02 (bundle limits) · frontend "(TT-49) who can open what" |
+| Faculty or the front office read a draft | A draft or Ready version is **404** unless the caller has a permission that builds the timetable; the version list shows published versions only | `timetable-draft` QA TT-49 · `timetable-ops` QA TT-62 · e2e "a faculty member sees their own timetable" |
+| An absence reason or an export leaks, or a formula runs in a spreadsheet | Reports need `timetable:report:view`; every CSV is audited and a cell starting with `= + - @` is escaped | `timetable-ops` QA TT-45 |
+| A one-day change quietly rewrites history | A change is a row with a date that points at a published lesson; it never edits the lesson. Past dates are refused; cancelling it restores the lesson; every create, edit and cancel is audited with who and why | `timetable-ops` QA TT-57 · QA TT-58b · QA TT-60 |
+
+### Checklist (timetable data)
+
+- [ ] **Lint.** `npm run lint` in `backend/` and `frontend/`: no errors.
+- [ ] **Backend tests.** `npm test` in `backend/`: green (`timetable`, `timetable-engine`, `timetable-draft`, `timetable-ops`).
+- [ ] **Frontend tests.** `npm test` in `frontend/`: green (`ops.test.tsx`: Review And Publish counts, tick and later date, Versions and revisions, Daily Operations flows, Views marks changes, My Timetable, parent timetable, reports, who can open what).
+- [ ] **Browser tests.** `npm run e2e` in `frontend/`: green (`timetable.spec.ts`: publish blocked by a clash then allowed, a future-dated revision, absence and substitutes, cancel and swap, faculty and parent, two admins publishing, screenshots at 1280px and 390px).
+
+Manual review (a person, not a script):
+
+- [ ] **Another campus.** Signed in as someone who works only at Chandigarh, call `/api/v1/daily-schedule?planId=…` for a Mohali plan: 403.
+- [ ] **A parent's other child.** As a parent, change the `studentId` in `/api/v1/schedule/effective` to a child who is not yours: 404.
+- [ ] **A draft as a teacher.** As a teacher, open a draft version's grid in the network tab: 404.
+- [ ] **A teacher who is away.** Record an absence, then try to name that teacher as a substitute for the same hours: refused with the reason.
+
+### Known limits (timetable data)
+
+One plan per campus and session. No school holiday calendar (a day off is a cancellation of the day). Smart Draft runs inside the
+request with a 30 second limit. Notifications are written to the outbox only; nothing is sent. Attendance and Homework do not exist
+yet; they will read the schedule through `timetableService`. See `docs/Module6.md`, "Simplifications versus the PRD".

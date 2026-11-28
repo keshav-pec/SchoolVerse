@@ -73,3 +73,49 @@ export const TIPS: Record<string, ReactNode> = {
   classDefault: <p>This section follows the value set for the whole class. Change it only if this section is different.</p>,
   weeklyLimits: <p>Limits stop one teacher from having too many periods. Leave a box empty to use the school default.</p>,
 };
+
+export const VIEWS_INTRO = (
+  <>
+    <p>Pick a section, teacher, room or Teaching Group to see what is really on. Changes for a day (a substitute, a new room, a cancelled lesson) are marked.</p>
+    <p>A teacher&apos;s view lists free periods. A room&apos;s view shows when it is free.</p>
+  </>
+);
+
+export const DAILY_INTRO = (
+  <>
+    <p>Handle today&apos;s problems here: a teacher is away, a room is closed, a lesson is cancelled. Pick the day, then use the tabs.</p>
+    <p>The weekly timetable is not changed. Cancelling a change puts the lesson back as it was.</p>
+  </>
+);
+
+export const VERSIONS_INTRO = (
+  <>
+    <p>Every timetable you publish is kept here. The published one is what the school follows and it never changes.</p>
+    <p>To change it, press Create Revision. That makes a copy to work on. Nothing changes for anyone until you publish the copy.</p>
+  </>
+);
+
+export const PUBLISH_INTRO = (
+  <>
+    <p>Check the timetable before the school follows it. Clashes must be fixed. Warnings and periods not placed can stay if you tick the box.</p>
+    <p>Choose the day it starts. A later day leaves the current timetable running until then.</p>
+  </>
+);
+
+export const REPORTS_INTRO = (
+  <>
+    <p>Simple tables about the published timetable. Each one says which version and dates it is based on.</p>
+    <p>Press Download CSV to open a report in a spreadsheet.</p>
+  </>
+);
+
+export const MY_TIMETABLE_INTRO = 'Today first, then the week. If a lesson is covered by someone else, or moved, it says so.';
+
+export const DAILY_TIPS = {
+  revision: 'A revision is a copy of the published timetable that you can change. The published one keeps running until you publish the copy.',
+  superseded: 'Superseded means a newer timetable took over. It is kept as history.',
+  startsOn: 'The day the timetable starts. Today is the usual choice. A later day lets the school keep the current timetable until then.',
+  swap: 'Two periods of the same section trade places for one day only. Both teachers and rooms are checked.',
+  substitute: 'Another teacher takes the lesson for one day. People who are away, busy or not available are never suggested.',
+  unchanged: 'The weekly timetable is not changed. This is for the chosen day only.',
+} as const;

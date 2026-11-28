@@ -27,6 +27,7 @@ import { Card } from '@/components/ui/card';
 import { useAuth, useSession } from '@/lib/auth';
 import { firstName, greetingFor } from '@/lib/utils';
 import { MyClassroomCard } from '@/features/spaces/my-classroom-card';
+import { TodayCard } from '@/features/timetable/ops/today-card';
 
 interface QuickLink {
   to: string;
@@ -244,6 +245,7 @@ export function HomePage() {
         </div>
       </motion.section>
 
+      {session.user.role === 'FACULTY' && can('timetable:view') && <TodayCard />}
       {session.user.role === 'FACULTY' && can('space:view') && <MyClassroomCard />}
 
       <section aria-labelledby="home-actions">

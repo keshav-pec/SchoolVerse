@@ -13,17 +13,24 @@ export const VERSION_PHASES = ['DRAFT', 'READY', 'UPCOMING', 'ACTIVE', 'SUPERSED
 export type VersionPhase = (typeof VERSION_PHASES)[number];
 export const VERSION_PHASE_LABELS: Record<VersionPhase, string> = { DRAFT: 'Draft', READY: 'Ready for review', UPCOMING: 'Published, starts later', ACTIVE: 'Published', SUPERSEDED: 'Superseded', DISCARDED: 'Discarded' };
 
-export interface ValidationClashDTO {
+/** Where to open the lesson in the Schedule: its section, or its Teaching Group. */
+export interface ValidationPlaceDTO {
+  sectionOfferingId: string | null;
+  teachingGroupId: string | null;
+}
+
+export interface ValidationClashDTO extends ValidationPlaceDTO {
   entryId: string;
   label: string;
   issues: TimetableIssueDTO[];
 }
 
-export interface ValidationWarningDTO {
+export interface ValidationWarningDTO extends ValidationPlaceDTO {
   entryId: string;
   label: string;
   message: string;
   when: string | null;
+  rule: RuleCode;
 }
 
 export interface ValidationWarningGroupDTO {

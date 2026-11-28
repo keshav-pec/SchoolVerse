@@ -1,6 +1,6 @@
 # SchoolVerse 🪐
 
-The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** (in progress, Parts 1 to 5: [docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
+The friendly School ERP. **Module 1: School & School Locations Setup** ([Module1.md](Module1.md)) and **Module 2: Academic Structure & Session Setup** ([Module2.md](Module2.md)), **Module 3: Faculty & Staff** ([Module3.md](Module3.md)) **Module 4: Student & Parent Management** ([Module4.md](Module4.md)) **Module 5: Building, Floor & Room Setup** ([Module5.md](Module5.md)) **Module 6: Timetable & Scheduling** ([docs/Module6.md](docs/Module6.md)) and **Module 7: Fees, Billing, Collections, Payroll, Tax & Accounting** ([docs/Module7.md](docs/Module7.md)).
 
 | Part | Scope | Status |
 |---|---|---|
@@ -288,6 +288,22 @@ Seed: `npm run seed` builds Class VIII at Mohali (Maths 6, Science 5, Social Stu
 ## Schedule for other modules
 
 Attendance, Homework, Communication and Exams read the schedule only through `timetableService` (`getEffectiveSchedule`, `getEntryContext`, `isClassHeld`) and store `timetableEntryId` and `date`. **Do not rebuild versions and overrides yourself.** See `backend/src/modules/timetable/CONTRACTS.md`.
+
+## Publishing, Daily Operations and the views (Module 6, Part 6, frontend)
+
+Code: `frontend/src/features/timetable/ops/` (`publish-page`, `versions-page`, `daily-page` with `substitutions-tab`, `rooms-tab`, `cancel-tab`, `exceptions-tab` and `change-dialog`, `views-page`, `reports-page`, `effective-view`, `today-card`, `api`), `features/me/my-timetable-page.tsx`, `features/parent/parent-timetable-page.tsx`. Tests: `features/timetable/__tests__/ops.test.tsx` (19) and the Part 6 block in `e2e/timetable.spec.ts`.
+
+| Route | Who | What |
+|---|---|---|
+| `/timetable` (Overview) | School Admin, Scheduling Coordinator | Now shows the status line ("Version 1 · Published · from 1 Jul 2026"), placed %, clashes, warnings and Today. The main button follows the state: **Open Schedule**, **Review And Publish** or **Open Daily Operations**. |
+| `/timetable/schedule` | same | With no draft the published timetable shows read-only under "This timetable is published. To change it, create a revision." with **Create Revision**. |
+| `/timetable/versions` | `draft:create`, `review` or `publish` | Every version with its phase (Draft, Ready, Published, Upcoming, Superseded, Discarded), dates and who published it. **Create Revision** (or **Open Draft** while one exists), **Compare**, **Discard Draft**. |
+| `/timetable/versions/:id/publish` | same | **Review And Publish**: "All 36 sections complete. 0 clashes. 6 warnings.", sections with bars, warnings by rule with **Open** and **Fix This For Me**, **What Changed** for a revision, **Starts on** (a later day says the current timetable keeps running), a tick for unplaced periods and warnings. **Publish** is off while a clash remains and says why. A coordinator sees **Mark Ready For Review** only. |
+| `/timetable/daily` | `override:manage`, `substitution:manage` or `report:view` | **Daily Operations** for a chosen day. Tabs: Today's Exceptions (periods with no teacher, changes made, **Cancel Change**), Substitutions (Teacher Absent: periods at once, suggested teacher with reasons, **Apply Suggestions**, who failed and why), Room Changes, Cancellations & Swaps (a lesson, a class or the whole day, swap two periods, **More One-Day Changes**). Every tab says "The weekly timetable is not changed." |
+| `/timetable/views` | `timetable:view` | Section, Teacher, Room or Teaching Group, week or day. Changes are marked (Substitute, Room changed, Cancelled, Swapped) with what was planned beside them. A teacher's and a room's free periods are listed. |
+| `/timetable/reports` | `report:view` | The 7 reports as tables with a basis line and **Download CSV**. |
+| `/me/timetable` | Faculty and Staff logins | **My Timetable**, Today first (free periods and cover marked), then the week. Read-only. A Today card is on the teacher's home page. |
+| `/parent/timetable` | Parent | **Timetable** in the parent portal: child switcher, Today and Week, with notes such as "Mathematics today is taken by Meena Rao". |
 
 ## Timetable setup screens (Module 6, Part 2)
 

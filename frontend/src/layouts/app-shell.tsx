@@ -38,6 +38,9 @@ import {
   UsersRound,
   Users,
   CalendarCheck2,
+  CalendarClock,
+  CalendarDays,
+  GitBranch,
   CalendarRange,
 } from 'lucide-react';
 import { SchoolLogo } from '@/components/sv/school-logo';
@@ -171,6 +174,10 @@ const NAV: NavSection[] = [
       { to: '/timetable/setup', label: 'Setup', Icon: Settings2, permission: 'timetable:setup:manage' },
       { to: '/timetable/schedule', label: 'Schedule', Icon: CalendarCheck2, permission: 'timetable:entry:edit' },
       { to: '/timetable/attention', label: 'Needs Attention', Icon: ListChecks, permission: 'timetable:entry:edit', badge: 'timetable-attention' },
+      { to: '/timetable/daily', label: 'Daily Operations', Icon: CalendarClock, permission: 'timetable:view', when: (_u, can) => can('timetable:override:manage') || can('timetable:substitution:manage') || can('timetable:report:view') },
+      { to: '/timetable/versions', label: 'Versions', Icon: GitBranch, permission: 'timetable:view', when: (_u, can) => can('timetable:draft:create') || can('timetable:review') || can('timetable:publish') },
+      { to: '/timetable/reports', label: 'Reports', Icon: FileBarChart, permission: 'timetable:report:view' },
+      { to: '/timetable/views', label: 'Views', Icon: CalendarDays, permission: 'timetable:view' },
     ],
   },
   {
@@ -219,6 +226,13 @@ const NAV: NavSection[] = [
         when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
       },
       {
+        to: '/me/timetable',
+        label: 'My Timetable',
+        Icon: CalendarDays,
+        permission: 'timetable:view',
+        when: (u) => u.role === 'FACULTY' || u.role === 'STAFF' || u.personId !== null,
+      },
+      {
         to: '/me/salary',
         label: 'My Salary',
         Icon: Wallet,
@@ -255,6 +269,12 @@ const CRUMBS: [string, string[]][] = [
   ['/finance/fees', ['Finance', 'Student Fees']],
   ['/finance/settings', ['Finance', 'Settings']],
   ['/finance', ['Finance', 'Overview']],
+  ['/timetable/versions/', ['Timetable', 'Versions', 'Review And Publish']],
+  ['/timetable/versions', ['Timetable', 'Versions']],
+  ['/timetable/daily', ['Timetable', 'Daily Operations']],
+  ['/timetable/reports', ['Timetable', 'Reports']],
+  ['/timetable/views', ['Timetable', 'Views']],
+  ['/me/timetable', ['People', 'My Timetable']],
   ['/timetable/setup', ['Timetable', 'Setup']],
   ['/timetable/schedule', ['Timetable', 'Schedule']],
   ['/timetable/start', ['Timetable', 'Start']],

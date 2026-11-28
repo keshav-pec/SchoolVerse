@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { ArrowRight, CalendarCheck2, CircleCheck, CircleDashed } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, CircleCheck, CircleDashed, ClipboardCheck, UserRoundCog } from 'lucide-react';
 import { WEEKDAY_LABELS, type TimetableReadinessAreaDTO, type TimetableReadinessItemDTO } from '@shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/sv/page-header';
 import { cn } from '@/lib/utils';
 import { useReadiness } from './api';
 import { CreatePlanCard, useTimetablePlan } from './context';
+import { useOverview } from './ops/api';
 import { OVERVIEW_INTRO } from './help-copy';
 
 function Item({ item }: { item: TimetableReadinessItemDTO }) {
@@ -49,6 +50,14 @@ function Tile({ area }: { area: TimetableReadinessAreaDTO }) {
 export function TimetableOverviewPage() {
   const { plan, loading } = useTimetablePlan();
   const readiness = useReadiness(plan?.planId);
+  const overview = useOverview(plan?.locationId, plan?.academicSessionId);
+  const o = overview.data;
+  const main =
+    o?.next === 'REVIEW_AND_PUBLISH' && o.draftVersionId
+      ? { to: `/timetable/versions/${o.draftVersionId}/publish`, label: 'Review And Publish', Icon: ClipboardCheck }
+      : o?.next === 'OPEN_DAILY_OPERATIONS'
+        ? { to: '/timetable/daily', label: 'Open Daily Operations', Icon: UserRoundCog }
+        : { to: '/timetable/schedule', label: 'Open Schedule', Icon: CalendarCheck2 };
 
   return (
     <>
@@ -78,6 +87,40 @@ export function TimetableOverviewPage() {
                 </p>
               </div>
             </Card>
+            {o && o.versionId && (
+              <Card className="space-y-3 p-4 sm:p-5" aria-label="Timetable status">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-lg font-extrabold" data-testid="status-line">
+                    {o.statusLine}
+                  </h2>
+                  <Badge tone={o.clashes > 0 ? 'danger' : 'success'}>{o.clashes} clashes</Badge>
+                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-4">
+                  <div>
+                    <dt className="text-muted">Placed</dt>
+                    <dd className="text-base font-bold" data-testid="coverage">
+                      {o.coveragePercent === null ? '—' : `${o.coveragePercent}%`} <span className="text-[13px] font-normal text-muted">({o.placed} of {o.needed})</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Warnings</dt>
+                    <dd className="text-base font-bold">{o.warnings}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Not placed</dt>
+                    <dd className="text-base font-bold">{o.ux.unresolved}</dd>
+                  </div>
+                  {o.today && (
+                    <div>
+                      <dt className="text-muted">Today</dt>
+                      <dd className="text-base font-bold" data-testid="today-line">
+                        {o.today.uncovered} with no teacher · {o.today.absentTeachers} away
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </Card>
+            )}
             {readiness.isLoading && <Skeleton className="h-40 rounded-card" role="status" aria-label="Checking setup" />}
             {readiness.isError && <ErrorState error={readiness.error} onRetry={() => void readiness.refetch()} />}
             {readiness.data && (
@@ -97,8 +140,8 @@ export function TimetableOverviewPage() {
                   </div>
                   <span className="flex items-center gap-2">
                     <Button asChild>
-                      <Link to="/timetable/schedule">
-                        <CalendarCheck2 /> Open Schedule
+                      <Link to={main.to}>
+                        <main.Icon /> {main.label}
                       </Link>
                     </Button>
                   </span>

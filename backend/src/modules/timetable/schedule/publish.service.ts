@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { RULE_LABELS, WEEKDAYS, type CloneVersionData, type CompareChangeDTO, type CompareDTO, type PublishData, type PublishResultDTO, type RuleCode, type TimetableVersionDTO, type ValidationClashDTO, type ValidationSectionDTO, type ValidationWarningGroupDTO, type VersionValidationDTO } from '@shared';
+import { RULE_LABELS, WEEKDAYS, type CloneVersionData, type CompareChangeDTO, type CompareDTO, type PublishData, type PublishResultDTO, type RuleCode, type TimetableVersionDTO, type ValidationClashDTO, type ValidationSectionDTO, type ValidationWarningDTO, type ValidationWarningGroupDTO, type VersionValidationDTO } from '@shared';
 import { AppError } from '../../../core/errors';
 import { withTransaction } from '../../../db/transaction';
 import type { ServiceContext } from '../../../platform/rbac/tenant-context';
@@ -30,19 +30,19 @@ export function validateSnapshot(snap: Snapshot, rev: number): VersionValidation
   const n = namerOf(snap);
   const lessons = snap.board.all().sort((a, b) => weekOrder(a) - weekOrder(b) || a.id.localeCompare(b.id));
   const clashes: ValidationClashDTO[] = [];
-  const groups = new Map<RuleCode, Map<string, { entryId: string; label: string; message: string; when: string | null }>>();
+  const groups = new Map<RuleCode, Map<string, ValidationWarningDTO>>();
   let clashCount = 0;
   for (const e of lessons) {
     const issues = issuesFor(snap, e);
     const blockers = issues.filter((i) => i.severity === 'CLASH');
     if (blockers.length > 0) {
       clashCount += blockers.length;
-      clashes.push({ entryId: e.id, label: `${n.lesson(e)} on ${n.when(e.weekday, e.periodId)}`, issues: blockers.map(issueDTO) });
+      clashes.push({ entryId: e.id, label: `${n.lesson(e)} on ${n.when(e.weekday, e.periodId)}`, issues: blockers.map(issueDTO), sectionOfferingId: e.sectionIds[0] ?? null, teachingGroupId: e.groupId });
     }
     for (const w of issues.filter((i) => i.severity === 'WARNING')) {
       const byKey = groups.get(w.rule) ?? new Map();
       const key = `${w.rule}|${w.message}`;
-      if (!byKey.has(key)) byKey.set(key, { entryId: e.id, label: `${n.lesson(e)} on ${n.when(e.weekday, e.periodId)}`, message: w.message, when: w.when });
+      if (!byKey.has(key)) byKey.set(key, { entryId: e.id, label: `${n.lesson(e)} on ${n.when(e.weekday, e.periodId)}`, message: w.message, when: w.when, rule: w.rule, sectionOfferingId: e.sectionIds[0] ?? null, teachingGroupId: e.groupId });
       groups.set(w.rule, byKey);
     }
   }
